@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>自动排产系统</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>自动排产系统 <span class="sub">柔性作业车间 · OR-Tools CP-SAT</span></h1>
+  </header>
+
+  <main>
+    <section class="panel controls">
+      <h2>排产控制</h2>
+      <div class="weights">
+        <label>最短完工 <input type="number" id="w-makespan" value="1" step="0.5" min="0" /></label>
+        <label>按时交付 <input type="number" id="w-tardiness" value="5" step="0.5" min="0" /></label>
+        <label>减少换型 <input type="number" id="w-changeover" value="1" step="0.5" min="0" /></label>
+        <label>设备利用 <input type="number" id="w-idle" value="0.5" step="0.5" min="0" /></label>
+        <label>求解上限(秒) <input type="number" id="time-limit" value="10" step="1" min="1" /></label>
+      </div>
+      <div class="actions">
+        <button id="btn-sample">加载样例数据</button>
+        <button id="btn-run" class="primary">开始排产</button>
+      </div>
+      <p class="hint">提示: 调整权重可在「完工时间 / 准时 / 换型 / 利用率」之间权衡, 再次排产对比结果。</p>
+    </section>
+
+    <section class="panel kpis" id="kpis" hidden>
+      <div class="kpi"><span class="kpi-label">求解状态</span><span class="kpi-val" id="kpi-status">-</span></div>
+      <div class="kpi"><span class="kpi-label">总完工(min)</span><span class="kpi-val" id="kpi-makespan">-</span></div>
+      <div class="kpi"><span class="kpi-label">加权拖期</span><span class="kpi-val" id="kpi-tardiness">-</span></div>
+      <div class="kpi"><span class="kpi-label">换型总量(min)</span><span class="kpi-val" id="kpi-changeover">-</span></div>
+      <div class="kpi"><span class="kpi-label">求解耗时(s)</span><span class="kpi-val" id="kpi-time">-</span></div>
+    </section>
+
+    <section class="panel" id="gantt-panel" hidden>
+      <h2>排产甘特图</h2>
+      <div id="gantt"></div>
+      <div id="legend" class="legend"></div>
+    </section>
+
+    <section class="panel" id="orders-panel" hidden>
+      <h2>订单交付情况</h2>
+      <table id="orders-table">
+        <thead><tr><th>订单</th><th>名称</th><th>交期</th><th>完工</th><th>拖期</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="util-panel" hidden>
+      <h2>设备利用率</h2>
+      <div id="util"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
