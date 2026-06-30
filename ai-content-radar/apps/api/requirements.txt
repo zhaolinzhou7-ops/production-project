@@ -1,0 +1,29 @@
+# --- API 运行时依赖 ---
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+pydantic-settings>=2.2
+
+# 数据层
+sqlalchemy>=2.0
+asyncpg>=0.29
+alembic>=1.13
+
+# 任务/缓存
+celery>=5.3
+redis>=5.0
+
+# 向量库 / Embedding
+qdrant-client>=1.8
+
+# LLM Providers（按需启用）
+openai>=1.30
+anthropic>=0.25
+google-generativeai>=0.5
+
+# 安全
+passlib[bcrypt]>=1.7
+python-jose[cryptography]>=3.3
+
+# 本地引擎（editable 安装）
+-e ../../packages/engine

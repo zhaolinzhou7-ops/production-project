@@ -1,0 +1,73 @@
+version: "3.9"
+
+# AI Content Radar 本地一键编排：API + Worker + Web + Postgres + Redis + Qdrant
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acr
+      POSTGRES_PASSWORD: acr
+      POSTGRES_DB: acr
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes:
+      - qdrantdata:/qdrant/storage
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://acr:acr@postgres:5432/acr
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-mock}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    ports: ["8000:8000"]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    command: celery -A worker.celery_app.celery_app worker -B --loglevel=info
+    working_dir: /srv/apps/worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://acr:acr@postgres:5432/acr
+    depends_on:
+      redis: { condition: service_started }
+      postgres: { condition: service_healthy }
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000/api/v1
+    depends_on:
+      api: { condition: service_started }
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
+  qdrantdata:

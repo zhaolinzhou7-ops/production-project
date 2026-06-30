@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acr-engine"
+version = "0.1.0"
+description = "AI Content Radar 纯算法内核（分析/评分/生成），零三方依赖"
+requires-python = ">=3.10"
+authors = [{ name = "AI Content Radar Team" }]
+dependencies = []  # 刻意保持零依赖，便于在任意环境/CI 运行
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["acr_engine*"]
