@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Users, Settings as SettingsIcon, ClipboardList, Gift } from 'lucide-react'
+import { Users, Settings as SettingsIcon, ClipboardList, Gift, Ruler } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
@@ -70,6 +70,19 @@ export function ParentDashboardPage() {
               {pendingCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/growth')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-mint-400/30 p-2.5 text-mint-500">
+            <Ruler size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">身体发育记录</div>
+            <div className="text-xs text-gray-400">身高体重曲线、BMI、成长里程碑</div>
+          </div>
         </button>
 
         <button

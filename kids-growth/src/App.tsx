@@ -13,6 +13,7 @@ import { ParentChildrenPage } from './pages/ParentChildrenPage'
 import { ParentSettingsPage } from './pages/ParentSettingsPage'
 import { ParentTasksPage } from './pages/ParentTasksPage'
 import { ParentRewardsPage } from './pages/ParentRewardsPage'
+import { ParentGrowthPage } from './pages/ParentGrowthPage'
 import { KidRewardsPage } from './pages/KidRewardsPage'
 import { KidBadgesPage } from './pages/KidBadgesPage'
 
@@ -72,6 +73,14 @@ function AppRoutes() {
           element={
             <RequireParent>
               <ParentRewardsPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/growth"
+          element={
+            <RequireParent>
+              <ParentGrowthPage />
             </RequireParent>
           }
         />
