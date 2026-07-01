@@ -1,24 +1,32 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Award, Flame, Gift } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { checkInTask } from '../db/checkin'
+import { evaluateAchievements } from '../db/achievements'
 import { useAppStore } from '../store/useAppStore'
 import { Avatar } from '../components/common/Avatar'
 import { LevelProgressCard } from '../components/points/LevelProgressCard'
 import { LevelUpModal } from '../components/points/LevelUpModal'
+import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import { TaskCheckCard } from '../components/tasks/TaskCheckCard'
 import { formatAge } from '../lib/age'
 import { todayISO } from '../lib/dateUtils'
 import { isTaskScheduledOn } from '../lib/taskDue'
 import { computeLevelInfo } from '../lib/points'
-import type { CheckIn, LevelStep, PointLedger, Task, TaskCategory } from '../types'
+import { computeStreak } from '../lib/streak'
+import type { Achievement, CheckIn, LevelStep, PointLedger, Task, TaskCategory } from '../types'
 
 const CATEGORY_ORDER: TaskCategory[] = ['生活', '学习', '运动', '品德', '家务', '其他']
 
+type Celebration = { kind: 'level'; level: LevelStep } | { kind: 'achievement'; achievement: Achievement }
+
 export function ChildHomePage() {
   const currentChildId = useAppStore((s) => s.currentChildId)
+  const navigate = useNavigate()
   const today = todayISO()
-  const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
+  const [queue, setQueue] = useState<Celebration[]>([])
 
   const currentChild = useLiveQuery(
     () => (currentChildId ? db.children.get(currentChildId) : undefined),
@@ -37,25 +45,26 @@ export function ChildHomePage() {
     if (!currentChildId) return []
     return db.checkIns.where('[childId+date]').equals([currentChildId, today]).toArray()
   }, [currentChildId, today])
-  const onceDoneTaskIds = useLiveQuery(async () => {
-    if (!currentChildId) return new Set<string>()
-    const done = await db.checkIns
+  const allDoneCheckIns = useLiveQuery(async (): Promise<CheckIn[]> => {
+    if (!currentChildId) return []
+    return db.checkIns
       .where('childId')
       .equals(currentChildId)
-      .and((c) => c.status === 'done')
+      .filter((c) => c.status === 'done')
       .toArray()
-    return new Set(done.map((c) => c.taskId))
   }, [currentChildId])
   const ledgerEntries = useLiveQuery(async (): Promise<PointLedger[]> => {
     if (!currentChildId) return []
     return db.pointLedger.where('childId').equals(currentChildId).toArray()
   }, [currentChildId])
 
-  if (!currentChild || !settings || !tasks || !todayCheckIns || !ledgerEntries || !onceDoneTaskIds) return null
+  if (!currentChild || !settings || !tasks || !todayCheckIns || !ledgerEntries || !allDoneCheckIns) return null
 
   const doneTaskIds = new Set(
     todayCheckIns.filter((c) => c.status === 'done').map((c) => c.taskId),
   )
+  const onceDoneTaskIds = new Set(allDoneCheckIns.map((c) => c.taskId))
+  const streak = computeStreak(new Set(allDoneCheckIns.map((c) => c.date)), today)
 
   const visibleTasks = tasks.filter((t) => {
     if (t.type === 'once') return !onceDoneTaskIds.has(t.id) || doneTaskIds.has(t.id)
@@ -73,15 +82,24 @@ export function ChildHomePage() {
   const handleCheckIn = async (task: Task) => {
     const before = computeLevelInfo(xp, settings.levelLadder).level
     const result = await checkInTask(task, today)
-    if (result) {
-      const after = computeLevelInfo(result.xp, settings.levelLadder).level
-      if (after.level > before.level) {
-        setLevelUp(after)
-      }
+    if (!result) return
+
+    const additions: Celebration[] = []
+    const after = computeLevelInfo(result.xp, settings.levelLadder).level
+    if (after.level > before.level) additions.push({ kind: 'level', level: after })
+
+    const newAchievements = await evaluateAchievements(task.childId)
+    for (const achievement of newAchievements) {
+      additions.push({ kind: 'achievement', achievement })
     }
+
+    if (additions.length > 0) setQueue((q) => [...q, ...additions])
   }
 
+  const dismissCurrent = () => setQueue((q) => q.slice(1))
+
   const completedCount = visibleTasks.filter((t) => doneTaskIds.has(t.id)).length
+  const current = queue[0]
 
   return (
     <div className="pt-4 pb-8">
@@ -93,9 +111,32 @@ export function ChildHomePage() {
           </h1>
           <p className="text-xs text-gray-400">{formatAge(currentChild.birthdate)}</p>
         </div>
+        {streak > 0 && (
+          <div className="ml-auto flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1.5 text-orange-500 font-bold text-sm">
+            <Flame size={16} />
+            {streak}
+          </div>
+        )}
       </div>
 
       <LevelProgressCard xp={xp} balance={balance} ladder={settings.levelLadder} />
+
+      <div className="mt-3 flex gap-3">
+        <button
+          onClick={() => navigate('/rewards')}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-white/70 py-2.5 text-sm font-medium text-gray-700 shadow-sm active:scale-95 transition"
+        >
+          <Gift size={16} className="text-brand-500" />
+          奖励商城
+        </button>
+        <button
+          onClick={() => navigate('/badges')}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-white/70 py-2.5 text-sm font-medium text-gray-700 shadow-sm active:scale-95 transition"
+        >
+          <Award size={16} className="text-mint-500" />
+          徽章墙
+        </button>
+      </div>
 
       <div className="mt-6 mb-2 flex items-center justify-between">
         <h2 className="font-bold text-gray-700">今日任务</h2>
@@ -129,7 +170,14 @@ export function ChildHomePage() {
         </div>
       )}
 
-      <LevelUpModal level={levelUp} onClose={() => setLevelUp(null)} />
+      <LevelUpModal
+        level={current?.kind === 'level' ? current.level : null}
+        onClose={dismissCurrent}
+      />
+      <AchievementUnlockModal
+        achievement={current?.kind === 'achievement' ? current.achievement : null}
+        onClose={dismissCurrent}
+      />
     </div>
   )
 }

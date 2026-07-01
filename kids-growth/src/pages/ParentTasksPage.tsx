@@ -6,6 +6,7 @@ import { db } from '../db/db'
 import { newId } from '../lib/id'
 import { importDefaultTasks } from '../db/seedActions'
 import { checkInTask, undoCheckIn } from '../db/checkin'
+import { evaluateAchievements } from '../db/achievements'
 import { todayISO } from '../lib/dateUtils'
 import { isTaskScheduledOn } from '../lib/taskDue'
 import { TaskFormModal, type TaskFormValues } from '../components/tasks/TaskFormModal'
@@ -99,6 +100,7 @@ export function ParentTasksPage() {
       await undoCheckIn(task, checkinDate)
     } else {
       await checkInTask(task, checkinDate)
+      await evaluateAchievements(task.childId)
     }
   }
 

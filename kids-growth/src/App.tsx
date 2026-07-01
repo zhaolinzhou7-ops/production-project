@@ -12,6 +12,9 @@ import { ParentDashboardPage } from './pages/ParentDashboardPage'
 import { ParentChildrenPage } from './pages/ParentChildrenPage'
 import { ParentSettingsPage } from './pages/ParentSettingsPage'
 import { ParentTasksPage } from './pages/ParentTasksPage'
+import { ParentRewardsPage } from './pages/ParentRewardsPage'
+import { KidRewardsPage } from './pages/KidRewardsPage'
+import { KidBadgesPage } from './pages/KidBadgesPage'
 
 function AppRoutes() {
   const childCount = useLiveQuery(() => db.children.count(), [])
@@ -29,6 +32,8 @@ function AppRoutes() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/" element={<ChildHomePage />} />
+        <Route path="/rewards" element={<KidRewardsPage />} />
+        <Route path="/badges" element={<KidBadgesPage />} />
         <Route path="/parent/pin" element={<ParentPinPage />} />
         <Route
           path="/parent"
@@ -59,6 +64,14 @@ function AppRoutes() {
           element={
             <RequireParent>
               <ParentTasksPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/rewards"
+          element={
+            <RequireParent>
+              <ParentRewardsPage />
             </RequireParent>
           }
         />
