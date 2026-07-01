@@ -27,8 +27,11 @@ def _clamp01(x: float) -> float:
 
 
 def _growth_multiplier(growth: float) -> float:
-    """把增长率经 logistic 压到 (0.5, 1.5)。growth=0 -> 1.0。"""
-    return 0.5 + 1.0 / (1.0 + math.exp(-3.0 * growth))
+    """把增长率经 logistic 压到 (0.6, 1.4)。growth=0 -> 1.0。
+
+    刻意收窄区间：避免"高增长赛道"把机会分直接顶到 100 而失去区分度。
+    """
+    return 0.6 + 0.8 / (1.0 + math.exp(-3.0 * growth))
 
 
 @dataclass
@@ -76,6 +79,24 @@ DEFAULT_CROSS_DIMENSIONS = [
     "美食", "基建狂魔", "悬疑推理", "经营养成", "末世求生",
 ]
 
+# 每个跨界维度的画像：(需求系数, 供给增量)。
+#   需求系数：该题材当下的大众关注度(1.0=很热)。
+#   供给增量：该跨界方向已有多少人做(越大越拥挤，机会越低)。
+# 让不同跨界组合产生有区分度的机会分，而不是全部并列。
+CROSS_PROFILE: dict[str, tuple[float, float]] = {
+    "AI":     (1.00, 0.10),   # 很热，但也已有人做
+    "工业文明": (0.86, 0.03),
+    "时间循环": (0.82, 0.04),
+    "航空制造": (0.70, 0.01),  # 冷门但极新
+    "赛博朋克": (0.90, 0.06),
+    "美食":    (0.95, 0.08),
+    "基建狂魔": (0.80, 0.03),
+    "悬疑推理": (0.92, 0.07),
+    "经营养成": (0.78, 0.04),
+    "末世求生": (0.88, 0.05),
+}
+_DEFAULT_PROFILE = (0.85, 0.05)
+
 
 def discover_blue_oceans(
     base_tracks: Iterable[str],
@@ -84,11 +105,14 @@ def discover_blue_oceans(
     cross_dimensions: Iterable[str] | None = None,
     demand_hint: dict[str, float] | None = None,
     top_k: int = 20,
+    max_per_base: int | None = None,
 ) -> list[BlueOcean]:
     """对 (主赛道 × 跨界维度) 组合打分，返回 Top-K 蓝海机会。
 
     - track_supply / track_growth：来自模块3 的同质化分析。
     - demand_hint：来自模块4 的需求雷达（缺省按基础需求估计）。
+    - max_per_base：每个主赛道最多保留几条，让推荐覆盖多个赛道、避免最热
+      赛道霸榜（None=不限制）。
     跨界组合天然供给更低（市场上少见），因此 supply 在主赛道基础上打折。
     """
     cross_dimensions = list(cross_dimensions or DEFAULT_CROSS_DIMENSIONS)
@@ -98,10 +122,13 @@ def discover_blue_oceans(
     for base, cross in product(base_tracks, cross_dimensions):
         base_supply = _clamp01(track_supply.get(base, 0.5))
         growth = track_growth.get(base, 0.0)
-        # 跨界组合越"陌生"，供给越低：用 0.35 系数衰减主赛道供给
-        combo_supply = _clamp01(base_supply * 0.35)
-        # 需求：主赛道既有热度 + 跨界维度新鲜度（默认 0.6 起步）
-        demand = _clamp01(demand_hint.get(base, 0.6) * 0.7 + 0.3)
+        cross_demand, cross_supply_add = CROSS_PROFILE.get(cross, _DEFAULT_PROFILE)
+        # 跨界组合越"陌生"，供给越低：主赛道供给衰减 + 该跨界方向已有供给
+        combo_supply = _clamp01(base_supply * 0.35 + cross_supply_add)
+        # 需求：主赛道既有热度(demand_hint) × 该跨界题材的大众关注度。
+        # 映射到 (0.25, 0.75) 而非逼近 1，避免热门赛道把分数直接顶满、失去区分度。
+        base_demand = _clamp01(demand_hint.get(base, 0.6) * 0.5 + 0.25)
+        demand = _clamp01(base_demand * cross_demand)
         inp = OpportunityInput(
             name=f"{base} + {cross}", demand=demand, supply=combo_supply, growth=growth
         )
@@ -124,4 +151,13 @@ def discover_blue_oceans(
         )
 
     out.sort(key=lambda b: b.score, reverse=True)
+    if max_per_base is not None:
+        kept: dict[str, int] = {}
+        diversified: list[BlueOcean] = []
+        for b in out:
+            if kept.get(b.base_track, 0) >= max_per_base:
+                continue
+            kept[b.base_track] = kept.get(b.base_track, 0) + 1
+            diversified.append(b)
+        out = diversified
     return out[:top_k]

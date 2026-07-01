@@ -56,8 +56,17 @@ def run_pipeline(
 
     supply = {t.name: t.share for t in homo.tracks}
     growth = {t.name: t.growth_rate for t in homo.tracks}
+    # 需求提示：用各赛道平均互动做 min-max 归一化，作为"需求热度"
+    engs = [t.avg_engagement for t in homo.tracks]
+    lo, hi = (min(engs), max(engs)) if engs else (0.0, 1.0)
+    demand_hint = {
+        t.name: (0.5 if hi == lo else 0.4 + 0.6 * (t.avg_engagement - lo) / (hi - lo))
+        for t in homo.tracks
+    }
     base_tracks = [t.name for t in homo.tracks] or ["通用"]
-    oceans = discover_blue_oceans(base_tracks, supply, growth, top_k=20)
+    oceans = discover_blue_oceans(
+        base_tracks, supply, growth, demand_hint=demand_hint, top_k=20, max_per_base=3
+    )
 
     # --- 选题阶段（取最高分蓝海作为目标赛道）---
     if oceans:
