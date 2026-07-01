@@ -35,7 +35,7 @@ export class GrowthDB extends Dexie {
     this.version(1).stores({
       children: 'id, name, createdAt',
       tasks: 'id, childId, category, type, active, createdAt',
-      checkIns: 'id, taskId, childId, date, status, [childId+date]',
+      checkIns: 'id, taskId, childId, date, status, [childId+date], [taskId+date]',
       pointLedger: 'id, childId, timestamp',
       achievements: 'id, code',
       unlocks: 'id, childId, achievementCode, [childId+achievementCode]',

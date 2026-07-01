@@ -11,6 +11,7 @@ import { ParentPinPage } from './pages/ParentPinPage'
 import { ParentDashboardPage } from './pages/ParentDashboardPage'
 import { ParentChildrenPage } from './pages/ParentChildrenPage'
 import { ParentSettingsPage } from './pages/ParentSettingsPage'
+import { ParentTasksPage } from './pages/ParentTasksPage'
 
 function AppRoutes() {
   const childCount = useLiveQuery(() => db.children.count(), [])
@@ -50,6 +51,14 @@ function AppRoutes() {
           element={
             <RequireParent>
               <ParentSettingsPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/tasks"
+          element={
+            <RequireParent>
+              <ParentTasksPage />
             </RequireParent>
           }
         />

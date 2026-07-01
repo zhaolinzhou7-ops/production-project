@@ -33,15 +33,18 @@ export function ParentDashboardPage() {
           </div>
         </button>
 
-        <div className="w-full flex items-center gap-3 rounded-2xl bg-white/40 p-4 shadow-sm text-left opacity-60">
+        <button
+          onClick={() => navigate('/parent/tasks')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
           <div className="rounded-xl bg-mint-400/30 p-2.5 text-mint-500">
             <ClipboardList size={20} />
           </div>
           <div>
             <div className="font-bold text-gray-800">任务与积分管理</div>
-            <div className="text-xs text-gray-400">即将上线</div>
+            <div className="text-xs text-gray-400">任务、打卡补登与撤销</div>
           </div>
-        </div>
+        </button>
 
         <button
           onClick={() => navigate('/parent/settings')}
