@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Award, Flame, Gift } from 'lucide-react'
+import { Award, BookOpen, Flame, Gift } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { checkInTask } from '../db/checkin'
@@ -135,6 +135,13 @@ export function ChildHomePage() {
         >
           <Award size={16} className="text-mint-500" />
           徽章墙
+        </button>
+        <button
+          onClick={() => navigate('/timeline')}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-white/70 py-2.5 text-sm font-medium text-gray-700 shadow-sm active:scale-95 transition"
+        >
+          <BookOpen size={16} className="text-sun-500" />
+          时间线
         </button>
       </div>
 
