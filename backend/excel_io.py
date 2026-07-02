@@ -14,14 +14,26 @@ from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session
 
 from . import crud
-from .schemas import ImportIssue, ImportReport, MachineDTO, OperationDTO, OrderDTO
+from .schemas import (
+    CalendarDTO,
+    CalendarExceptionDTO,
+    ImportIssue,
+    ImportReport,
+    MachineDTO,
+    OperationDTO,
+    OrderDTO,
+    ResourceDTO,
+    ShiftRuleDTO,
+)
 
 SHEET_MACHINES = "机台"
 SHEET_SETUP = "换型矩阵"
 SHEET_ORDERS = "订单"
 SHEET_ROUTES = "工艺路线"
+SHEET_CALENDARS = "日历"
+SHEET_RESOURCES = "资源"
 
-MACHINE_HEADERS = ["机台ID", "机台名称", "是否启用(是/否)"]
+MACHINE_HEADERS = ["机台ID", "机台名称", "是否启用(是/否)", "日历ID(可空)"]
 SETUP_HEADERS = ["机台ID", "原产品族", "新产品族", "换型时间(分钟)"]
 ORDER_HEADERS = [
     "订单ID", "订单名称", "交期(YYYY-MM-DD HH:MM)", "优先级(>=1)",
@@ -29,7 +41,13 @@ ORDER_HEADERS = [
 ]
 ROUTE_HEADERS = [
     "订单ID", "工序号(0起)", "工序名称", "产品族", "机台ID", "加工时长(分钟)",
+    "外协周期(分钟,填了即外协)", "资源ID(可空)", "资源数量",
 ]
+CALENDAR_HEADERS = [
+    "日历ID", "日历名称", "星期(1-7,或日期YYYY-MM-DD)", "班次开始(HH:MM)",
+    "班次结束(HH:MM)", "整天休(是/否,仅日期行)",
+]
+RESOURCE_HEADERS = ["资源ID", "资源名称", "同时可用数量"]
 
 DATE_FORMATS = ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d")
 
@@ -41,8 +59,8 @@ def build_template() -> bytes:
     ws = wb.active
     ws.title = SHEET_MACHINES
     ws.append(MACHINE_HEADERS)
-    ws.append(["M1", "CNC 车床", "是"])
-    ws.append(["M2", "加工中心", "是"])
+    ws.append(["M1", "CNC 车床", "是", "C1"])
+    ws.append(["M2", "加工中心", "是", ""])
 
     ws = wb.create_sheet(SHEET_SETUP)
     ws.append(SETUP_HEADERS)
@@ -55,11 +73,22 @@ def build_template() -> bytes:
 
     ws = wb.create_sheet(SHEET_ROUTES)
     ws.append(ROUTE_HEADERS)
-    ws.append(["J1", 0, "粗车", "A", "M1", 40])
-    ws.append(["J1", 0, "粗车", "A", "M2", 50])
-    ws.append(["J1", 1, "精铣", "A", "M2", 35])
+    ws.append(["J1", 0, "粗车", "A", "M1", 40, "", "", ""])
+    ws.append(["J1", 0, "粗车", "A", "M2", 50, "", "", ""])
+    ws.append(["J1", 1, "热处理", "A", "", "", 240, "", ""])
+    ws.append(["J1", 2, "精铣", "A", "M2", 35, "", "F1", 1])
 
-    for name in (SHEET_MACHINES, SHEET_SETUP, SHEET_ORDERS, SHEET_ROUTES):
+    ws = wb.create_sheet(SHEET_CALENDARS)
+    ws.append(CALENDAR_HEADERS)
+    for wd in (1, 2, 3, 4, 5):
+        ws.append(["C1", "两班制", wd, "08:00", "22:00", ""])
+    ws.append(["C1", "两班制", "2026-10-01", "", "", "是"])
+
+    ws = wb.create_sheet(SHEET_RESOURCES)
+    ws.append(RESOURCE_HEADERS)
+    ws.append(["F1", "专用夹具", 1])
+
+    for name in wb.sheetnames:
         for col in wb[name].columns:
             letter = col[0].column_letter
             wb[name].column_dimensions[letter].width = max(
@@ -128,19 +157,80 @@ def import_workbook(session: Session, content: bytes, mode: str = "replace") -> 
     if errors:
         return ImportReport(ok=False, mode=mode, errors=errors)
 
+    # -- 日历 (可选 sheet): 星期行=周规则, 日期行=例外 --
+    calendars: dict[str, CalendarDTO] = {}
+    if SHEET_CALENDARS in wb.sheetnames:
+        for r, row in _data_rows(wb[SHEET_CALENDARS]):
+            cid = _cell_str(row[0])
+            cname = _cell_str(row[1] if len(row) > 1 else "")
+            day_s = _cell_str(row[2] if len(row) > 2 else "")
+            start_s = _cell_str(row[3] if len(row) > 3 else "")
+            end_s = _cell_str(row[4] if len(row) > 4 else "")
+            off_s = _cell_str(row[5] if len(row) > 5 else "")
+            if not cid or not day_s:
+                err(SHEET_CALENDARS, r, "日历ID 与 星期/日期 不能为空")
+                continue
+            cal = calendars.setdefault(cid, CalendarDTO(id=cid, name=cname))
+            try:
+                if "-" in day_s or isinstance(row[2], datetime):
+                    day = (
+                        row[2].strftime("%Y-%m-%d")
+                        if isinstance(row[2], datetime) else day_s
+                    )
+                    off = off_s in ("是", "yes", "true", "1")
+                    cal.exceptions.append(CalendarExceptionDTO(
+                        date=day, available=not off,
+                        start=start_s or None, end=end_s or None,
+                    ))
+                else:
+                    wd = int(float(day_s))
+                    if not 1 <= wd <= 7:
+                        raise ValueError(f"星期必须为 1-7, 实际为 {day_s}")
+                    if not start_s or not end_s:
+                        raise ValueError("周规则行必须填写班次开始/结束")
+                    cal.rules.append(ShiftRuleDTO(
+                        weekday=wd - 1, start=start_s, end=end_s,
+                    ))
+            except ValueError as e:
+                err(SHEET_CALENDARS, r, str(e))
+
+    # -- 资源 (可选 sheet) --
+    resources: dict[str, ResourceDTO] = {}
+    if SHEET_RESOURCES in wb.sheetnames:
+        for r, row in _data_rows(wb[SHEET_RESOURCES]):
+            rid = _cell_str(row[0])
+            if not rid:
+                err(SHEET_RESOURCES, r, "资源ID 不能为空")
+                continue
+            try:
+                cap = _parse_int(row[2], "同时可用数量") if len(row) > 2 and _cell_str(row[2]) else 1
+                if cap < 1:
+                    raise ValueError("同时可用数量必须 >= 1")
+            except ValueError as e:
+                err(SHEET_RESOURCES, r, str(e))
+                continue
+            resources[rid] = ResourceDTO(
+                id=rid, name=_cell_str(row[1] if len(row) > 1 else ""), capacity=cap,
+            )
+
     # -- 机台 --
     machines: dict[str, MachineDTO] = {}
     for r, row in _data_rows(wb[SHEET_MACHINES]):
         mid, name = _cell_str(row[0]), _cell_str(row[1] if len(row) > 1 else "")
         active_s = _cell_str(row[2] if len(row) > 2 else "是") or "是"
+        cal_id = _cell_str(row[3] if len(row) > 3 else "")
         if not mid or not name:
             err(SHEET_MACHINES, r, "机台ID 与 机台名称 不能为空")
             continue
         if mid in machines:
             err(SHEET_MACHINES, r, f"机台ID 重复: {mid}")
             continue
+        if cal_id and cal_id not in calendars:
+            err(SHEET_MACHINES, r, f"日历ID 不存在: {cal_id}")
+            continue
         machines[mid] = MachineDTO(
             id=mid, name=name, active=active_s not in ("否", "no", "false", "0"),
+            calendar_id=cal_id or None,
         )
 
     # -- 换型矩阵 --
@@ -203,20 +293,46 @@ def import_workbook(session: Session, content: bytes, mode: str = "replace") -> 
             name = _cell_str(row[2] if len(row) > 2 else "")
             family = _cell_str(row[3] if len(row) > 3 else "")
             mid = _cell_str(row[4] if len(row) > 4 else "")
-            dur = _parse_int(row[5] if len(row) > 5 else None, "加工时长")
+            lead_s = _cell_str(row[6] if len(row) > 6 else "")
+            res_id = _cell_str(row[7] if len(row) > 7 else "") or None
+            res_qty = (
+                _parse_int(row[8], "资源数量")
+                if len(row) > 8 and _cell_str(row[8]) else 1
+            )
             if not name or not family:
                 raise ValueError("工序名称/产品族不能为空")
-            if mid not in machines:
-                raise ValueError(f"机台ID 不存在: {mid}")
-            if dur <= 0:
-                raise ValueError("加工时长必须为正")
+            if res_id and res_id not in resources:
+                raise ValueError(f"资源ID 不存在: {res_id}")
+            if lead_s:  # 外协工序: 忽略机台/时长
+                lead = _parse_int(lead_s, "外协周期")
+                if lead <= 0:
+                    raise ValueError("外协周期必须为正")
+                mid, dur = None, None
+            else:
+                dur = _parse_int(row[5] if len(row) > 5 else None, "加工时长")
+                lead = None
+                if mid not in machines:
+                    raise ValueError(f"机台ID 不存在: {mid}")
+                if dur <= 0:
+                    raise ValueError("加工时长必须为正")
         except ValueError as e:
             err(SHEET_ROUTES, r, str(e))
             continue
         ops = order_meta[oid]["ops"]
-        op = ops.setdefault(seq, dict(name=name, family=family, machines={}))
+        op = ops.setdefault(seq, dict(
+            name=name, family=family, machines={},
+            is_outsourced=lead is not None, outsource_lead_min=lead,
+            resource_id=res_id, resource_qty=res_qty,
+        ))
         if op["name"] != name or op["family"] != family:
             err(SHEET_ROUTES, r, f"订单 {oid} 工序 {seq} 的名称/产品族与前面行不一致")
+            continue
+        if lead is not None:
+            if op["machines"]:
+                err(SHEET_ROUTES, r, f"订单 {oid} 工序 {seq} 既有机台行又有外协行")
+            continue
+        if op["is_outsourced"]:
+            err(SHEET_ROUTES, r, f"订单 {oid} 工序 {seq} 既有外协行又有机台行")
             continue
         if mid in op["machines"]:
             err(SHEET_ROUTES, r, f"订单 {oid} 工序 {seq} 重复指定机台 {mid}")
@@ -247,6 +363,10 @@ def import_workbook(session: Session, content: bytes, mode: str = "replace") -> 
     # -- 入库 (全有或全无) --
     if mode == "replace":
         crud.clear_all(session)
+    for cal in calendars.values():
+        crud.upsert_calendar(session, cal)
+    for res in resources.values():
+        crud.upsert_resource(session, res)
     for m in machines.values():
         crud.upsert_machine(session, m)
     total_ops = 0

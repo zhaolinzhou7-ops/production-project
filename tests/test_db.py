@@ -83,6 +83,37 @@ def test_load_schedule_request_converts_minutes(session, sample_machines, sample
     assert req.machines[0].setup_time("A", "B") == 30
 
 
+def test_load_schedule_request_expands_calendar(session, sample_machines, sample_order):
+    """带日历机台应展开出停机窗; 超长工序被剔除该机台。"""
+    from backend.schemas import CalendarDTO, ShiftRuleDTO
+
+    crud.upsert_calendar(session, CalendarDTO(
+        id="C1", name="白班",
+        rules=[ShiftRuleDTO(weekday=wd, start="08:00", end="16:00")
+               for wd in range(5)],
+    ))
+    sample_machines[0].calendar_id = "C1"
+    _seed(session, sample_machines, sample_order)
+
+    # 2026-07-06 是周一, 从 00:00 排产
+    start = datetime(2026, 7, 6, 0, 0)
+    req = crud.load_schedule_request(session, schedule_start=start)
+    m1 = next(m for m in req.machines if m.id == "M1")
+    assert m1.downtime_windows, "M1 应有班次外不可用窗"
+    assert m1.downtime_windows[0].start == 0
+    assert m1.downtime_windows[0].end == 480  # 00:00-08:00 不可用
+
+    # 工序 0 在 M1 需 40 分钟 < 480 可用段, M1 仍为合格机台
+    assert "M1" in req.orders[0].operations[0].eligible_machines
+
+    # 把 M1 加工时长改成 500 分钟 (> 8h 班), 应被剔除, 只剩 M2
+    o = crud.get_order(session, "J1")
+    o.operations[0].machines["M1"] = 500
+    crud.upsert_order(session, o)
+    req = crud.load_schedule_request(session, schedule_start=start)
+    assert req.orders[0].operations[0].eligible_machines == {"M2": 50}
+
+
 def test_load_schedule_request_skips_cancelled_and_inactive(
     session, sample_machines, sample_order
 ):

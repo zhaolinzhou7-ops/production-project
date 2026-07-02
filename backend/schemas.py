@@ -31,6 +31,8 @@ class OperationDTO(BaseModel):
     )
     is_outsourced: bool = False
     outsource_lead_min: int | None = None
+    resource_id: str | None = None
+    resource_qty: int = Field(default=1, ge=1)
 
     @field_validator("machines")
     @classmethod
@@ -69,6 +71,45 @@ class OrderDTO(BaseModel):
             if op.is_outsourced and not op.outsource_lead_min:
                 raise ValueError(f"外协工序 seq={op.seq} 必须填写外协周期(分钟)")
         return sorted(v, key=lambda op: op.seq)
+
+
+class ShiftRuleDTO(BaseModel):
+    weekday: int = Field(..., ge=0, le=6, description="0=周一 ... 6=周日")
+    start: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    end: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+
+
+class CalendarExceptionDTO(BaseModel):
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    available: bool = Field(..., description="False=整天停; True=按窗加班/调休")
+    start: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    end: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+
+
+class CalendarDTO(BaseModel):
+    id: str = Field(..., min_length=1)
+    name: str = ""
+    rules: list[ShiftRuleDTO] = Field(default_factory=list)
+    exceptions: list[CalendarExceptionDTO] = Field(default_factory=list)
+
+
+class DowntimeDTO(BaseModel):
+    start: datetime
+    end: datetime
+    reason: str = ""
+
+    @field_validator("end")
+    @classmethod
+    def _end_after_start(cls, v: datetime, info) -> datetime:
+        if "start" in info.data and v <= info.data["start"]:
+            raise ValueError("停机结束必须晚于开始")
+        return v
+
+
+class ResourceDTO(BaseModel):
+    id: str = Field(..., min_length=1)
+    name: str = ""
+    capacity: int = Field(default=1, ge=1)
 
 
 class ImportIssue(BaseModel):

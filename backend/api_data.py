@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 from . import crud, excel_io
 from .db import get_session
 from .models import ObjectiveWeights, ScheduleRequest
-from .schemas import ImportReport, MachineDTO, OrderDTO
+from .schemas import (
+    CalendarDTO,
+    DowntimeDTO,
+    ImportReport,
+    MachineDTO,
+    OrderDTO,
+    ResourceDTO,
+)
 
 router = APIRouter(prefix="/api", tags=["data"])
 
@@ -26,7 +33,10 @@ def list_machines(session: Session = Depends(get_session)):
 def create_machine(dto: MachineDTO, session: Session = Depends(get_session)):
     if crud.get_machine(session, dto.id) is not None:
         raise HTTPException(409, f"机台 {dto.id} 已存在")
-    return crud.upsert_machine(session, dto)
+    try:
+        return crud.upsert_machine(session, dto)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @router.put("/machines/{machine_id}", response_model=MachineDTO)
@@ -37,7 +47,10 @@ def update_machine(
         raise HTTPException(400, "路径与请求体中的机台ID不一致")
     if crud.get_machine(session, machine_id) is None:
         raise HTTPException(404, f"机台 {machine_id} 不存在")
-    return crud.upsert_machine(session, dto)
+    try:
+        return crud.upsert_machine(session, dto)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @router.put("/machines/{machine_id}/setup-times", response_model=MachineDTO)
@@ -104,6 +117,77 @@ def delete_order(order_id: str, session: Session = Depends(get_session)):
     if not crud.delete_order(session, order_id):
         raise HTTPException(404, f"订单 {order_id} 不存在")
     return {"deleted": order_id}
+
+
+# ---- 日历 -------------------------------------------------------------------
+
+@router.get("/calendars", response_model=list[CalendarDTO])
+def list_calendars(session: Session = Depends(get_session)):
+    return crud.list_calendars(session)
+
+
+@router.put("/calendars/{calendar_id}", response_model=CalendarDTO)
+def upsert_calendar(
+    calendar_id: str, dto: CalendarDTO, session: Session = Depends(get_session)
+):
+    if dto.id != calendar_id:
+        raise HTTPException(400, "路径与请求体中的日历ID不一致")
+    return crud.upsert_calendar(session, dto)
+
+
+@router.delete("/calendars/{calendar_id}")
+def delete_calendar(calendar_id: str, session: Session = Depends(get_session)):
+    try:
+        if not crud.delete_calendar(session, calendar_id):
+            raise HTTPException(404, f"日历 {calendar_id} 不存在")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {"deleted": calendar_id}
+
+
+# ---- 停机窗 -----------------------------------------------------------------
+
+@router.get("/machines/{machine_id}/downtimes", response_model=list[DowntimeDTO])
+def list_downtimes(machine_id: str, session: Session = Depends(get_session)):
+    return crud.list_downtimes(session, machine_id)
+
+
+@router.put("/machines/{machine_id}/downtimes", response_model=list[DowntimeDTO])
+def set_downtimes(
+    machine_id: str,
+    items: list[DowntimeDTO],
+    session: Session = Depends(get_session),
+):
+    try:
+        return crud.set_downtimes(session, machine_id, items)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+# ---- 资源 -------------------------------------------------------------------
+
+@router.get("/resources", response_model=list[ResourceDTO])
+def list_resources(session: Session = Depends(get_session)):
+    return crud.list_resources(session)
+
+
+@router.put("/resources/{resource_id}", response_model=ResourceDTO)
+def upsert_resource(
+    resource_id: str, dto: ResourceDTO, session: Session = Depends(get_session)
+):
+    if dto.id != resource_id:
+        raise HTTPException(400, "路径与请求体中的资源ID不一致")
+    return crud.upsert_resource(session, dto)
+
+
+@router.delete("/resources/{resource_id}")
+def delete_resource(resource_id: str, session: Session = Depends(get_session)):
+    try:
+        if not crud.delete_resource(session, resource_id):
+            raise HTTPException(404, f"资源 {resource_id} 不存在")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {"deleted": resource_id}
 
 
 # ---- Excel ------------------------------------------------------------------

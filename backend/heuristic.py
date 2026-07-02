@@ -12,13 +12,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .calendar_utils import merge_windows
 from .models import (
+    OUTSOURCE_MACHINE_ID,
     MachineUtilization,
     OrderResult,
     ScheduledOperation,
     ScheduleRequest,
     ScheduleResult,
+    TimeWindow,
 )
+
+
+def fit_after_windows(start: int, dur: int, windows: list[TimeWindow]) -> int:
+    """把 [start, start+dur) 推到不与任何不可用窗重叠的最早位置。
+
+    windows 需已合并排序 (merge_windows)。工序不可中断。
+    """
+    for w in windows:
+        if start + dur <= w.start:
+            break
+        if start < w.end:  # 与该窗重叠 -> 推到窗后
+            start = w.end
+    return start
 
 
 @dataclass
@@ -44,6 +60,7 @@ def greedy_schedule(
     last_fam: dict[str, str | None] = {
         m.id: (machine_init_family or {}).get(m.id) for m in request.machines
     }
+    windows = {m.id: merge_windows(m.downtime_windows) for m in request.machines}
 
     next_idx = {o.id: 0 for o in request.orders}
     prev_end = {o.id: o.release_time for o in request.orders}
@@ -52,23 +69,34 @@ def greedy_schedule(
 
     plan = HeuristicPlan()
     while pending:
-        best = None  # (end, -priority, due, order, op, machine, start, setup)
+        best = None  # (key, order, op, machine, start, setup, dur)
         for o in orders_sorted:
             i = next_idx[o.id]
             if i >= len(o.operations):
                 continue
             op = o.operations[i]
+            if op.is_outsourced:
+                # 外协: 不占机台, 固定周期
+                start = prev_end[o.id]
+                key = (start + op.outsource_lead, -o.priority, o.due_date)
+                if best is None or key < best[0]:
+                    best = (key, o, op, OUTSOURCE_MACHINE_ID, start, 0,
+                            op.outsource_lead)
+                continue
             for mid, dur in op.eligible_machines.items():
                 setup = machines[mid].setup_time(last_fam[mid], op.family)
                 start = max(prev_end[o.id], free[mid] + setup)
+                # 加工段整体避开不可用窗 (换型允许落在停机时段)
+                start = fit_after_windows(start, dur, windows[mid])
                 key = (start + dur, -o.priority, o.due_date)
                 if best is None or key < best[0]:
-                    best = (key, o, op, mid, start, setup)
-        _, o, op, mid, start, setup = best
-        end = start + op.eligible_machines[mid]
+                    best = (key, o, op, mid, start, setup, dur)
+        _, o, op, mid, start, setup, dur = best
+        end = start + dur
         plan.assignment[op.id] = (mid, start, end, setup)
-        free[mid] = end
-        last_fam[mid] = op.family
+        if mid != OUTSOURCE_MACHINE_ID:
+            free[mid] = end
+            last_fam[mid] = op.family
         prev_end[o.id] = end
         next_idx[o.id] += 1
         pending -= 1

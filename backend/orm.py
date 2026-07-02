@@ -85,6 +85,69 @@ class OperationRow(Base):
     )
 
 
+class CalendarRow(Base):
+    __tablename__ = "calendars"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, default="")
+
+    rules: Mapped[list["CalendarRuleRow"]] = relationship(
+        back_populates="calendar", cascade="all, delete-orphan"
+    )
+    exceptions: Mapped[list["CalendarExceptionRow"]] = relationship(
+        back_populates="calendar", cascade="all, delete-orphan"
+    )
+
+
+class CalendarRuleRow(Base):
+    __tablename__ = "calendar_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    calendar_id: Mapped[str] = mapped_column(
+        ForeignKey("calendars.id", ondelete="CASCADE")
+    )
+    weekday: Mapped[int] = mapped_column(Integer)  # 0=周一 ... 6=周日
+    shift_start: Mapped[str] = mapped_column(String)  # "08:00"
+    shift_end: Mapped[str] = mapped_column(String)    # "16:00"
+
+    calendar: Mapped[CalendarRow] = relationship(back_populates="rules")
+
+
+class CalendarExceptionRow(Base):
+    __tablename__ = "calendar_exceptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    calendar_id: Mapped[str] = mapped_column(
+        ForeignKey("calendars.id", ondelete="CASCADE")
+    )
+    date: Mapped[str] = mapped_column(String)  # "2026-07-06"
+    available: Mapped[bool] = mapped_column(Boolean)  # False=整天停; True=按窗加班
+    start: Mapped[str | None] = mapped_column(String, nullable=True)
+    end: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    calendar: Mapped[CalendarRow] = relationship(back_populates="exceptions")
+
+
+class MachineDowntimeRow(Base):
+    __tablename__ = "machine_downtimes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    machine_id: Mapped[str] = mapped_column(
+        ForeignKey("machines.id", ondelete="CASCADE")
+    )
+    start: Mapped[datetime] = mapped_column(DateTime)
+    end: Mapped[datetime] = mapped_column(DateTime)
+    reason: Mapped[str] = mapped_column(String, default="")
+
+
+class ResourceRow(Base):
+    __tablename__ = "resources"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, default="")
+    capacity: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class OperationMachineRow(Base):
     __tablename__ = "operation_machines"
 

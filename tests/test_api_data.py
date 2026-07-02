@@ -120,7 +120,9 @@ def test_schedule_request_from_db_and_solve(client):
     assert solved.status_code == 200
     body = solved.json()
     assert body["status"] in ("OPTIMAL", "FEASIBLE")
-    assert len(body["operations"]) == 2
+    # 模板订单含 3 道工序 (含外协热处理)
+    assert len(body["operations"]) == 3
+    assert any(op["machine_id"] == "OUTSOURCE" for op in body["operations"])
 
 
 def test_schedule_request_empty_db_422(client):

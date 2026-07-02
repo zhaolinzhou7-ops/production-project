@@ -97,6 +97,22 @@
           <tbody></tbody>
         </table>
       </section>
+
+      <section class="panel">
+        <h2>班次日历 <button id="btn-add-calendar" class="mini">+ 新增日历</button></h2>
+        <table id="calendars-table">
+          <thead><tr><th>ID</th><th>名称</th><th>周规则</th><th>例外</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>第二资源 (工装/人员) <button id="btn-add-resource" class="mini">+ 新增资源</button></h2>
+        <table id="resources-table">
+          <thead><tr><th>ID</th><th>名称</th><th>同时可用数量</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
     </div>
 
     <!-- ============ 方案 (M4) ============ -->
@@ -121,8 +137,14 @@
       <label>机台 ID <input id="m-id" required /></label>
       <label>名称 <input id="m-name" required /></label>
       <label class="row"><input type="checkbox" id="m-active" checked /> 启用</label>
+      <label>班次日历 ID (可空 = 24h 连续)
+        <input id="m-calendar" placeholder="C1" />
+      </label>
       <label>换型矩阵 (每行: 原产品族,新产品族,分钟)
         <textarea id="m-setup" rows="4" placeholder="A,B,30&#10;B,A,20"></textarea>
+      </label>
+      <label>停机计划 (每行: 开始,结束,原因; 时间如 2026-07-10 14:00)
+        <textarea id="m-downtime" rows="3" placeholder="2026-07-10 14:00,2026-07-10 18:00,保养"></textarea>
       </label>
       <div class="dlg-actions">
         <button value="cancel">取消</button>
@@ -147,12 +169,45 @@
           <option value="cancelled">cancelled (取消)</option>
         </select>
       </label>
-      <label>工序 (每行: 工序号|名称|产品族|机台:分钟,机台:分钟)
-        <textarea id="o-ops" rows="5" placeholder="0|粗车|A|M1:40,M2:50&#10;1|精铣|A|M2:35"></textarea>
+      <label>工序 (每行: 工序号|名称|产品族|机台:分钟,... 外协写 外协:周期分钟; 可加 |资源ID:数量)
+        <textarea id="o-ops" rows="5" placeholder="0|粗车|A|M1:40,M2:50&#10;1|热处理|A|外协:240&#10;2|精铣|A|M2:35|F1:1"></textarea>
       </label>
       <div class="dlg-actions">
         <button value="cancel">取消</button>
         <button value="ok" class="primary" id="dlg-order-save">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 日历编辑对话框 -->
+  <dialog id="dlg-calendar">
+    <form method="dialog" class="dlg-form">
+      <h3 id="dlg-calendar-title">新增日历</h3>
+      <label>日历 ID <input id="c-id" required /></label>
+      <label>名称 <input id="c-name" /></label>
+      <label>周规则 (每行: 星期1-7,开始HH:MM,结束HH:MM; 一天多班写多行)
+        <textarea id="c-rules" rows="5" placeholder="1,08:00,16:00&#10;1,16:00,22:00"></textarea>
+      </label>
+      <label>例外 (每行: 日期,休 或 日期,班,开始,结束)
+        <textarea id="c-exceptions" rows="3" placeholder="2026-10-01,休&#10;2026-07-11,班,09:00,12:00"></textarea>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel">取消</button>
+        <button value="ok" class="primary" id="dlg-calendar-save">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 资源编辑对话框 -->
+  <dialog id="dlg-resource">
+    <form method="dialog" class="dlg-form">
+      <h3 id="dlg-resource-title">新增资源</h3>
+      <label>资源 ID <input id="r-id" required /></label>
+      <label>名称 <input id="r-name" /></label>
+      <label>同时可用数量 <input type="number" id="r-capacity" value="1" min="1" /></label>
+      <div class="dlg-actions">
+        <button value="cancel">取消</button>
+        <button value="ok" class="primary" id="dlg-resource-save">保存</button>
       </div>
     </form>
   </dialog>

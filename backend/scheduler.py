@@ -20,6 +20,7 @@ from ortools.sat.python import cp_model
 
 from .heuristic import greedy_schedule, plan_to_result
 from .models import (
+    OUTSOURCE_MACHINE_ID,
     MachineUtilization,
     Operation,
     Order,
@@ -32,7 +33,7 @@ from .models import (
 
 
 def _sum_horizon(request: ScheduleRequest, machine_release: dict[str, int]) -> int:
-    """保守时间上界: 所有工序最大耗时 + 换型 + 释放时间之和。"""
+    """保守时间上界: 所有工序最大耗时 + 换型 + 释放时间之和 + 停机总量。"""
     total = max(machine_release.values(), default=0)
     max_setup = 0
     for m in request.machines:
@@ -42,8 +43,17 @@ def _sum_horizon(request: ScheduleRequest, machine_release: dict[str, int]) -> i
     for order in request.orders:
         total += order.release_time
         for op in order.operations:
-            total += max(op.eligible_machines.values()) + max_setup
-    return max(total, 1)
+            if op.is_outsourced:
+                total += op.outsource_lead
+            else:
+                total += max(op.eligible_machines.values()) + max_setup
+    base = max(total, 1)
+    # 工序需避开停机窗, 最坏情况全部被推到最晚停机窗之后
+    max_window_end = max(
+        (w.end for m in request.machines for w in m.downtime_windows),
+        default=0,
+    )
+    return base + max_window_end
 
 
 def _empty_result(status: str, solve_time: float) -> ScheduleResult:
@@ -91,9 +101,18 @@ def solve_core(
 
     machines = {m.id: m for m in request.machines}
 
+    # 有第二资源约束时贪心解可能超容量 (贪心不检查资源), 不能作为 hint/兜底
+    res_ids = {r.id for r in request.resources}
+    has_resource_ops = any(
+        op.resource_id in res_ids
+        for o in request.orders for op in o.operations
+        if op.resource_id
+    )
+    use_hint = params.use_hint and not has_resource_ops
+
     # ---- 启发式初始解 (hint + 时域收紧 + 兜底) -----------------------------
     hint_plan = None
-    if params.use_hint:
+    if use_hint:
         hint_plan = greedy_schedule(request, machine_release, machine_init_family)
         # 上界留 30% 余量: 允许最优解为降换型/拖期而适当放宽完工时间
         horizon = int(hint_plan.makespan * 1.3) + 1
@@ -118,6 +137,11 @@ def solve_core(
             e = model.NewIntVar(order.release_time, horizon, f"end_{op.id}")
             op_start[op.id], op_end[op.id] = s, e
             alt[op.id] = {}
+
+            if op.is_outsourced:
+                # 外协: 固定周期, 不占内部机台/不进 NoOverlap
+                model.Add(e == s + op.outsource_lead)
+                continue
 
             presences = []
             for mid, dur in op.eligible_machines.items():
@@ -162,6 +186,13 @@ def solve_core(
         nodes = machine_ops[mid]
         if not nodes:
             continue
+        # 停机/班次外时间 -> 固定哑区间, 加工段不可与之重叠 (换型不占区间)
+        for w in m.downtime_windows:
+            machine_intervals[mid].append(
+                model.NewFixedSizeIntervalVar(
+                    w.start, w.end - w.start, f"down_{mid}_{w.start}"
+                )
+            )
         model.AddNoOverlap(machine_intervals[mid])
 
         init_fam = machine_init_family.get(mid)
@@ -229,6 +260,25 @@ def solve_core(
         model.Add(idle >= m_hi - m_lo - machine_busy_expr[mid])
         idle_terms.append(idle)
         machine_span[mid] = (m_lo, m_hi, idle)
+
+    # ---- 第二资源 (工装/人员): Cumulative 容量约束 --------------------------
+    if has_resource_ops:
+        res_map = {r.id: r for r in request.resources}
+        res_usage: dict[str, tuple[list, list]] = {r.id: ([], []) for r in request.resources}
+        for order in request.orders:
+            for op in order.operations:
+                if op.is_outsourced or not op.resource_id:
+                    continue
+                if op.resource_id not in res_map:
+                    raise ValueError(f"工序 {op.id} 引用了未定义的资源 {op.resource_id}")
+                ivs, dem = res_usage[op.resource_id]
+                # 所有机台候选可选区间都挂入; presence 保证同时只计一次
+                for tup in alt[op.id].values():
+                    ivs.append(tup[3])
+                    dem.append(op.resource_qty)
+        for rid, (ivs, dem) in res_usage.items():
+            if ivs:
+                model.AddCumulative(ivs, dem, res_map[rid].capacity)
 
     # ---- 目标各分量 --------------------------------------------------------
     makespan = model.NewIntVar(0, horizon, "makespan")
@@ -364,6 +414,19 @@ def solve_core(
                     setup=op_setup.get(op_id, 0),
                     duration=dur,
                     end=solver.Value(a_e),
+                ))
+    # 外协工序: 无机台区间, 直接取总体开工/完工
+    for o in request.orders:
+        for op in o.operations:
+            if op.is_outsourced:
+                scheduled.append(ScheduledOperation(
+                    operation_id=op.id, operation_name=op.name,
+                    order_id=o.id, order_name=o.name,
+                    machine_id=OUTSOURCE_MACHINE_ID, family=op.family,
+                    start=solver.Value(op_start[op.id]),
+                    setup=0,
+                    duration=op.outsource_lead,
+                    end=solver.Value(op_end[op.id]),
                 ))
     scheduled.sort(key=lambda x: (x.machine_id, x.start))
 

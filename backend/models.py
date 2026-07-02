@@ -8,9 +8,34 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+# 外协工序在排产结果中的虚拟"机台"标识
+OUTSOURCE_MACHINE_ID = "OUTSOURCE"
+
+
+class TimeWindow(BaseModel):
+    """一个相对分钟的时间窗 [start, end)。"""
+
+    start: int = Field(..., ge=0)
+    end: int = Field(..., gt=0)
+
+    @model_validator(mode="after")
+    def _valid_range(self) -> "TimeWindow":
+        if self.end <= self.start:
+            raise ValueError("时间窗 end 必须大于 start")
+        return self
+
+
+class Resource(BaseModel):
+    """第二资源 (工装/专用人员等), 容量有限。"""
+
+    id: str
+    name: str = ""
+    capacity: int = Field(default=1, ge=1, description="同时可用数量")
 
 
 class Machine(BaseModel):
@@ -23,6 +48,10 @@ class Machine(BaseModel):
     setup_times: dict[str, dict[str, int]] = Field(
         default_factory=dict,
         description="顺序相关换型时间矩阵 (按产品族), 单位: 分钟",
+    )
+    downtime_windows: list[TimeWindow] = Field(
+        default_factory=list,
+        description="不可用时间窗 (班次外/保养/故障), 相对分钟, 由日历在 API 边界展开",
     )
 
     def setup_time(self, from_family: Optional[str], to_family: str) -> int:
@@ -44,17 +73,30 @@ class Operation(BaseModel):
     name: str = Field(..., description="工序名称, 如 '车削'")
     sequence: int = Field(..., description="在所属订单内的工序序号 (从 0 开始, 决定先后)")
     family: str = Field(..., description="产品族, 用于计算换型时间")
-    # 合格机台 -> 在该机台上的加工时长(分钟)
+    # 合格机台 -> 在该机台上的加工时长(分钟); 外协工序可为空
     eligible_machines: dict[str, int] = Field(
-        ..., description="可执行本工序的机台及对应加工时长(分钟)"
+        default_factory=dict,
+        description="可执行本工序的机台及对应加工时长(分钟)",
     )
+    is_outsourced: bool = Field(
+        default=False, description="外协工序 (热处理/表面处理等), 不占内部机台"
+    )
+    outsource_lead: int | None = Field(
+        default=None, gt=0, description="外协固定周期(分钟), 外协工序必填"
+    )
+    resource_id: str | None = Field(
+        default=None, description="需要的第二资源 (工装/人员), 可空"
+    )
+    resource_qty: int = Field(default=1, ge=1, description="占用资源数量")
 
-    @field_validator("eligible_machines")
-    @classmethod
-    def _non_empty_machines(cls, v: dict[str, int]) -> dict[str, int]:
-        if not v:
-            raise ValueError("每道工序至少要有一台合格机台")
-        return v
+    @model_validator(mode="after")
+    def _machines_or_outsourced(self) -> "Operation":
+        if self.is_outsourced:
+            if not self.outsource_lead:
+                raise ValueError(f"外协工序 {self.id} 必须填写外协周期")
+        elif not self.eligible_machines:
+            raise ValueError(f"工序 {self.id} 至少要有一台合格机台")
+        return self
 
 
 class Order(BaseModel):
@@ -115,6 +157,13 @@ class ScheduleRequest(BaseModel):
     )
     solver_params: SolverParams | None = Field(
         default=None, description="求解器参数, 缺省用默认值"
+    )
+    resources: list[Resource] = Field(
+        default_factory=list, description="第二资源定义 (工装/人员)"
+    )
+    schedule_start: datetime | None = Field(
+        default=None,
+        description="t=0 对应的绝对时刻 (仅供展示换算, 求解器不感知)",
     )
 
 

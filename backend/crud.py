@@ -10,15 +10,45 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from .models import Machine, ObjectiveWeights, Operation, Order, ScheduleRequest
+from .calendar_utils import (
+    CalendarException,
+    ShiftRule,
+    WorkCalendar,
+    expand_unavailable,
+    max_contiguous_available,
+    merge_windows,
+)
+from .models import (
+    Machine,
+    ObjectiveWeights,
+    Operation,
+    Order,
+    Resource,
+    ScheduleRequest,
+    TimeWindow,
+)
 from .orm import (
+    CalendarExceptionRow,
+    CalendarRow,
+    CalendarRuleRow,
+    MachineDowntimeRow,
     MachineRow,
     OperationMachineRow,
     OperationRow,
     OrderRow,
+    ResourceRow,
     SetupTimeRow,
 )
-from .schemas import MachineDTO, OperationDTO, OrderDTO
+from .schemas import (
+    CalendarDTO,
+    CalendarExceptionDTO,
+    DowntimeDTO,
+    MachineDTO,
+    OperationDTO,
+    OrderDTO,
+    ResourceDTO,
+    ShiftRuleDTO,
+)
 
 
 def minutes_from(start: datetime, t: datetime) -> int:
@@ -52,6 +82,8 @@ def get_machine(session: Session, machine_id: str) -> MachineDTO | None:
 
 
 def upsert_machine(session: Session, dto: MachineDTO) -> MachineDTO:
+    if dto.calendar_id and session.get(CalendarRow, dto.calendar_id) is None:
+        raise ValueError(f"日历 {dto.calendar_id} 不存在")
     row = session.get(MachineRow, dto.id)
     if row is None:
         row = MachineRow(id=dto.id)
@@ -108,6 +140,8 @@ def _order_to_dto(row: OrderRow) -> OrderDTO:
                 machines={m.machine_id: m.duration_min for m in op.machines},
                 is_outsourced=op.is_outsourced,
                 outsource_lead_min=op.outsource_lead_min,
+                resource_id=op.resource_id,
+                resource_qty=op.resource_qty or 1,
             )
             for op in row.operations
         ],
@@ -156,6 +190,8 @@ def upsert_order(session: Session, dto: OrderDTO) -> OrderDTO:
             seq=op.seq, name=op.name, family=op.family,
             is_outsourced=op.is_outsourced,
             outsource_lead_min=op.outsource_lead_min,
+            resource_id=op.resource_id,
+            resource_qty=op.resource_qty,
             machines=[
                 OperationMachineRow(machine_id=mid, duration_min=dur)
                 for mid, dur in op.machines.items()
@@ -181,30 +217,201 @@ def clear_all(session: Session) -> None:
         session.delete(row)
     for row in session.scalars(select(MachineRow)).all():
         session.delete(row)
+    for row in session.scalars(select(CalendarRow)).all():
+        session.delete(row)
+    for row in session.scalars(select(ResourceRow)).all():
+        session.delete(row)
     session.flush()
 
 
+# ---- 日历 -------------------------------------------------------------------
+
+def _calendar_to_dto(row: CalendarRow) -> CalendarDTO:
+    return CalendarDTO(
+        id=row.id, name=row.name,
+        rules=[
+            ShiftRuleDTO(weekday=r.weekday, start=r.shift_start, end=r.shift_end)
+            for r in row.rules
+        ],
+        exceptions=[
+            CalendarExceptionDTO(
+                date=e.date, available=e.available, start=e.start, end=e.end
+            )
+            for e in row.exceptions
+        ],
+    )
+
+
+def list_calendars(session: Session) -> list[CalendarDTO]:
+    rows = session.scalars(
+        select(CalendarRow)
+        .options(selectinload(CalendarRow.rules), selectinload(CalendarRow.exceptions))
+        .order_by(CalendarRow.id)
+    ).all()
+    return [_calendar_to_dto(r) for r in rows]
+
+
+def get_calendar(session: Session, calendar_id: str) -> CalendarDTO | None:
+    row = session.get(CalendarRow, calendar_id)
+    return _calendar_to_dto(row) if row else None
+
+
+def upsert_calendar(session: Session, dto: CalendarDTO) -> CalendarDTO:
+    row = session.get(CalendarRow, dto.id)
+    if row is None:
+        row = CalendarRow(id=dto.id)
+        session.add(row)
+    row.name = dto.name
+    row.rules = [
+        CalendarRuleRow(weekday=r.weekday, shift_start=r.start, shift_end=r.end)
+        for r in dto.rules
+    ]
+    row.exceptions = [
+        CalendarExceptionRow(
+            date=e.date, available=e.available, start=e.start, end=e.end
+        )
+        for e in dto.exceptions
+    ]
+    session.flush()
+    return _calendar_to_dto(row)
+
+
+def delete_calendar(session: Session, calendar_id: str) -> bool:
+    row = session.get(CalendarRow, calendar_id)
+    if row is None:
+        return False
+    used = session.scalars(
+        select(MachineRow).where(MachineRow.calendar_id == calendar_id)
+    ).first()
+    if used is not None:
+        raise ValueError(f"日历 {calendar_id} 仍被机台 {used.id} 引用")
+    session.delete(row)
+    return True
+
+
+# ---- 停机窗 -----------------------------------------------------------------
+
+def list_downtimes(session: Session, machine_id: str) -> list[DowntimeDTO]:
+    rows = session.scalars(
+        select(MachineDowntimeRow)
+        .where(MachineDowntimeRow.machine_id == machine_id)
+        .order_by(MachineDowntimeRow.start)
+    ).all()
+    return [DowntimeDTO(start=r.start, end=r.end, reason=r.reason) for r in rows]
+
+
+def set_downtimes(
+    session: Session, machine_id: str, items: list[DowntimeDTO]
+) -> list[DowntimeDTO]:
+    if session.get(MachineRow, machine_id) is None:
+        raise ValueError(f"机台 {machine_id} 不存在")
+    for r in session.scalars(
+        select(MachineDowntimeRow).where(MachineDowntimeRow.machine_id == machine_id)
+    ).all():
+        session.delete(r)
+    for d in items:
+        session.add(MachineDowntimeRow(
+            machine_id=machine_id, start=d.start, end=d.end, reason=d.reason,
+        ))
+    session.flush()
+    return list_downtimes(session, machine_id)
+
+
+# ---- 资源 -------------------------------------------------------------------
+
+def list_resources(session: Session) -> list[ResourceDTO]:
+    rows = session.scalars(select(ResourceRow).order_by(ResourceRow.id)).all()
+    return [ResourceDTO(id=r.id, name=r.name, capacity=r.capacity) for r in rows]
+
+
+def upsert_resource(session: Session, dto: ResourceDTO) -> ResourceDTO:
+    row = session.get(ResourceRow, dto.id)
+    if row is None:
+        row = ResourceRow(id=dto.id)
+        session.add(row)
+    row.name = dto.name
+    row.capacity = dto.capacity
+    session.flush()
+    return dto
+
+
+def delete_resource(session: Session, resource_id: str) -> bool:
+    row = session.get(ResourceRow, resource_id)
+    if row is None:
+        return False
+    used = session.scalars(
+        select(OperationRow).where(OperationRow.resource_id == resource_id)
+    ).first()
+    if used is not None:
+        raise ValueError(f"资源 {resource_id} 仍被工序 {used.id} 引用")
+    session.delete(row)
+    return True
+
+
 # ---- 排产请求组装 -----------------------------------------------------------
+
+def _machine_windows(
+    session: Session,
+    machine: MachineDTO,
+    start: datetime,
+    horizon_minutes: int,
+) -> list[TimeWindow]:
+    """机台不可用窗 = 班次日历展开 + 停机记录 (合并, 相对分钟)。"""
+    windows: list[TimeWindow] = []
+    if machine.calendar_id:
+        dto = get_calendar(session, machine.calendar_id)
+        if dto is None:
+            raise ValueError(f"机台 {machine.id} 引用了不存在的日历 {machine.calendar_id}")
+        cal = WorkCalendar(
+            id=dto.id, name=dto.name,
+            rules=[ShiftRule(r.weekday, r.start, r.end) for r in dto.rules],
+            exceptions=[
+                CalendarException(
+                    day=datetime.strptime(e.date, "%Y-%m-%d").date(),
+                    available=e.available, start=e.start, end=e.end,
+                )
+                for e in dto.exceptions
+            ],
+        )
+        windows.extend(expand_unavailable(cal, start, horizon_minutes))
+    for d in list_downtimes(session, machine.id):
+        s = minutes_from(start, d.start)
+        e = minutes_from(start, d.end)
+        if e > s:
+            windows.append(TimeWindow(start=s, end=e))
+    return merge_windows(windows)
+
 
 def load_schedule_request(
     session: Session,
     schedule_start: datetime | None = None,
     weights: ObjectiveWeights | None = None,
     time_limit_seconds: float = 10.0,
+    calendar_days: int = 60,
 ) -> ScheduleRequest:
     """从 DB 组装 ScheduleRequest (绝对时间 -> 相对分钟)。
 
     - 只取 active 机台与非 cancelled 订单;
-    - schedule_start 默认取当前时间 (取整到分钟)。
+    - schedule_start 默认取当前时间 (取整到分钟);
+    - 班次日历/停机在 [start, start + calendar_days天) 内展开为不可用窗;
+    - 工序时长超过某机台最长连续可用段时, 剔除该机台; 全部被剔除则报错。
     """
     start = (schedule_start or datetime.now()).replace(second=0, microsecond=0)
+    horizon_minutes = calendar_days * 24 * 60
 
-    machines = [
-        Machine(id=m.id, name=m.name, setup_times=m.setup_times)
-        for m in list_machines(session)
-        if m.active
-    ]
+    machines: list[Machine] = []
+    for m in list_machines(session):
+        if not m.active:
+            continue
+        machines.append(Machine(
+            id=m.id, name=m.name, setup_times=m.setup_times,
+            downtime_windows=_machine_windows(session, m, start, horizon_minutes),
+        ))
     machine_ids = {m.id for m in machines}
+    max_avail = {
+        m.id: max_contiguous_available(m.downtime_windows, horizon_minutes)
+        for m in machines
+    }
 
     orders: list[Order] = []
     for o in list_orders(session):
@@ -212,15 +419,29 @@ def load_schedule_request(
             continue
         ops = []
         for op in o.operations:
-            eligible = {mid: dur for mid, dur in op.machines.items() if mid in machine_ids}
+            if op.is_outsourced:
+                ops.append(Operation(
+                    id=op.id or f"{o.id}-{op.seq}",
+                    name=op.name, sequence=op.seq, family=op.family,
+                    is_outsourced=True, outsource_lead=op.outsource_lead_min,
+                    resource_id=op.resource_id, resource_qty=op.resource_qty,
+                ))
+                continue
+            eligible = {
+                mid: dur for mid, dur in op.machines.items()
+                if mid in machine_ids and dur <= max_avail[mid]
+            }
             if not eligible:
                 raise ValueError(
-                    f"订单 {o.id} 工序 seq={op.seq} 没有可用机台 (机台停用或未配置)"
+                    f"订单 {o.id} 工序 seq={op.seq} 没有可用机台 "
+                    f"(机台停用/未配置, 或加工时长超过班次日历的最长连续可用段, "
+                    f"请拆分工序或将机台设为 24h 连续)"
                 )
             ops.append(Operation(
                 id=op.id or f"{o.id}-{op.seq}",
                 name=op.name, sequence=op.seq, family=op.family,
                 eligible_machines=eligible,
+                resource_id=op.resource_id, resource_qty=op.resource_qty,
             ))
         orders.append(Order(
             id=o.id, name=o.name,
@@ -238,4 +459,9 @@ def load_schedule_request(
         orders=orders,
         weights=weights or ObjectiveWeights(),
         time_limit_seconds=time_limit_seconds,
+        resources=[
+            Resource(id=r.id, name=r.name, capacity=r.capacity)
+            for r in list_resources(session)
+        ],
+        schedule_start=start,
     )
