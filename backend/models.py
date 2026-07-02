@@ -81,7 +81,27 @@ class ObjectiveWeights(BaseModel):
     makespan: float = Field(default=1.0, ge=0, description="最短完工时间权重")
     tardiness: float = Field(default=5.0, ge=0, description="拖期 (按时交付) 权重")
     changeover: float = Field(default=1.0, ge=0, description="换型时间总量权重")
-    idle: float = Field(default=0.5, ge=0, description="设备空闲 (利用率) 权重")
+    idle: float = Field(
+        default=0.5, ge=0,
+        description="设备空闲权重 (最小化机台首末工序之间的空闲时间)",
+    )
+
+
+class SolverParams(BaseModel):
+    """求解器行为参数 (规模化控制)。"""
+
+    time_limit_seconds: float | None = Field(
+        default=None, gt=0, description="覆盖请求级求解时限"
+    )
+    num_workers: int = Field(default=8, ge=1, description="并行搜索线程数")
+    use_hint: bool = Field(
+        default=True, description="用贪心启发式解作为 CP-SAT 初始解提示"
+    )
+    decompose_threshold: int = Field(
+        default=5000, ge=1,
+        description="(工序,机台) 候选对数超过该值时启用滚动时域分解",
+    )
+    batch_size: int = Field(default=40, ge=2, description="滚动分解每批订单数")
 
 
 class ScheduleRequest(BaseModel):
@@ -92,6 +112,9 @@ class ScheduleRequest(BaseModel):
     weights: ObjectiveWeights = Field(default_factory=ObjectiveWeights)
     time_limit_seconds: float = Field(
         default=10.0, gt=0, description="求解时间上限(秒)"
+    )
+    solver_params: SolverParams | None = Field(
+        default=None, description="求解器参数, 缺省用默认值"
     )
 
 
