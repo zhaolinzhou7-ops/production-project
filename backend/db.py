@@ -53,6 +53,13 @@ def init_app_db(url: str = DEFAULT_URL) -> Engine:
     return _engine
 
 
+def open_session() -> Session:
+    """直接打开一个 session (后台线程用, 调用方负责 commit/close)。"""
+    if _session_factory is None:
+        init_app_db()
+    return _session_factory()
+
+
 def get_session() -> Iterator[Session]:
     """FastAPI 依赖: 每请求独立 session, 成功提交、异常回滚。"""
     if _session_factory is None:

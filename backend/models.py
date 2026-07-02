@@ -129,6 +129,15 @@ class ObjectiveWeights(BaseModel):
     )
 
 
+class FrozenOp(BaseModel):
+    """已开工/完工工序的冻结安排 (增量重排时保持不动)。"""
+
+    op_id: str
+    machine_id: str = Field(..., description="实际机台 (外协用 OUTSOURCE)")
+    start: int = Field(..., ge=0, description="实际开工(相对分钟)")
+    end: int = Field(..., gt=0, description="预计/实际完工(相对分钟)")
+
+
 class SolverParams(BaseModel):
     """求解器行为参数 (规模化控制)。"""
 

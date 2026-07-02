@@ -15,14 +15,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api_data import router as data_router
+from .api_scenario import router as scenario_router
 from .db import init_app_db
 from .models import ScheduleRequest, ScheduleResult
 from .sample_data import sample_request
 from .scheduler import solve
 
-app = FastAPI(title="自动排产系统", version="2.0.0")
+app = FastAPI(title="智能排产系统", version="2.0.0")
 init_app_db()
 app.include_router(data_router)
+app.include_router(scenario_router)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 

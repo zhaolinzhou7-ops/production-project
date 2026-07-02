@@ -3,11 +3,6 @@
 // 当前加载的排产请求数据 (机台 + 订单)
 let currentData = null;
 
-const COLORS = [
-  "#4f8cff", "#36d399", "#fbbd23", "#f87272", "#a78bfa",
-  "#22d3ee", "#fb923c", "#e879f9", "#84cc16", "#f472b6",
-];
-
 document.getElementById("btn-sample").addEventListener("click", loadSample);
 document.getElementById("btn-load-db").addEventListener("click", loadFromDb);
 document.getElementById("btn-run").addEventListener("click", runSchedule);
@@ -55,6 +50,8 @@ async function runSchedule() {
   const payload = {
     machines: currentData.machines,
     orders: currentData.orders,
+    resources: currentData.resources || [],
+    schedule_start: currentData.schedule_start || null,
     weights: {
       makespan: parseFloat(document.getElementById("w-makespan").value),
       tardiness: parseFloat(document.getElementById("w-tardiness").value),
@@ -65,15 +62,10 @@ async function runSchedule() {
   };
 
   try {
-    const res = await fetch("/api/schedule", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const result = await res.json();
+    const result = await apiSend("/api/schedule", "POST", payload);
     render(result);
   } catch (e) {
-    alert("排产失败: " + e);
+    alert("排产失败: " + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = "开始排产";
@@ -100,161 +92,23 @@ function render(result) {
   renderUtil(result);
 }
 
-const OUTSOURCE_ID = "OUTSOURCE";
-
 function renderGantt(result) {
   document.getElementById("gantt-panel").hidden = false;
-  const ops = result.operations;
-  const makespan = result.makespan;
-
-  // 泳道 = 机台 (+ 外协虚拟泳道)
   const lanes = currentData.machines.map((m) => ({
     id: m.id, name: m.name, windows: m.downtime_windows || [],
   }));
-  if (ops.some((op) => op.machine_id === OUTSOURCE_ID)) {
+  if (result.operations.some((op) => op.machine_id === OUTSOURCE_ID)) {
     lanes.push({ id: OUTSOURCE_ID, name: "外协", windows: [] });
   }
-
-  // 订单 -> 颜色
-  const orderColor = {};
-  currentData.orders.forEach((o, i) => {
-    orderColor[o.id] = COLORS[i % COLORS.length];
+  drawGantt({
+    container: document.getElementById("gantt"),
+    legendContainer: document.getElementById("legend"),
+    lanes,
+    ops: result.operations,
+    makespan: result.makespan,
+    scheduleStart: currentData.schedule_start,
+    orders: currentData.orders,
   });
-
-  const rowH = 44, padTop = 30, padLeft = 90, padRight = 30, padBottom = 30;
-  const width = 1000;
-  const plotW = width - padLeft - padRight;
-  const height = padTop + lanes.length * rowH + padBottom;
-  const scale = plotW / Math.max(makespan, 1);
-  const startMs = currentData.schedule_start
-    ? new Date(currentData.schedule_start).getTime() : null;
-
-  const fmtTick = (t) => {
-    if (startMs === null) return String(t);
-    const d = new Date(startMs + t * 60000);
-    const p = (n) => String(n).padStart(2, "0");
-    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  };
-
-  const svgNS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height);
-
-  // 时间轴
-  const ticks = startMs === null ? 10 : 6;
-  for (let i = 0; i <= ticks; i++) {
-    const t = Math.round((makespan / ticks) * i);
-    const x = padLeft + t * scale;
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("x1", x); line.setAttribute("x2", x);
-    line.setAttribute("y1", padTop); line.setAttribute("y2", height - padBottom);
-    line.setAttribute("class", "axis-line");
-    svg.appendChild(line);
-    const lbl = document.createElementNS(svgNS, "text");
-    lbl.setAttribute("x", x); lbl.setAttribute("y", padTop - 8);
-    lbl.setAttribute("text-anchor", "middle");
-    lbl.setAttribute("class", "axis-label");
-    lbl.textContent = fmtTick(t);
-    svg.appendChild(lbl);
-  }
-
-  // 泳道标签 + 停机底纹
-  const rowIndex = {};
-  lanes.forEach((lane, i) => {
-    rowIndex[lane.id] = i;
-    const y = padTop + i * rowH + rowH / 2;
-    const lbl = document.createElementNS(svgNS, "text");
-    lbl.setAttribute("x", padLeft - 10); lbl.setAttribute("y", y + 4);
-    lbl.setAttribute("text-anchor", "end");
-    lbl.textContent = lane.name;
-    svg.appendChild(lbl);
-
-    lane.windows.forEach((w) => {
-      if (w.start >= makespan) return;
-      const x = padLeft + w.start * scale;
-      const wpx = Math.max((Math.min(w.end, makespan) - w.start) * scale, 1);
-      const rect = document.createElementNS(svgNS, "rect");
-      rect.setAttribute("x", x);
-      rect.setAttribute("y", padTop + i * rowH + 3);
-      rect.setAttribute("width", wpx);
-      rect.setAttribute("height", rowH - 8);
-      rect.setAttribute("class", "downtime-bar");
-      const title = document.createElementNS(svgNS, "title");
-      title.textContent = `停机/班次外 ${fmtTick(w.start)} ~ ${fmtTick(Math.min(w.end, makespan))}`;
-      rect.appendChild(title);
-      svg.appendChild(rect);
-    });
-  });
-
-  // 工序条
-  ops.forEach((op) => {
-    const row = rowIndex[op.machine_id];
-    const y = padTop + row * rowH + 8;
-    const barH = rowH - 18;
-
-    // 换型段 (灰色)
-    if (op.setup > 0) {
-      const sx = padLeft + (op.start - op.setup) * scale;
-      const setupRect = document.createElementNS(svgNS, "rect");
-      setupRect.setAttribute("x", sx);
-      setupRect.setAttribute("y", y);
-      setupRect.setAttribute("width", Math.max(op.setup * scale, 1));
-      setupRect.setAttribute("height", barH);
-      setupRect.setAttribute("class", "setup-bar gantt-bar");
-      setupRect.setAttribute("rx", 2);
-      const st = document.createElementNS(svgNS, "title");
-      st.textContent = `换型 ${op.setup}min (机台 ${op.machine_id})`;
-      setupRect.appendChild(st);
-      svg.appendChild(setupRect);
-    }
-
-    // 加工段
-    const x = padLeft + op.start * scale;
-    const w = Math.max(op.duration * scale, 1);
-    const rect = document.createElementNS(svgNS, "rect");
-    rect.setAttribute("x", x);
-    rect.setAttribute("y", y);
-    rect.setAttribute("width", w);
-    rect.setAttribute("height", barH);
-    rect.setAttribute("rx", 3);
-    rect.setAttribute("fill", orderColor[op.order_id]);
-    rect.setAttribute("class", "gantt-bar");
-    const where = op.machine_id === OUTSOURCE_ID ? "外协" : `机台 ${op.machine_id}`;
-    const title = document.createElementNS(svgNS, "title");
-    title.textContent =
-      `${op.order_name} / ${op.operation_name}\n` +
-      `${where} · ${fmtTick(op.start)}~${fmtTick(op.end)} (${op.duration}min)` +
-      (op.setup ? `\n换型 ${op.setup}min` : "");
-    rect.appendChild(title);
-    svg.appendChild(rect);
-
-    if (w > 28) {
-      const t = document.createElementNS(svgNS, "text");
-      t.setAttribute("x", x + 4);
-      t.setAttribute("y", y + barH / 2 + 4);
-      t.textContent = op.order_id;
-      svg.appendChild(t);
-    }
-  });
-
-  const gantt = document.getElementById("gantt");
-  gantt.innerHTML = "";
-  gantt.appendChild(svg);
-
-  // 图例
-  const legend = document.getElementById("legend");
-  legend.innerHTML = "";
-  currentData.orders.forEach((o) => {
-    const item = document.createElement("div");
-    item.className = "item";
-    item.innerHTML = `<span class="swatch" style="background:${orderColor[o.id]}"></span>${o.id} ${o.name}`;
-    legend.appendChild(item);
-  });
-  const setupItem = document.createElement("div");
-  setupItem.className = "item";
-  setupItem.innerHTML = `<span class="swatch" style="background:#55617a"></span>换型时间`;
-  legend.appendChild(setupItem);
 }
 
 function renderOrders(result) {

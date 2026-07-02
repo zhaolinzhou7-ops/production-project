@@ -53,7 +53,7 @@ def greedy_schedule(
     """贪心构造一个可行排产。
 
     machine_release / machine_init_family: 机台最早可用时刻与其上一产品族
-    (滚动分解时由上一批传入)。
+    (滚动分解或冻结重排时传入)。
     """
     machines = {m.id: m for m in request.machines}
     free = {m.id: (machine_release or {}).get(m.id, 0) for m in request.machines}

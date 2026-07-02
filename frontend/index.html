@@ -117,8 +117,49 @@
 
     <!-- ============ 方案 (M4) ============ -->
     <div class="tab-page" id="tab-scenarios" hidden>
-      <section class="panel"><h2>方案管理</h2>
-        <p class="hint">方案保存、急单/停机模拟与对比功能开发中 (M4)。</p>
+      <section class="panel">
+        <h2>求解并保存方案</h2>
+        <div class="weights">
+          <label>方案名称 <input id="sc-name" placeholder="如: 7月第2周基准" /></label>
+          <label>求解时限(秒) <input type="number" id="sc-limit" value="20" min="1" /></label>
+          <label>基准方案 (对比用)
+            <select id="sc-base"><option value="">— 无 —</option></select>
+          </label>
+          <label class="row"><input type="checkbox" id="sc-freeze" /> 冻结已报工工序</label>
+        </div>
+        <label class="block-label">模拟停机 (每行: 机台ID,开始,结束 如 M1,2026-07-10 14:00,2026-07-10 18:00)
+          <textarea id="sc-downtimes" rows="2"></textarea>
+        </label>
+        <div class="actions">
+          <button id="btn-sc-solve" class="primary">求解并保存方案</button>
+          <span id="sc-status" class="hint"></span>
+        </div>
+        <p class="hint">插急单: 在「基础数据」页新增订单 (状态 rush、高优先级), 再回此处求解新方案并与基准对比。</p>
+      </section>
+
+      <section class="panel">
+        <h2>方案列表</h2>
+        <table id="scenarios-table">
+          <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>创建时间</th><th>状态</th>
+            <th>完工(min)</th><th>加权拖期</th><th>换型</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="sc-gantt-panel" hidden>
+        <h2 id="sc-gantt-title">方案甘特图</h2>
+        <div id="sc-gantt"></div>
+        <div id="sc-legend" class="legend"></div>
+      </section>
+
+      <section class="panel" id="sc-compare-panel" hidden>
+        <h2 id="sc-compare-title">方案对比</h2>
+        <div id="sc-compare-kpis" class="kpis"></div>
+        <table id="sc-compare-table">
+          <thead><tr><th>订单</th><th>名称</th><th>方案A完工</th><th>方案B完工</th>
+            <th>Δ完工</th><th>方案A拖期</th><th>方案B拖期</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </section>
     </div>
 
@@ -213,7 +254,9 @@
   </dialog>
 
   <script src="/static/api.js"></script>
+  <script src="/static/gantt.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/data.js"></script>
+  <script src="/static/scenarios.js"></script>
 </body>
 </html>

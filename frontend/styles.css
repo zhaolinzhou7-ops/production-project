@@ -75,6 +75,13 @@ th { color: var(--muted); font-weight: 600; }
 .gantt-bar:hover { opacity: 0.85; }
 .setup-bar { fill: #55617a; }
 .downtime-bar { fill: #3a4256; opacity: 0.55; }
+.frozen-bar { stroke: #e6ecf5; stroke-width: 1.5; stroke-dasharray: 4 2; }
+.block-label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); margin: 10px 0; }
+.block-label textarea {
+  padding: 7px 9px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+}
 text { fill: var(--text); font-size: 11px; }
 .axis-line { stroke: var(--border); stroke-width: 1; }
 .axis-label { fill: var(--muted); font-size: 10px; }

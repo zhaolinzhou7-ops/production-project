@@ -148,6 +148,78 @@ class ResourceRow(Base):
     capacity: Mapped[int] = mapped_column(Integer, default=1)
 
 
+class ScenarioRow(Base):
+    __tablename__ = "scenarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String, default="baseline")  # baseline/simulation
+    base_scenario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    schedule_start: Mapped[datetime] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String)
+    makespan: Mapped[int] = mapped_column(Integer, default=0)
+    total_tardiness: Mapped[int] = mapped_column(Integer, default=0)
+    total_changeover: Mapped[int] = mapped_column(Integer, default=0)
+    solve_time_seconds: Mapped[float] = mapped_column(default=0.0)
+
+    operations: Mapped[list["ScenarioOperationRow"]] = relationship(
+        cascade="all, delete-orphan"
+    )
+    orders: Mapped[list["ScenarioOrderRow"]] = relationship(
+        cascade="all, delete-orphan"
+    )
+
+
+class ScenarioOperationRow(Base):
+    __tablename__ = "scenario_operations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE")
+    )
+    operation_id: Mapped[str] = mapped_column(String)
+    operation_name: Mapped[str] = mapped_column(String)
+    order_id: Mapped[str] = mapped_column(String)
+    order_name: Mapped[str] = mapped_column(String)
+    machine_id: Mapped[str] = mapped_column(String)
+    family: Mapped[str] = mapped_column(String)
+    start_min: Mapped[int] = mapped_column(Integer)
+    setup_min: Mapped[int] = mapped_column(Integer, default=0)
+    duration_min: Mapped[int] = mapped_column(Integer)
+    end_min: Mapped[int] = mapped_column(Integer)
+    frozen: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ScenarioOrderRow(Base):
+    __tablename__ = "scenario_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[str] = mapped_column(String)
+    order_name: Mapped[str] = mapped_column(String)
+    due_min: Mapped[int] = mapped_column(Integer)
+    completion_min: Mapped[int] = mapped_column(Integer)
+    tardiness_min: Mapped[int] = mapped_column(Integer)
+
+
+class OpProgressRow(Base):
+    """报工: 工序实际执行状态 (冻结重排的依据)。"""
+
+    __tablename__ = "op_progress"
+
+    operation_id: Mapped[str] = mapped_column(
+        ForeignKey("operations.id", ondelete="CASCADE"), primary_key=True
+    )
+    state: Mapped[str] = mapped_column(String, default="pending")  # pending/started/done
+    actual_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    actual_machine_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class OperationMachineRow(Base):
     __tablename__ = "operation_machines"
 
