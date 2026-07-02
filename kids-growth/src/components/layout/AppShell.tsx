@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ShieldCheck, LogOut } from 'lucide-react'
@@ -13,9 +14,13 @@ export function AppShell() {
 
   const currentChild = childList.find((c) => c.id === currentChildId) ?? childList[0] ?? null
 
-  if (currentChildId !== currentChild?.id && currentChild) {
-    setCurrentChildId(currentChild.id)
-  }
+  // Re-point the persisted selection when it goes stale (e.g. after a backup
+  // import replaced all children, or the selected child was deleted).
+  useEffect(() => {
+    if (currentChild && currentChildId !== currentChild.id) {
+      setCurrentChildId(currentChild.id)
+    }
+  }, [currentChild, currentChildId, setCurrentChildId])
 
   const onPinPage = location.pathname === '/parent/pin'
 
