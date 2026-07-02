@@ -9,19 +9,44 @@ const COLORS = [
 ];
 
 document.getElementById("btn-sample").addEventListener("click", loadSample);
+document.getElementById("btn-load-db").addEventListener("click", loadFromDb);
 document.getElementById("btn-run").addEventListener("click", runSchedule);
 
+function setDataStatus(text) {
+  document.getElementById("data-status").textContent = text;
+}
+
 async function loadSample() {
-  const res = await fetch("/api/sample");
-  currentData = await res.json();
-  alert(
-    `已加载样例: ${currentData.machines.length} 台机台, ${currentData.orders.length} 个订单。点击「开始排产」运行。`
+  currentData = await apiGet("/api/sample");
+  setDataStatus(
+    `已加载样例: ${currentData.machines.length} 台机台 / ${currentData.orders.length} 个订单`
   );
+}
+
+async function loadFromDb() {
+  const limit = document.getElementById("time-limit").value;
+  try {
+    currentData = await apiGet(
+      `/api/data/schedule-request?time_limit_seconds=${encodeURIComponent(limit)}`
+    );
+    setDataStatus(
+      `已从数据库加载: ${currentData.machines.length} 台机台 / ${currentData.orders.length} 个订单`
+    );
+  } catch (e) {
+    setDataStatus("");
+    alert("加载失败: " + e.message);
+    throw e;
+  }
 }
 
 async function runSchedule() {
   if (!currentData) {
-    await loadSample();
+    // 优先用数据库数据, 库空则退回样例
+    try {
+      await loadFromDb();
+    } catch (_) {
+      await loadSample();
+    }
   }
   const btn = document.getElementById("btn-run");
   btn.disabled = true;

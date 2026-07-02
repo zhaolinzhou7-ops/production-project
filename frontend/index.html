@@ -3,59 +3,162 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>自动排产系统</title>
+  <title>智能排产系统</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <header>
-    <h1>自动排产系统 <span class="sub">柔性作业车间 · OR-Tools CP-SAT</span></h1>
+    <h1>智能排产系统 <span class="sub">航空零部件 · 柔性作业车间 · OR-Tools CP-SAT</span></h1>
+    <nav class="tabs">
+      <button class="tab active" data-tab="schedule">排产</button>
+      <button class="tab" data-tab="data">基础数据</button>
+      <button class="tab" data-tab="scenarios">方案</button>
+      <button class="tab" data-tab="reports">报表</button>
+    </nav>
   </header>
 
   <main>
-    <section class="panel controls">
-      <h2>排产控制</h2>
-      <div class="weights">
-        <label>最短完工 <input type="number" id="w-makespan" value="1" step="0.5" min="0" /></label>
-        <label>按时交付 <input type="number" id="w-tardiness" value="5" step="0.5" min="0" /></label>
-        <label>减少换型 <input type="number" id="w-changeover" value="1" step="0.5" min="0" /></label>
-        <label>设备利用 <input type="number" id="w-idle" value="0.5" step="0.5" min="0" /></label>
-        <label>求解上限(秒) <input type="number" id="time-limit" value="10" step="1" min="1" /></label>
-      </div>
-      <div class="actions">
-        <button id="btn-sample">加载样例数据</button>
-        <button id="btn-run" class="primary">开始排产</button>
-      </div>
-      <p class="hint">提示: 调整权重可在「完工时间 / 准时 / 换型 / 利用率」之间权衡, 再次排产对比结果。</p>
-    </section>
+    <!-- ============ 排产 ============ -->
+    <div class="tab-page" id="tab-schedule">
+      <section class="panel controls">
+        <h2>排产控制</h2>
+        <div class="weights">
+          <label>最短完工 <input type="number" id="w-makespan" value="1" step="0.5" min="0" /></label>
+          <label>按时交付 <input type="number" id="w-tardiness" value="5" step="0.5" min="0" /></label>
+          <label>减少换型 <input type="number" id="w-changeover" value="1" step="0.5" min="0" /></label>
+          <label>设备利用 <input type="number" id="w-idle" value="0.5" step="0.5" min="0" /></label>
+          <label>求解上限(秒) <input type="number" id="time-limit" value="10" step="1" min="1" /></label>
+        </div>
+        <div class="actions">
+          <button id="btn-load-db" class="primary">从数据库加载</button>
+          <button id="btn-sample">加载样例数据</button>
+          <button id="btn-run" class="primary">开始排产</button>
+          <span id="data-status" class="hint"></span>
+        </div>
+        <p class="hint">提示: 在「基础数据」页导入/维护机台与订单, 点「从数据库加载」后排产; 调整权重可在多目标间权衡。</p>
+      </section>
 
-    <section class="panel kpis" id="kpis" hidden>
-      <div class="kpi"><span class="kpi-label">求解状态</span><span class="kpi-val" id="kpi-status">-</span></div>
-      <div class="kpi"><span class="kpi-label">总完工(min)</span><span class="kpi-val" id="kpi-makespan">-</span></div>
-      <div class="kpi"><span class="kpi-label">加权拖期</span><span class="kpi-val" id="kpi-tardiness">-</span></div>
-      <div class="kpi"><span class="kpi-label">换型总量(min)</span><span class="kpi-val" id="kpi-changeover">-</span></div>
-      <div class="kpi"><span class="kpi-label">求解耗时(s)</span><span class="kpi-val" id="kpi-time">-</span></div>
-    </section>
+      <section class="panel kpis" id="kpis" hidden>
+        <div class="kpi"><span class="kpi-label">求解状态</span><span class="kpi-val" id="kpi-status">-</span></div>
+        <div class="kpi"><span class="kpi-label">总完工(min)</span><span class="kpi-val" id="kpi-makespan">-</span></div>
+        <div class="kpi"><span class="kpi-label">加权拖期</span><span class="kpi-val" id="kpi-tardiness">-</span></div>
+        <div class="kpi"><span class="kpi-label">换型总量(min)</span><span class="kpi-val" id="kpi-changeover">-</span></div>
+        <div class="kpi"><span class="kpi-label">求解耗时(s)</span><span class="kpi-val" id="kpi-time">-</span></div>
+      </section>
 
-    <section class="panel" id="gantt-panel" hidden>
-      <h2>排产甘特图</h2>
-      <div id="gantt"></div>
-      <div id="legend" class="legend"></div>
-    </section>
+      <section class="panel" id="gantt-panel" hidden>
+        <h2>排产甘特图</h2>
+        <div id="gantt"></div>
+        <div id="legend" class="legend"></div>
+      </section>
 
-    <section class="panel" id="orders-panel" hidden>
-      <h2>订单交付情况</h2>
-      <table id="orders-table">
-        <thead><tr><th>订单</th><th>名称</th><th>交期</th><th>完工</th><th>拖期</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </section>
+      <section class="panel" id="orders-panel" hidden>
+        <h2>订单交付情况</h2>
+        <table id="orders-table">
+          <thead><tr><th>订单</th><th>名称</th><th>交期</th><th>完工</th><th>拖期</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
 
-    <section class="panel" id="util-panel" hidden>
-      <h2>设备利用率</h2>
-      <div id="util"></div>
-    </section>
+      <section class="panel" id="util-panel" hidden>
+        <h2>设备利用率</h2>
+        <div id="util"></div>
+      </section>
+    </div>
+
+    <!-- ============ 基础数据 ============ -->
+    <div class="tab-page" id="tab-data" hidden>
+      <section class="panel">
+        <h2>Excel 导入 / 导出</h2>
+        <div class="actions">
+          <a href="/api/import/template" download><button type="button">下载导入模板</button></a>
+          <select id="import-mode">
+            <option value="replace">整库替换 (replace)</option>
+            <option value="append">追加/覆盖 (append)</option>
+          </select>
+          <input type="file" id="import-file" accept=".xlsx" />
+          <button id="btn-import" class="primary">上传导入</button>
+        </div>
+        <div id="import-result" class="hint"></div>
+      </section>
+
+      <section class="panel">
+        <h2>机台 <button id="btn-add-machine" class="mini">+ 新增机台</button></h2>
+        <table id="machines-table">
+          <thead><tr><th>ID</th><th>名称</th><th>启用</th><th>换型矩阵</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>订单 <button id="btn-add-order" class="mini">+ 新增订单</button></h2>
+        <table id="orders-data-table">
+          <thead><tr><th>ID</th><th>名称</th><th>交期</th><th>优先级</th><th>状态</th><th>工序</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- ============ 方案 (M4) ============ -->
+    <div class="tab-page" id="tab-scenarios" hidden>
+      <section class="panel"><h2>方案管理</h2>
+        <p class="hint">方案保存、急单/停机模拟与对比功能开发中 (M4)。</p>
+      </section>
+    </div>
+
+    <!-- ============ 报表 (M5) ============ -->
+    <div class="tab-page" id="tab-reports" hidden>
+      <section class="panel"><h2>报表与预警</h2>
+        <p class="hint">交期预警看板与 KPI 报表功能开发中 (M5)。</p>
+      </section>
+    </div>
   </main>
 
+  <!-- 机台编辑对话框 -->
+  <dialog id="dlg-machine">
+    <form method="dialog" class="dlg-form">
+      <h3 id="dlg-machine-title">新增机台</h3>
+      <label>机台 ID <input id="m-id" required /></label>
+      <label>名称 <input id="m-name" required /></label>
+      <label class="row"><input type="checkbox" id="m-active" checked /> 启用</label>
+      <label>换型矩阵 (每行: 原产品族,新产品族,分钟)
+        <textarea id="m-setup" rows="4" placeholder="A,B,30&#10;B,A,20"></textarea>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel">取消</button>
+        <button value="ok" class="primary" id="dlg-machine-save">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 订单编辑对话框 -->
+  <dialog id="dlg-order">
+    <form method="dialog" class="dlg-form">
+      <h3 id="dlg-order-title">新增订单</h3>
+      <label>订单 ID <input id="o-id" required /></label>
+      <label>名称 <input id="o-name" required /></label>
+      <label>交期 <input type="datetime-local" id="o-due" required /></label>
+      <label>优先级 <input type="number" id="o-priority" value="1" min="1" /></label>
+      <label>最早开工 (可空) <input type="datetime-local" id="o-release" /></label>
+      <label>状态
+        <select id="o-status">
+          <option value="normal">normal</option>
+          <option value="rush">rush (急单)</option>
+          <option value="cancelled">cancelled (取消)</option>
+        </select>
+      </label>
+      <label>工序 (每行: 工序号|名称|产品族|机台:分钟,机台:分钟)
+        <textarea id="o-ops" rows="5" placeholder="0|粗车|A|M1:40,M2:50&#10;1|精铣|A|M2:35"></textarea>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel">取消</button>
+        <button value="ok" class="primary" id="dlg-order-save">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/api.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/data.js"></script>
 </body>
 </html>
