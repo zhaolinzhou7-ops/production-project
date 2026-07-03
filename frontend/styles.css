@@ -30,6 +30,7 @@ header .sub { font-size: 13px; color: var(--muted); font-weight: normal; margin-
 }
 .tabs .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .tab-page { display: flex; flex-direction: column; gap: 18px; }
+.tab-page[hidden] { display: none; }
 main { padding: 22px 28px; display: flex; flex-direction: column; gap: 18px; max-width: 1200px; }
 .panel {
   background: var(--panel);
