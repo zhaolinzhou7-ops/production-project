@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
@@ -93,6 +93,64 @@ def build_template() -> bytes:
             letter = col[0].column_letter
             wb[name].column_dimensions[letter].width = max(
                 14, max(len(str(c.value or "")) for c in col) + 4
+            )
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ---- 方案结果导出 -----------------------------------------------------------
+
+def export_scenario(session: Session, scenario_id: int) -> bytes | None:
+    """把方案导出为 Excel: 排产明细 / 订单交付 / 机台利用 三个 sheet。"""
+    from . import reports, scenario as scenario_mod
+    from .models import OUTSOURCE_MACHINE_ID
+
+    detail = scenario_mod.get_scenario(session, scenario_id)
+    if detail is None:
+        return None
+    start = detail.schedule_start
+
+    def dt(minutes: int) -> str:
+        return (start + timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "排产明细"
+    ws.append(["订单", "订单名称", "工序", "工序名称", "机台", "产品族",
+               "开工", "完工", "加工(分钟)", "换型(分钟)", "冻结"])
+    for op in sorted(detail.operations, key=lambda x: (x["machine_id"], x["start"])):
+        ws.append([
+            op["order_id"], op["order_name"], op["operation_id"],
+            op["operation_name"],
+            "外协" if op["machine_id"] == OUTSOURCE_MACHINE_ID else op["machine_id"],
+            op["family"], dt(op["start"]), dt(op["end"]),
+            op["duration"], op["setup"], "是" if op.get("frozen") else "",
+        ])
+
+    ws = wb.create_sheet("订单交付")
+    ws.append(["订单", "名称", "交期", "预计完工", "拖期(分钟)", "富余(分钟)", "风险"])
+    risk = reports.delivery_risk(session, scenario_id)
+    risk_names = {"red": "拖期", "yellow": "紧张", "green": "安全"}
+    for o in risk.orders:
+        ws.append([
+            o.order_id, o.order_name,
+            o.due.strftime("%Y-%m-%d %H:%M"),
+            o.completion.strftime("%Y-%m-%d %H:%M"),
+            o.tardiness_min, o.slack_min, risk_names[o.risk],
+        ])
+
+    ws = wb.create_sheet("机台利用")
+    ws.append(["机台", "占用(分钟)", "利用率"])
+    for m in reports.kpi(session, scenario_id).machines:
+        ws.append([m.machine_id, m.busy_min, m.utilization])
+
+    for name in wb.sheetnames:
+        for col in wb[name].columns:
+            letter = col[0].column_letter
+            wb[name].column_dimensions[letter].width = max(
+                12, max(len(str(c.value or "")) for c in col) + 4
             )
 
     buf = io.BytesIO()

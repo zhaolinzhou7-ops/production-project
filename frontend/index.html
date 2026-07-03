@@ -165,8 +165,28 @@
 
     <!-- ============ 报表 (M5) ============ -->
     <div class="tab-page" id="tab-reports" hidden>
-      <section class="panel"><h2>报表与预警</h2>
-        <p class="hint">交期预警看板与 KPI 报表功能开发中 (M5)。</p>
+      <section class="panel">
+        <h2>报表与预警</h2>
+        <div class="actions">
+          <select id="rp-scenario"><option value="">— 选择方案 —</option></select>
+          <button id="btn-rp-load" class="primary">生成报表</button>
+          <a id="rp-export" hidden><button type="button">导出 Excel</button></a>
+        </div>
+      </section>
+
+      <section class="panel" id="rp-kpi-panel" hidden>
+        <h2>KPI 概览</h2>
+        <div id="rp-kpis" class="kpis"></div>
+        <div id="rp-util" style="margin-top:14px"></div>
+      </section>
+
+      <section class="panel" id="rp-risk-panel" hidden>
+        <h2>交期预警看板 <span id="rp-risk-summary" class="sub"></span></h2>
+        <table id="rp-risk-table">
+          <thead><tr><th>风险</th><th>订单</th><th>名称</th><th>交期</th>
+            <th>预计完工</th><th>富余</th><th>拖期</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </section>
     </div>
   </main>
@@ -258,5 +278,6 @@
   <script src="/static/app.js"></script>
   <script src="/static/data.js"></script>
   <script src="/static/scenarios.js"></script>
+  <script src="/static/reports.js"></script>
 </body>
 </html>
