@@ -19,6 +19,7 @@ import { ParentHealthHubPage } from './pages/ParentHealthHubPage'
 import { GenericRecordListPage } from './pages/GenericRecordListPage'
 import { ParentExamsPage } from './pages/ParentExamsPage'
 import { ParentAnecdotesPage } from './pages/ParentAnecdotesPage'
+import { ParentTalentsPage } from './pages/ParentTalentsPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { KidRewardsPage } from './pages/KidRewardsPage'
 import { KidBadgesPage } from './pages/KidBadgesPage'
@@ -128,6 +129,14 @@ function AppRoutes() {
           element={
             <RequireParent>
               <ParentAnecdotesPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/talents"
+          element={
+            <RequireParent>
+              <ParentTalentsPage />
             </RequireParent>
           }
         />

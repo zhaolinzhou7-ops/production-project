@@ -4,7 +4,7 @@ import type { LevelStep } from '../types'
 
 export interface TimelineItem {
   id: string
-  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge' | 'exam' | 'anecdote'
+  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge' | 'exam' | 'anecdote' | 'talent'
   date: string // ISO date used for ordering
   sortKey: number // secondary ordering within a day
   title: string
@@ -36,7 +36,7 @@ function deriveLevelUps(
 }
 
 export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
-  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings, exams, examScores, anecdotes] =
+  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings, exams, examScores, anecdotes, talentRecords] =
     await Promise.all([
       db.milestones.where('childId').equals(childId).toArray(),
       db.portfolios.where('childId').equals(childId).toArray(),
@@ -48,6 +48,11 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
       db.exams.where('childId').equals(childId).toArray(),
       db.examScores.where('childId').equals(childId).toArray(),
       db.anecdotes.where('childId').equals(childId).toArray(),
+      db.records
+        .where('childId')
+        .equals(childId)
+        .filter((r) => r.module === 'grading' || r.module === 'award')
+        .toArray(),
     ])
 
   const items: TimelineItem[] = []
@@ -134,6 +139,26 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
       desc: a.content,
       icon: a.kind === 'shine' ? '✨' : '🌱',
       photos: a.photos,
+    })
+  }
+
+  for (const r of talentRecords) {
+    const isGrading = r.module === 'grading'
+    const title = isGrading
+      ? `考级：${r.fields.project ?? ''} ${r.fields.level ?? ''}`.trim()
+      : `获奖：${r.fields.contest ?? ''}`.trim()
+    const desc = isGrading
+      ? [r.fields.result, r.fields.org].filter(Boolean).join(' · ') || undefined
+      : [r.fields.scope, r.fields.prize].filter(Boolean).join(' · ') || undefined
+    items.push({
+      id: `talent-${r.id}`,
+      kind: 'talent',
+      date: r.date,
+      sortKey: r.createdAt,
+      title,
+      desc,
+      icon: isGrading ? '🏅' : '🏆',
+      photos: r.photos,
     })
   }
 

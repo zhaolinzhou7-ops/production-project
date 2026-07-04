@@ -15,6 +15,8 @@ import {
   HeartPulse,
   GraduationCap,
   Star,
+  Music,
+  CloudSun,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Line, LineChart, ResponsiveContainer } from 'recharts'
@@ -23,6 +25,7 @@ import { useAppStore } from '../store/useAppStore'
 import { buildDashboardStats } from '../lib/dashboard'
 import { buildTimeline } from '../lib/timeline'
 import { formatGrade, getGradeNumber, getStageMeta, getAgeStage } from '../lib/ageStage'
+import { getWellbeingHint } from '../lib/wellbeing'
 
 const BACKUP_REMINDER_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
@@ -42,6 +45,11 @@ export function ParentDashboardPage() {
     async () => (currentChildId ? (await buildTimeline(currentChildId)).slice(0, 3) : []),
     [currentChildId],
   )
+  const wellbeingHint = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const c = await db.children.get(currentChildId)
+    return c ? getWellbeingHint(c) : null
+  }, [currentChildId])
 
   if (!currentChild || !stats || !settings || !recentTimeline) return null
 
@@ -77,6 +85,19 @@ export function ParentDashboardPage() {
           {stageLabel}
         </span>
       </p>
+
+      {wellbeingHint && (
+        <div className="mb-4 rounded-2xl bg-mint-400/15 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+            💚 多陪陪TA
+          </div>
+          <p className="mt-1 text-xs text-gray-500 leading-relaxed">
+            最近 {wellbeingHint.windowDays} 天记录到 {wellbeingHint.negativeCount} 次情绪偏低。
+            青春期有情绪波动很正常，不妨找个轻松的时机聊聊天、一起做点TA喜欢的事。
+            此提示仅基于记录条数，非心理评估；如持续低落请寻求专业帮助。
+          </p>
+        </div>
+      )}
 
       {needsBackupReminder && (
         <button
@@ -305,6 +326,32 @@ export function ParentDashboardPage() {
           <div>
             <div className="font-bold text-gray-800">成长事例</div>
             <div className="text-xs text-gray-400">闪光时刻、成长时刻与品格画像</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/talents')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-brand-100 p-2.5 text-brand-500">
+            <Music size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">兴趣特长</div>
+            <div className="text-xs text-gray-400">兴趣项目、考级与比赛获奖</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/records/emotion')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-mint-400/30 p-2.5 text-mint-500">
+            <CloudSun size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">情绪记录</div>
+            <div className="text-xs text-gray-400">观察情绪规律，更好地陪伴</div>
           </div>
         </button>
 

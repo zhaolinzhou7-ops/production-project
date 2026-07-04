@@ -15,6 +15,7 @@ const KIND_COLOR: Record<string, string> = {
   badge: 'bg-sun-400/20',
   exam: 'bg-brand-100',
   anecdote: 'bg-sun-400/20',
+  talent: 'bg-mint-400/20',
 }
 
 export function TimelinePage() {

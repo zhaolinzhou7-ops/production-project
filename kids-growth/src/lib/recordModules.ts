@@ -174,6 +174,68 @@ export const RECORD_MODULES: RecordModuleDef[] = [
     summarize: (f) =>
       [fmt(f.name), f.dose ? `第${f.dose}剂` : null].filter(Boolean).join(' · ') || '接种记录',
   },
+  {
+    module: 'grading',
+    group: 'talent',
+    label: '考级记录',
+    icon: '🏅',
+    addLabel: '新增考级记录',
+    hasNote: true,
+    hasPhotos: true,
+    fields: [
+      { key: 'project', label: '项目', type: 'text', required: true, placeholder: '如「钢琴」「围棋」「剑桥英语」' },
+      { key: 'level', label: '级别/证书', type: 'text', required: true, placeholder: '如「五级」「KET」「业余1段」' },
+      { key: 'result', label: '结果', type: 'select', options: ['通过', '优秀', '良好', '未通过'] },
+      { key: 'org', label: '考级机构', type: 'text', placeholder: '可选' },
+    ],
+    summarize: (f) =>
+      [fmt(f.project), fmt(f.level), fmt(f.result)].filter(Boolean).join(' · ') || '考级记录',
+  },
+  {
+    module: 'award',
+    group: 'talent',
+    label: '比赛获奖',
+    icon: '🏆',
+    addLabel: '新增获奖记录',
+    hasNote: true,
+    hasPhotos: true,
+    fields: [
+      { key: 'contest', label: '比赛名称', type: 'text', required: true, placeholder: '如「市青少年绘画大赛」' },
+      { key: 'prize', label: '奖项', type: 'text', required: true, placeholder: '如「一等奖」「金奖」' },
+      {
+        key: 'scope',
+        label: '级别',
+        type: 'select',
+        options: ['校级', '区级', '市级', '省级', '国家级', '国际级'],
+      },
+    ],
+    summarize: (f) =>
+      [fmt(f.contest), fmt(f.scope), fmt(f.prize)].filter(Boolean).join(' · ') || '获奖记录',
+  },
+  {
+    module: 'emotion',
+    group: 'wellbeing',
+    label: '情绪记录',
+    icon: '🌤️',
+    addLabel: '记一次情绪',
+    hasNote: true,
+    disclaimer: '情绪记录用于观察规律、更好地陪伴，仅供家庭参考，非心理评估或诊断。',
+    fields: [
+      {
+        key: 'mood',
+        label: '情绪',
+        type: 'select',
+        required: true,
+        options: ['开心', '平静', '疲惫', '烦躁', '焦虑', '难过', '愤怒'],
+      },
+      { key: 'intensity', label: '强度（1轻微—5强烈）', type: 'rating', max: 5 },
+      { key: 'trigger', label: '触发事件', type: 'text', placeholder: '如「和同学闹矛盾」，可选' },
+    ],
+    summarize: (f) =>
+      [fmt(f.mood), f.intensity ? `强度${f.intensity}` : null, fmt(f.trigger)]
+        .filter(Boolean)
+        .join(' · ') || '情绪记录',
+  },
 ]
 
 export function getRecordModule(module: string): RecordModuleDef | undefined {
