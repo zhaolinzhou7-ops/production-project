@@ -77,6 +77,8 @@ export interface AchievementRule {
     | 'firstRedeem'
     | 'firstGrowth'
     | 'firstPortfolio'
+    | 'firstExam'
+    | 'firstAnecdote'
     | 'level'
   days?: number
   count?: number

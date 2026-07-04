@@ -4,7 +4,7 @@ import type { LevelStep } from '../types'
 
 export interface TimelineItem {
   id: string
-  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge'
+  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge' | 'exam' | 'anecdote'
   date: string // ISO date used for ordering
   sortKey: number // secondary ordering within a day
   title: string
@@ -36,7 +36,7 @@ function deriveLevelUps(
 }
 
 export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
-  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings] =
+  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings, exams, examScores, anecdotes] =
     await Promise.all([
       db.milestones.where('childId').equals(childId).toArray(),
       db.portfolios.where('childId').equals(childId).toArray(),
@@ -45,6 +45,9 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
       db.unlocks.where('childId').equals(childId).toArray(),
       db.achievements.toArray(),
       db.settings.get('singleton'),
+      db.exams.where('childId').equals(childId).toArray(),
+      db.examScores.where('childId').equals(childId).toArray(),
+      db.anecdotes.where('childId').equals(childId).toArray(),
     ])
 
   const items: TimelineItem[] = []
@@ -101,6 +104,37 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
         photos: [],
       })
     }
+  }
+
+  const scoresByExam = new Map<string, string[]>()
+  for (const s of examScores) {
+    if (!scoresByExam.has(s.examId)) scoresByExam.set(s.examId, [])
+    scoresByExam.get(s.examId)!.push(`${s.subject} ${s.score}${s.fullScore ? `/${s.fullScore}` : ''}`)
+  }
+  for (const e of exams) {
+    items.push({
+      id: `exam-${e.id}`,
+      kind: 'exam',
+      date: e.date,
+      sortKey: e.createdAt,
+      title: e.name || `${e.examType}考试`,
+      desc: (scoresByExam.get(e.id) ?? []).join(' · ') || undefined,
+      icon: '📝',
+      photos: [],
+    })
+  }
+
+  for (const a of anecdotes) {
+    items.push({
+      id: `anecdote-${a.id}`,
+      kind: 'anecdote',
+      date: a.date,
+      sortKey: a.createdAt,
+      title: a.kind === 'shine' ? '闪光时刻' : '成长时刻',
+      desc: a.content,
+      icon: a.kind === 'shine' ? '✨' : '🌱',
+      photos: a.photos,
+    })
   }
 
   const achievementByCode = new Map(achievements.map((a) => [a.code, a]))

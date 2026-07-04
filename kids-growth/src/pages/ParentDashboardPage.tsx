@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Sparkles,
   HeartPulse,
+  GraduationCap,
+  Star,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Line, LineChart, ResponsiveContainer } from 'recharts'
@@ -275,6 +277,34 @@ export function ParentDashboardPage() {
           <div>
             <div className="font-bold text-gray-800">健康档案</div>
             <div className="text-xs text-gray-400">视力等健康记录与趋势</div>
+          </div>
+        </button>
+
+        {stageMeta.stage !== 'toddler' && (
+          <button
+            onClick={() => navigate('/parent/exams')}
+            className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+          >
+            <div className="rounded-xl bg-mint-400/30 p-2.5 text-mint-500">
+              <GraduationCap size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-gray-800">学业成绩</div>
+              <div className="text-xs text-gray-400">各科成绩、得分率与排名趋势</div>
+            </div>
+          </button>
+        )}
+
+        <button
+          onClick={() => navigate('/parent/anecdotes')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-sun-400/30 p-2.5 text-sun-500">
+            <Star size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">成长事例</div>
+            <div className="text-xs text-gray-400">闪光时刻、成长时刻与品格画像</div>
           </div>
         </button>
 

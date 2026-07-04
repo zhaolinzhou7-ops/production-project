@@ -17,6 +17,8 @@ import { ParentGrowthPage } from './pages/ParentGrowthPage'
 import { ParentArchivePage } from './pages/ParentArchivePage'
 import { ParentHealthHubPage } from './pages/ParentHealthHubPage'
 import { GenericRecordListPage } from './pages/GenericRecordListPage'
+import { ParentExamsPage } from './pages/ParentExamsPage'
+import { ParentAnecdotesPage } from './pages/ParentAnecdotesPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { KidRewardsPage } from './pages/KidRewardsPage'
 import { KidBadgesPage } from './pages/KidBadgesPage'
@@ -110,6 +112,22 @@ function AppRoutes() {
           element={
             <RequireParent>
               <GenericRecordListPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/exams"
+          element={
+            <RequireParent>
+              <ParentExamsPage />
+            </RequireParent>
+          }
+        />
+        <Route
+          path="/parent/anecdotes"
+          element={
+            <RequireParent>
+              <ParentAnecdotesPage />
             </RequireParent>
           }
         />

@@ -62,3 +62,18 @@ export function formatGrade(grade: number | null): string {
   if (grade <= 9) return `初${'一二三'[grade - 7]}`
   return `高${'一二三'[grade - 10]}`
 }
+
+/** 某个日期对应的学期标签,如「三年级上」;推不出年级时返回 undefined。 */
+export function getTermForDate(
+  birthdate: string,
+  enrollmentYear: number | undefined,
+  dateISO: string,
+): string | undefined {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  const atDate = new Date(y, m - 1, d)
+  const grade = getGradeNumber(birthdate, enrollmentYear, atDate)
+  if (grade === null) return undefined
+  // 9月–次年1月为上学期,2月–7月为下学期,8月归入即将开始的上学期
+  const half = m >= 2 && m <= 7 ? '下' : '上'
+  return `${formatGrade(grade)}${half}`
+}

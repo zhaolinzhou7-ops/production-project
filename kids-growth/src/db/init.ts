@@ -17,11 +17,11 @@ export async function ensureInitialized(): Promise<void> {
       })
     }
 
-    const achievementCount = await db.achievements.count()
-    if (achievementCount === 0) {
-      await db.achievements.bulkAdd(
-        DEFAULT_ACHIEVEMENTS.map((a) => ({ ...a, id: newId() })),
-      )
+    // 按 code 补齐缺失的成就(老库升级后能拿到新增的成就定义)
+    const existingCodes = new Set((await db.achievements.toArray()).map((a) => a.code))
+    const missing = DEFAULT_ACHIEVEMENTS.filter((a) => !existingCodes.has(a.code))
+    if (missing.length > 0) {
+      await db.achievements.bulkAdd(missing.map((a) => ({ ...a, id: newId() })))
     }
   })
 }

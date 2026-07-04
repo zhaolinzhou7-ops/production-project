@@ -8,7 +8,7 @@ import type { Achievement } from '../types'
 
 /** Checks all not-yet-unlocked achievement rules for a child and records any newly satisfied ones. */
 export async function evaluateAchievements(childId: string): Promise<Achievement[]> {
-  const [achievements, unlocks, doneCheckIns, tasks, ledger, settings, growthCount, portfolioCount, approvedRedemptions] =
+  const [achievements, unlocks, doneCheckIns, tasks, ledger, settings, growthCount, portfolioCount, approvedRedemptions, examCount, anecdoteCount] =
     await Promise.all([
       db.achievements.toArray(),
       db.unlocks.where('childId').equals(childId).toArray(),
@@ -23,6 +23,8 @@ export async function evaluateAchievements(childId: string): Promise<Achievement
         .equals(childId)
         .filter((r) => r.status === 'approved' || r.status === 'fulfilled')
         .count(),
+      db.exams.where('childId').equals(childId).count(),
+      db.anecdotes.where('childId').equals(childId).count(),
     ])
   if (!settings) return []
 
@@ -95,6 +97,12 @@ export async function evaluateAchievements(childId: string): Promise<Achievement
         break
       case 'firstPortfolio':
         satisfied = portfolioCount > 0
+        break
+      case 'firstExam':
+        satisfied = examCount > 0
+        break
+      case 'firstAnecdote':
+        satisfied = anecdoteCount > 0
         break
       case 'level':
         satisfied = level >= (a.rule.level ?? Infinity)

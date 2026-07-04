@@ -110,6 +110,8 @@ export const DEFAULT_ACHIEVEMENTS: Array<Omit<Achievement, 'id'>> = [
   { code: 'first_portfolio', name: '小小艺术家', icon: '🎨', desc: '首件作品入档', rule: { type: 'firstPortfolio' } },
   { code: 'level_5', name: '节节高升', icon: '⬆️', desc: '达到Lv5', rule: { type: 'level', level: 5 } },
   { code: 'level_10', name: '成长大师', icon: '👑', desc: '达到Lv10', rule: { type: 'level', level: 10 } },
+  { code: 'first_exam', name: '学业起步', icon: '📝', desc: '第一次记录考试成绩', rule: { type: 'firstExam' } },
+  { code: 'first_anecdote', name: '闪光被看见', icon: '✨', desc: '第一条成长事例入档', rule: { type: 'firstAnecdote' } },
 ]
 
 /** 分龄里程碑预设:按孩子当前阶段展示对应清单(始终附加「自定义」) */
