@@ -78,6 +78,102 @@ export const RECORD_MODULES: RecordModuleDef[] = [
       return parts.join(' · ') || '视力记录'
     },
   },
+  {
+    module: 'dental',
+    group: 'health',
+    label: '牙齿记录',
+    icon: '🦷',
+    addLabel: '新增牙齿记录',
+    hasNote: true,
+    hasPhotos: true,
+    fields: [
+      {
+        key: 'event',
+        label: '事项',
+        type: 'select',
+        required: true,
+        options: ['长牙', '换牙', '龋齿', '补牙', '拔牙', '正畸', '洁牙', '常规检查', '其他'],
+      },
+      { key: 'position', label: '牙位', type: 'text', placeholder: '如「左下第一乳磨牙」，可选' },
+    ],
+    summarize: (f) => [fmt(f.event), fmt(f.position)].filter(Boolean).join(' · ') || '牙齿记录',
+  },
+  {
+    module: 'medical',
+    group: 'health',
+    label: '就医记录',
+    icon: '🏥',
+    addLabel: '新增就医记录',
+    hasNote: true,
+    hasPhotos: true,
+    disclaimer: '就医与用药信息请以医院病历为准，此处仅作家庭备忘。',
+    fields: [
+      { key: 'symptom', label: '症状', type: 'text', required: true, placeholder: '如「发烧38.5°C、咳嗽」' },
+      { key: 'diagnosis', label: '诊断', type: 'text', placeholder: '如「急性支气管炎」' },
+      { key: 'medication', label: '用药', type: 'text', placeholder: '药名与剂量' },
+      { key: 'hospital', label: '医院/科室', type: 'text', placeholder: '可选' },
+      { key: 'allergy', label: '新发现过敏', type: 'text', placeholder: '如「青霉素过敏」，重要！' },
+    ],
+    summarize: (f) =>
+      [fmt(f.symptom), fmt(f.diagnosis), f.allergy ? `⚠️过敏:${f.allergy}` : null]
+        .filter(Boolean)
+        .join(' · ') || '就医记录',
+  },
+  {
+    module: 'checkup',
+    group: 'health',
+    label: '体检记录',
+    icon: '🩺',
+    addLabel: '新增体检记录',
+    hasNote: true,
+    hasPhotos: true,
+    disclaimer: '体检结论请以体检机构报告为准；身高体重请在「身体发育记录」中登记以纳入生长曲线。',
+    fields: [
+      { key: 'org', label: '体检机构', type: 'text', placeholder: '如「市妇幼保健院」「学校体检」' },
+      { key: 'conclusion', label: '主要结论', type: 'text', required: true, placeholder: '如「各项正常」' },
+      { key: 'followUp', label: '需复查/关注项', type: 'text', placeholder: '可选' },
+    ],
+    summarize: (f) =>
+      [fmt(f.conclusion), f.followUp ? `复查:${f.followUp}` : null].filter(Boolean).join(' · ') ||
+      '体检记录',
+  },
+  {
+    module: 'vaccine',
+    group: 'health',
+    label: '疫苗接种',
+    icon: '💉',
+    addLabel: '新增接种记录',
+    hasNote: true,
+    fields: [
+      {
+        key: 'name',
+        label: '疫苗名称',
+        type: 'select',
+        required: true,
+        options: [
+          '乙肝疫苗',
+          '卡介苗',
+          '脊灰疫苗',
+          '百白破疫苗',
+          '麻腮风疫苗',
+          '乙脑疫苗',
+          '流脑疫苗',
+          '甲肝疫苗',
+          '水痘疫苗',
+          '手足口(EV71)疫苗',
+          '流感疫苗',
+          'HPV疫苗',
+          '新冠疫苗',
+          '狂犬疫苗',
+          '其他',
+        ],
+      },
+      { key: 'dose', label: '第几剂', type: 'number', min: 1, step: 1, placeholder: '如 2' },
+      { key: 'org', label: '接种单位', type: 'text', placeholder: '可选' },
+    ],
+    summarize: (f) =>
+      [fmt(f.name), f.dose ? `第${f.dose}剂` : null].filter(Boolean).join(' · ') || '接种记录',
+  },
 ]
 
 export function getRecordModule(module: string): RecordModuleDef | undefined {
