@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { ensureInitialized } from './db/init'
@@ -155,6 +155,9 @@ function AppRoutes() {
   )
 }
 
+// 单文件/Artifact 部署没有服务端路由,改用 hash 路由
+const Router = import.meta.env.VITE_ARTIFACT ? HashRouter : BrowserRouter
+
 export default function App() {
   const [ready, setReady] = useState(false)
 
@@ -167,8 +170,8 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <Router>
       <AppRoutes />
-    </BrowserRouter>
+    </Router>
   )
 }
