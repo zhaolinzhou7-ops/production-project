@@ -17,6 +17,8 @@ import {
   Star,
   Music,
   CloudSun,
+  BookOpen,
+  BarChart3,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Line, LineChart, ResponsiveContainer } from 'recharts'
@@ -352,6 +354,32 @@ export function ParentDashboardPage() {
           <div>
             <div className="font-bold text-gray-800">情绪记录</div>
             <div className="text-xs text-gray-400">观察情绪规律，更好地陪伴</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/records/reading')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-sun-400/30 p-2.5 text-sun-500">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">阅读记录</div>
+            <div className="text-xs text-gray-400">读完的书、评分与感想</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/report')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-brand-100 p-2.5 text-brand-500">
+            <BarChart3 size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">年度成长报告</div>
+            <div className="text-xs text-gray-400">「孩子的这一年」一键回顾</div>
           </div>
         </button>
 

@@ -236,6 +236,24 @@ export const RECORD_MODULES: RecordModuleDef[] = [
         .filter(Boolean)
         .join(' · ') || '情绪记录',
   },
+  {
+    module: 'reading',
+    group: 'learning',
+    label: '阅读记录',
+    icon: '📚',
+    addLabel: '记一本读完的书',
+    hasNote: false,
+    fields: [
+      { key: 'title', label: '书名', type: 'text', required: true, placeholder: '如《夏洛的网》' },
+      { key: 'author', label: '作者', type: 'text', placeholder: '可选' },
+      { key: 'rating', label: '喜欢程度', type: 'rating', max: 5 },
+      { key: 'thought', label: '一句话感想', type: 'text', placeholder: '可选' },
+    ],
+    summarize: (f) =>
+      [fmt(f.title), f.rating ? '⭐'.repeat(Number(f.rating)) : null, fmt(f.thought)]
+        .filter(Boolean)
+        .join(' · ') || '阅读记录',
+  },
 ]
 
 export function getRecordModule(module: string): RecordModuleDef | undefined {
