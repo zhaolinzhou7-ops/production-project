@@ -22,11 +22,14 @@ import { GrowthRecordFormModal, type GrowthRecordFormValues } from '../component
 import { MilestoneFormModal, type MilestoneFormValues } from '../components/growth/MilestoneFormModal'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { evaluateAchievements } from '../db/achievements'
+import { MILESTONE_PRESETS_BY_STAGE } from '../db/seedData'
+import { useCurrentChild } from '../hooks/useCurrentChild'
 import type { GrowthRecord, Milestone } from '../types'
 
 export function ParentGrowthPage() {
   const navigate = useNavigate()
   const currentChildId = useAppStore((s) => s.currentChildId)
+  const { stage } = useCurrentChild()
   const child = useLiveQuery(
     () => (currentChildId ? db.children.get(currentChildId) : undefined),
     [currentChildId],
@@ -260,12 +263,15 @@ export function ParentGrowthPage() {
         新增里程碑
       </button>
 
-      <GrowthRecordFormModal
-        open={recordFormOpen}
-        initial={editingRecord}
-        onClose={() => setRecordFormOpen(false)}
-        onSubmit={handleRecordSubmit}
-      />
+      {recordFormOpen && (
+        <GrowthRecordFormModal
+          key={editingRecord?.id ?? 'new'}
+          open={recordFormOpen}
+          initial={editingRecord}
+          onClose={() => setRecordFormOpen(false)}
+          onSubmit={handleRecordSubmit}
+        />
+      )}
       <ConfirmDialog
         open={!!deleteRecordTarget}
         title="删除这条发育记录？"
@@ -275,12 +281,16 @@ export function ParentGrowthPage() {
         onCancel={() => setDeleteRecordTarget(null)}
       />
 
-      <MilestoneFormModal
-        open={milestoneFormOpen}
-        initial={editingMilestone}
-        onClose={() => setMilestoneFormOpen(false)}
-        onSubmit={handleMilestoneSubmit}
-      />
+      {milestoneFormOpen && (
+        <MilestoneFormModal
+          key={editingMilestone?.id ?? 'new'}
+          open={milestoneFormOpen}
+          initial={editingMilestone}
+          presets={MILESTONE_PRESETS_BY_STAGE[stage]}
+          onClose={() => setMilestoneFormOpen(false)}
+          onSubmit={handleMilestoneSubmit}
+        />
+      )}
       <ConfirmDialog
         open={!!deleteMilestoneTarget}
         title={`删除里程碑「${deleteMilestoneTarget?.title}」？`}

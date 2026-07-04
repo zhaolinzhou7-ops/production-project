@@ -16,16 +16,24 @@ export interface MilestoneFormValues {
 interface MilestoneFormModalProps {
   open: boolean
   initial?: Milestone
+  /** 分龄预设清单;缺省用全量 MILESTONE_PRESETS */
+  presets?: string[]
   onClose: () => void
   onSubmit: (values: MilestoneFormValues) => void
 }
 
 const CUSTOM_OPTION = '自定义'
 
-export function MilestoneFormModal({ open, initial, onClose, onSubmit }: MilestoneFormModalProps) {
-  const initialIsPreset = initial ? MILESTONE_PRESETS.includes(initial.type) : true
-  const [type, setType] = useState(initial ? (initialIsPreset ? initial.type : CUSTOM_OPTION) : MILESTONE_PRESETS[0])
-  const [title, setTitle] = useState(initial?.title ?? MILESTONE_PRESETS[0])
+export function MilestoneFormModal({
+  open,
+  initial,
+  presets = MILESTONE_PRESETS,
+  onClose,
+  onSubmit,
+}: MilestoneFormModalProps) {
+  const initialIsPreset = initial ? presets.includes(initial.type) : true
+  const [type, setType] = useState(initial ? (initialIsPreset ? initial.type : CUSTOM_OPTION) : presets[0])
+  const [title, setTitle] = useState(initial?.title ?? presets[0])
   const [date, setDate] = useState(initial?.date ?? todayISO())
   const [note, setNote] = useState(initial?.note ?? '')
   const [photo, setPhoto] = useState<string | undefined>(initial?.photo)
@@ -76,7 +84,7 @@ export function MilestoneFormModal({ open, initial, onClose, onSubmit }: Milesto
               onChange={(e) => handleTypeChange(e.target.value)}
               className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-brand-400 bg-white"
             >
-              {MILESTONE_PRESETS.map((p) => (
+              {presets.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>

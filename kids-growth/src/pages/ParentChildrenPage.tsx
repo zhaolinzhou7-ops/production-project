@@ -6,9 +6,9 @@ import { db } from '../db/db'
 import { newId } from '../lib/id'
 import { formatAge } from '../lib/age'
 import { Avatar } from '../components/common/Avatar'
-import { ChildFormModal } from '../components/children/ChildFormModal'
+import { ChildFormModal, type ChildFormValues } from '../components/children/ChildFormModal'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
-import type { Child, Gender } from '../types'
+import type { Child } from '../types'
 import { useAppStore } from '../store/useAppStore'
 
 export function ParentChildrenPage() {
@@ -28,13 +28,7 @@ export function ParentChildrenPage() {
     setFormOpen(true)
   }
 
-  const handleSubmit = async (values: {
-    name: string
-    nickname: string
-    gender: Gender
-    birthdate: string
-    avatar?: string
-  }) => {
+  const handleSubmit = async (values: ChildFormValues) => {
     if (editing) {
       await db.children.update(editing.id, {
         name: values.name,
@@ -42,6 +36,7 @@ export function ParentChildrenPage() {
         gender: values.gender,
         birthdate: values.birthdate,
         avatar: values.avatar,
+        enrollmentYear: values.enrollmentYear,
       })
     } else {
       const id = newId()
@@ -52,6 +47,7 @@ export function ParentChildrenPage() {
         gender: values.gender,
         birthdate: values.birthdate,
         avatar: values.avatar,
+        enrollmentYear: values.enrollmentYear,
         createdAt: Date.now(),
       })
       setCurrentChildId(id)
@@ -64,7 +60,7 @@ export function ParentChildrenPage() {
     const id = deleteTarget.id
     await db.transaction(
       'rw',
-      [db.children, db.tasks, db.checkIns, db.pointLedger, db.unlocks, db.rewards, db.redemptions, db.growthRecords, db.milestones, db.portfolios, db.diaryEntries],
+      [db.children, db.tasks, db.checkIns, db.pointLedger, db.unlocks, db.rewards, db.redemptions, db.growthRecords, db.milestones, db.portfolios, db.diaryEntries, db.records, db.exams, db.examScores, db.anecdotes, db.interests],
       async () => {
         await db.children.delete(id)
         await db.tasks.where('childId').equals(id).delete()
@@ -77,6 +73,11 @@ export function ParentChildrenPage() {
         await db.milestones.where('childId').equals(id).delete()
         await db.portfolios.where('childId').equals(id).delete()
         await db.diaryEntries.where('childId').equals(id).delete()
+        await db.records.where('childId').equals(id).delete()
+        await db.exams.where('childId').equals(id).delete()
+        await db.examScores.where('childId').equals(id).delete()
+        await db.anecdotes.where('childId').equals(id).delete()
+        await db.interests.where('childId').equals(id).delete()
       },
     )
     if (currentChildId === id) {
@@ -133,12 +134,15 @@ export function ParentChildrenPage() {
         添加孩子
       </button>
 
-      <ChildFormModal
-        open={formOpen}
-        initial={editing}
-        onClose={() => setFormOpen(false)}
-        onSubmit={handleSubmit}
-      />
+      {formOpen && (
+        <ChildFormModal
+          key={editing?.id ?? 'new'}
+          open={formOpen}
+          initial={editing}
+          onClose={() => setFormOpen(false)}
+          onSubmit={handleSubmit}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}

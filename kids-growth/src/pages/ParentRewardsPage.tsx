@@ -192,12 +192,15 @@ export function ParentRewardsPage() {
         新增奖励
       </button>
 
-      <RewardFormModal
-        open={formOpen}
-        initial={editing}
-        onClose={() => setFormOpen(false)}
-        onSubmit={handleSubmit}
-      />
+      {formOpen && (
+        <RewardFormModal
+          key={editing?.id ?? 'new'}
+          open={formOpen}
+          initial={editing}
+          onClose={() => setFormOpen(false)}
+          onSubmit={handleSubmit}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}

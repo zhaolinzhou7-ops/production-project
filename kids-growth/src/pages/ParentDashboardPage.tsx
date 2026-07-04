@@ -12,6 +12,7 @@ import {
   Download,
   ChevronRight,
   Sparkles,
+  HeartPulse,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Line, LineChart, ResponsiveContainer } from 'recharts'
@@ -19,6 +20,7 @@ import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { buildDashboardStats } from '../lib/dashboard'
 import { buildTimeline } from '../lib/timeline'
+import { formatGrade, getGradeNumber, getStageMeta, getAgeStage } from '../lib/ageStage'
 
 const BACKUP_REMINDER_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
@@ -57,11 +59,21 @@ export function ParentDashboardPage() {
   const sparkData = stats.heightHistory.length >= 2 ? stats.heightHistory : stats.weightHistory
   const sparkLabel = stats.heightHistory.length >= 2 ? '身高' : '体重'
 
+  const stageMeta = getStageMeta(getAgeStage(currentChild.birthdate))
+  const grade = formatGrade(getGradeNumber(currentChild.birthdate, currentChild.enrollmentYear))
+  const stageLabel =
+    stageMeta.stage === 'toddler'
+      ? `${stageMeta.emoji} ${stageMeta.label}`
+      : `${stageMeta.emoji} ${grade || stageMeta.label}`
+
   return (
     <div className="pt-4 pb-10">
       <h1 className="text-xl font-bold text-gray-800 mb-1">家长中心</h1>
-      <p className="text-sm text-gray-400 mb-4">
-        正在查看：{currentChild.nickname || currentChild.name}
+      <p className="text-sm text-gray-400 mb-4 flex items-center gap-2">
+        <span>正在查看：{currentChild.nickname || currentChild.name}</span>
+        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-medium text-brand-600">
+          {stageLabel}
+        </span>
       </p>
 
       {needsBackupReminder && (
@@ -250,6 +262,19 @@ export function ParentDashboardPage() {
           <div>
             <div className="font-bold text-gray-800">身体发育记录</div>
             <div className="text-xs text-gray-400">身高体重曲线、BMI、成长里程碑</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/health')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-brand-100 p-2.5 text-brand-500">
+            <HeartPulse size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">健康档案</div>
+            <div className="text-xs text-gray-400">视力等健康记录与趋势</div>
           </div>
         </button>
 

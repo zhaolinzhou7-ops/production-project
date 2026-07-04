@@ -4,17 +4,20 @@ import type { Child, Gender } from '../../types'
 import { compressImageFile } from '../../lib/image'
 import { Avatar } from '../common/Avatar'
 
+export interface ChildFormValues {
+  name: string
+  nickname: string
+  gender: Gender
+  birthdate: string
+  avatar?: string
+  enrollmentYear?: number
+}
+
 interface ChildFormModalProps {
   open: boolean
   initial?: Child
   onClose: () => void
-  onSubmit: (values: {
-    name: string
-    nickname: string
-    gender: Gender
-    birthdate: string
-    avatar?: string
-  }) => void
+  onSubmit: (values: ChildFormValues) => void
 }
 
 export function ChildFormModal({ open, initial, onClose, onSubmit }: ChildFormModalProps) {
@@ -23,6 +26,9 @@ export function ChildFormModal({ open, initial, onClose, onSubmit }: ChildFormMo
   const [gender, setGender] = useState<Gender>(initial?.gender ?? 'male')
   const [birthdate, setBirthdate] = useState(initial?.birthdate ?? '')
   const [avatar, setAvatar] = useState<string | undefined>(initial?.avatar)
+  const [enrollmentYear, setEnrollmentYear] = useState(
+    initial?.enrollmentYear ? String(initial.enrollmentYear) : '',
+  )
   const [error, setError] = useState('')
 
   if (!open) return null
@@ -44,7 +50,19 @@ export function ChildFormModal({ open, initial, onClose, onSubmit }: ChildFormMo
       setError('请选择出生日期')
       return
     }
-    onSubmit({ name: name.trim(), nickname: nickname.trim(), gender, birthdate, avatar })
+    const year = Number(enrollmentYear)
+    if (enrollmentYear && (!Number.isInteger(year) || year < 1990 || year > 2100)) {
+      setError('入学年份格式不正确')
+      return
+    }
+    onSubmit({
+      name: name.trim(),
+      nickname: nickname.trim(),
+      gender,
+      birthdate,
+      avatar,
+      enrollmentYear: enrollmentYear ? year : undefined,
+    })
   }
 
   return (
@@ -121,6 +139,16 @@ export function ChildFormModal({ open, initial, onClose, onSubmit }: ChildFormMo
               value={birthdate}
               onChange={(e) => setBirthdate(e.target.value)}
               max={new Date().toISOString().slice(0, 10)}
+              className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-500">小学入学年份（可选，用于推算年级）</label>
+            <input
+              type="number"
+              value={enrollmentYear}
+              onChange={(e) => setEnrollmentYear(e.target.value)}
+              placeholder="例如 2021；未上小学可不填"
               className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-brand-400"
             />
           </div>

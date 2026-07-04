@@ -1,6 +1,6 @@
 import { db } from '../db/db'
 
-const BACKUP_VERSION = 1
+const BACKUP_VERSION = 2
 
 export interface BackupPayload {
   version: number
@@ -19,6 +19,11 @@ export interface BackupPayload {
     portfolios: unknown[]
     diaryEntries: unknown[]
     settings: unknown[]
+    records: unknown[]
+    exams: unknown[]
+    examScores: unknown[]
+    anecdotes: unknown[]
+    interests: unknown[]
   }
 }
 
@@ -36,6 +41,12 @@ const TABLE_NAMES = [
   'portfolios',
   'diaryEntries',
   'settings',
+  // v2 新增表;旧版备份缺这些键时 parseBackupFile 会补成空数组,因此 v1 备份仍可导入
+  'records',
+  'exams',
+  'examScores',
+  'anecdotes',
+  'interests',
 ] as const
 
 export async function exportBackup(): Promise<BackupPayload> {

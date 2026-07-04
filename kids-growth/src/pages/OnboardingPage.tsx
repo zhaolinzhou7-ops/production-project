@@ -1,22 +1,15 @@
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
-import { ChildFormModal } from '../components/children/ChildFormModal'
+import { ChildFormModal, type ChildFormValues } from '../components/children/ChildFormModal'
 import { db } from '../db/db'
 import { newId } from '../lib/id'
 import { useAppStore } from '../store/useAppStore'
-import type { Gender } from '../types'
 
 export function OnboardingPage() {
   const [formOpen, setFormOpen] = useState(true)
   const setCurrentChildId = useAppStore((s) => s.setCurrentChildId)
 
-  const handleAdd = async (values: {
-    name: string
-    nickname: string
-    gender: Gender
-    birthdate: string
-    avatar?: string
-  }) => {
+  const handleAdd = async (values: ChildFormValues) => {
     const id = newId()
     await db.children.add({
       id,
@@ -25,6 +18,7 @@ export function OnboardingPage() {
       gender: values.gender,
       birthdate: values.birthdate,
       avatar: values.avatar,
+      enrollmentYear: values.enrollmentYear,
       createdAt: Date.now(),
     })
     setCurrentChildId(id)

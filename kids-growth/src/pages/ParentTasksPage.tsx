@@ -12,6 +12,7 @@ import { isTaskScheduledOn } from '../lib/taskDue'
 import { TaskFormModal, type TaskFormValues } from '../components/tasks/TaskFormModal'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { useAppStore } from '../store/useAppStore'
+import { useCurrentChild } from '../hooks/useCurrentChild'
 import type { CheckIn, Task, TaskCategory } from '../types'
 
 const CATEGORY_ORDER: TaskCategory[] = ['生活', '学习', '运动', '品德', '家务', '其他']
@@ -20,6 +21,7 @@ const TYPE_LABEL: Record<Task['type'], string> = { daily: '每日', weekly: '每
 export function ParentTasksPage() {
   const navigate = useNavigate()
   const currentChildId = useAppStore((s) => s.currentChildId)
+  const { stage, stageMeta } = useCurrentChild()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Task | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null)
@@ -85,8 +87,10 @@ export function ParentTasksPage() {
   }
 
   const handleImportDefaults = async () => {
-    const count = await importDefaultTasks(currentChildId)
-    setImportMsg(count > 0 ? `已导入 ${count} 个默认任务` : '默认任务已全部存在')
+    const count = await importDefaultTasks(currentChildId, stage)
+    setImportMsg(
+      count > 0 ? `已导入 ${count} 个${stageMeta.label}阶段默认任务` : '默认任务已全部存在',
+    )
     setTimeout(() => setImportMsg(''), 2500)
   }
 
@@ -216,12 +220,15 @@ export function ParentTasksPage() {
         )}
       </div>
 
-      <TaskFormModal
-        open={formOpen}
-        initial={editing}
-        onClose={() => setFormOpen(false)}
-        onSubmit={handleSubmit}
-      />
+      {formOpen && (
+        <TaskFormModal
+          key={editing?.id ?? 'new'}
+          open={formOpen}
+          initial={editing}
+          onClose={() => setFormOpen(false)}
+          onSubmit={handleSubmit}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}

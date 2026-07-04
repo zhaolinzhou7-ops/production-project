@@ -12,6 +12,7 @@ import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import { TaskCheckCard } from '../components/tasks/TaskCheckCard'
 import { formatAge } from '../lib/age'
+import { getUiTone } from '../lib/ageStage'
 import { todayISO } from '../lib/dateUtils'
 import { isTaskScheduledOn } from '../lib/taskDue'
 import { computeLevelInfo } from '../lib/points'
@@ -100,6 +101,7 @@ export function ChildHomePage() {
 
   const completedCount = visibleTasks.filter((t) => doneTaskIds.has(t.id)).length
   const current = queue[0]
+  const tone = getUiTone(currentChild.birthdate)
 
   return (
     <div className="pt-4 pb-8">
@@ -134,7 +136,7 @@ export function ChildHomePage() {
           className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-white/70 py-2.5 text-sm font-medium text-gray-700 shadow-sm active:scale-95 transition"
         >
           <Award size={16} className="text-mint-500" />
-          徽章墙
+          {tone === 'playful' ? '徽章墙' : '成就'}
         </button>
         <button
           onClick={() => navigate('/timeline')}
@@ -179,10 +181,12 @@ export function ChildHomePage() {
 
       <LevelUpModal
         level={current?.kind === 'level' ? current.level : null}
+        tone={tone}
         onClose={dismissCurrent}
       />
       <AchievementUnlockModal
         achievement={current?.kind === 'achievement' ? current.achievement : null}
+        tone={tone}
         onClose={dismissCurrent}
       />
     </div>

@@ -1,10 +1,15 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   Achievement,
+  Anecdote,
   Child,
   CheckIn,
   DiaryEntry,
+  ExamRecord,
+  ExamScore,
   GrowthRecord,
+  Interest,
+  LogRecord,
   Milestone,
   PointLedger,
   Portfolio,
@@ -29,6 +34,11 @@ export class GrowthDB extends Dexie {
   portfolios!: EntityTable<Portfolio, 'id'>
   diaryEntries!: EntityTable<DiaryEntry, 'id'>
   settings!: EntityTable<Settings, 'id'>
+  records!: EntityTable<LogRecord, 'id'>
+  exams!: EntityTable<ExamRecord, 'id'>
+  examScores!: EntityTable<ExamScore, 'id'>
+  anecdotes!: EntityTable<Anecdote, 'id'>
+  interests!: EntityTable<Interest, 'id'>
 
   constructor() {
     super('kids-growth-db')
@@ -46,6 +56,14 @@ export class GrowthDB extends Dexie {
       portfolios: 'id, childId, date',
       diaryEntries: 'id, childId, date',
       settings: 'id',
+    })
+    // v2:全龄化扩展 — 通用记录引擎 + 学业成绩 + 事例 + 兴趣(纯新增表,旧数据无需迁移)
+    this.version(2).stores({
+      records: 'id, childId, module, date, [childId+module]',
+      exams: 'id, childId, date',
+      examScores: 'id, examId, childId, subject, [childId+subject]',
+      anecdotes: 'id, childId, date, kind',
+      interests: 'id, childId, active',
     })
   }
 }

@@ -1,14 +1,18 @@
 import { db } from './db'
-import { DEFAULT_REWARDS, DEFAULT_TASKS } from './seedData'
+import { DEFAULT_REWARDS, DEFAULT_TASKS_BY_STAGE } from './seedData'
 import { newId } from '../lib/id'
+import type { AgeStage } from '../types'
 
-/** Adds the default task template for a child, skipping titles that already exist. */
-export async function importDefaultTasks(childId: string): Promise<number> {
+/** Adds the stage-appropriate default task template for a child, skipping titles that already exist. */
+export async function importDefaultTasks(
+  childId: string,
+  stage: AgeStage = 'primary',
+): Promise<number> {
   return db.transaction('rw', db.tasks, async () => {
     const existingTitles = new Set(
       (await db.tasks.where('childId').equals(childId).toArray()).map((t) => t.title),
     )
-    const toAdd = DEFAULT_TASKS.filter((t) => !existingTitles.has(t.title))
+    const toAdd = DEFAULT_TASKS_BY_STAGE[stage].filter((t) => !existingTitles.has(t.title))
     if (toAdd.length === 0) return 0
     await db.tasks.bulkAdd(
       toAdd.map((t) => ({

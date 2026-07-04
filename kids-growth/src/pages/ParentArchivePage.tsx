@@ -224,12 +224,15 @@ export function ParentArchivePage() {
         </>
       )}
 
-      <PortfolioFormModal
-        open={portfolioFormOpen}
-        initial={editingPortfolio}
-        onClose={() => setPortfolioFormOpen(false)}
-        onSubmit={handlePortfolioSubmit}
-      />
+      {portfolioFormOpen && (
+        <PortfolioFormModal
+          key={editingPortfolio?.id ?? 'new'}
+          open={portfolioFormOpen}
+          initial={editingPortfolio}
+          onClose={() => setPortfolioFormOpen(false)}
+          onSubmit={handlePortfolioSubmit}
+        />
+      )}
       <ConfirmDialog
         open={!!deletePortfolioTarget}
         title={`删除作品「${deletePortfolioTarget?.title}」？`}
@@ -242,12 +245,15 @@ export function ParentArchivePage() {
         onCancel={() => setDeletePortfolioTarget(null)}
       />
 
-      <DiaryFormModal
-        open={diaryFormOpen}
-        initial={editingDiary}
-        onClose={() => setDiaryFormOpen(false)}
-        onSubmit={handleDiarySubmit}
-      />
+      {diaryFormOpen && (
+        <DiaryFormModal
+          key={editingDiary?.id ?? 'new'}
+          open={diaryFormOpen}
+          initial={editingDiary}
+          onClose={() => setDiaryFormOpen(false)}
+          onSubmit={handleDiarySubmit}
+        />
+      )}
       <ConfirmDialog
         open={!!deleteDiaryTarget}
         title="删除这段寄语？"
