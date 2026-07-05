@@ -3,15 +3,61 @@ import { newId } from '../lib/id'
 import { getChildPointStats } from '../lib/points'
 import { initialSrs, gradeCard, isDue } from '../lib/srs'
 import { getPackMeta } from '../lib/learningContent'
+import type {
+  BuiltinCard,
+  BuiltinHanziCard,
+  BuiltinPoemCard,
+  BuiltinWordCard,
+} from '../lib/learningContent'
 import { computeStreak } from '../lib/streak'
 import { addDays, todayISO } from '../lib/dateUtils'
-import type { LearnCard, LearnDeck, PracticeMode, ReviewGrade, StudyState } from '../types'
+import type { CardItemType, LearnCard, LearnDeck, PracticeMode, ReviewGrade, StudyState } from '../types'
 
 /** 每答对一张卡的积分 */
 const POINTS_PER_CORRECT = 2
 
 /** 错词本卡组名称(每个孩子一个,存答错的单词) */
 const WRONG_DECK_NAME = '错词本'
+
+/** 把内容包里的一条(按 itemType 不同结构)转成通用 LearnCard */
+function builtinCardToLearnCard(
+  c: BuiltinCard,
+  itemType: CardItemType,
+  deckId: string,
+  order: number,
+): LearnCard {
+  const base = { id: newId(), deckId, order }
+  if (itemType === 'poem') {
+    const p = c as BuiltinPoemCard
+    return {
+      ...base,
+      front: p.title,
+      back: p.lines.join('\n'),
+      audioText: p.lines.join('，'),
+      extra: { author: p.author, dynasty: p.dynasty, lines: p.lines },
+    }
+  }
+  if (itemType === 'hanzi') {
+    const h = c as BuiltinHanziCard
+    return {
+      ...base,
+      front: h.c,
+      back: h.py,
+      phonetic: h.py,
+      audioText: h.c,
+      extra: h.w ? { word: h.w } : undefined,
+    }
+  }
+  const w = c as BuiltinWordCard
+  return {
+    ...base,
+    front: w.w,
+    back: w.tr,
+    phonetic: w.ph || undefined,
+    audioText: w.w,
+    extra: w.pos ? { pos: w.pos } : undefined,
+  }
+}
 
 /**
  * 确保某内置卡组已为该孩子实例化(建 deck + cards + 每卡的 SRS 初始状态)。幂等。
@@ -46,16 +92,9 @@ export async function ensureBuiltinDeck(childId: string, builtinKey: string): Pr
     }
     await db.decks.add(deck)
 
-    const cards: LearnCard[] = pack.cards.map((c, i) => ({
-      id: newId(),
-      deckId,
-      front: c.w,
-      back: c.tr,
-      phonetic: c.ph || undefined,
-      audioText: c.w,
-      extra: c.pos ? { pos: c.pos } : undefined,
-      order: i,
-    }))
+    const cards: LearnCard[] = pack.cards.map((c, i) =>
+      builtinCardToLearnCard(c, pack.itemType, deckId, i),
+    )
     await db.cards.bulkAdd(cards)
 
     const init = initialSrs()

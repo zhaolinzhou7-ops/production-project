@@ -22,12 +22,12 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'speak', label: '跟读', icon: '🎤', desc: '跟着读一遍', needsMic: true, lowAgeFriendly: true },
   ],
   poem: [
-    { mode: 'fillBlank', label: '挖空填词', icon: '✏️', desc: '补全诗句', lowAgeFriendly: true },
-    { mode: 'recite', label: '朗读对照', icon: '📖', desc: '对照朗读', lowAgeFriendly: true },
+    { mode: 'recite', label: '朗读背诵', icon: '📖', desc: '听读并背诵', lowAgeFriendly: true },
+    { mode: 'fillBlank', label: '补全诗句', icon: '✏️', desc: '选出缺的一句', lowAgeFriendly: true },
   ],
   hanzi: [
     { mode: 'recognize', label: '认字', icon: '👀', desc: '看字读音组词', lowAgeFriendly: true },
-    { mode: 'dictation', label: '听写', icon: '👂', desc: '听词写字', lowAgeFriendly: false },
+    { mode: 'listenChoose', label: '听音选字', icon: '👂', desc: '听读音选汉字', lowAgeFriendly: true },
   ],
   wrong: [{ mode: 'review', label: '重做', icon: '🔁', desc: '回想再自评', lowAgeFriendly: true }],
 }

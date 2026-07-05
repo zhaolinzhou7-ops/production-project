@@ -8,7 +8,7 @@ import { useCurrentChild } from '../hooks/useCurrentChild'
 import { getSessionCards, applyGrade, finishSession, addWrongCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
-import { playWordAudio, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import { playWordAudio, speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
@@ -32,7 +32,9 @@ export function StudySessionPage() {
 
   const [cards, setCards] = useState<DueCard[] | null>(null)
   const [deck, setDeck] = useState<LearnDeck | null>(null)
-  const [pool, setPool] = useState<string[]>([]) // 干扰项池(同卡组的所有释义)
+  const [pool, setPool] = useState<string[]>([]) // 干扰项池(释义/拼音)
+  const [poolFront, setPoolFront] = useState<string[]>([]) // 干扰项池(正面:汉字)
+  const [linePool, setLinePool] = useState<string[]>([]) // 古诗诗句池(补全诗句干扰项)
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('prompt')
   const [correctCount, setCorrectCount] = useState(0)
@@ -53,6 +55,13 @@ export function StudySessionPage() {
       const d = await db.decks.get(deckId)
       if (!alive) return
       setPool(allCards.map((c) => c.back))
+      setPoolFront(allCards.map((c) => c.front))
+      const lines: string[] = []
+      for (const c of allCards) {
+        const ls = (c.extra as { lines?: string[] } | undefined)?.lines
+        if (Array.isArray(ls)) lines.push(...ls)
+      }
+      setLinePool(lines)
       setDeck(d ?? null)
       setCards(list)
     })()
@@ -62,21 +71,50 @@ export function StudySessionPage() {
   }, [currentChildId, deckId])
 
   const current = cards?.[idx]
+  const itemType = deck?.itemType ?? 'word'
+  const isHanzi = itemType === 'hanzi'
 
-  // 听音选义 4 选项
+  /** 按学科播放:英语用真人音源,语文(古诗/识字)用中文 TTS。 */
+  const playAudio = useCallback(
+    (text: string) => {
+      if (itemType === 'word') void playWordAudio(text)
+      else speak(text, 'zh-CN', itemType === 'poem' ? 0.85 : 0.8)
+    },
+    [itemType],
+  )
+
+  // 听音选(义/字) 4 选项:汉字选正面,单词选释义
   const options = useMemo(() => {
     if (!current || mode !== 'listenChoose') return []
-    const distractors = shuffle(pool.filter((b) => b !== current.card.back)).slice(0, 3)
-    return shuffle([current.card.back, ...distractors])
-  }, [current, mode, pool])
+    const answer = isHanzi ? current.card.front : current.card.back
+    const src = isHanzi ? poolFront : pool
+    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, pool, poolFront, isHanzi])
 
-  // 进入每张卡时,听音选义/跟读/听写自动播放发音
+  // 补全诗句:随机挖掉一句,4 选项(正确句 + 3 干扰句)
+  const blank = useMemo(() => {
+    if (!current || mode !== 'fillBlank') return null
+    const lines = (current.card.extra as { lines?: string[] } | undefined)?.lines ?? []
+    if (lines.length === 0) return null
+    const hideIdx = Math.floor(Math.random() * lines.length)
+    const answer = lines[hideIdx]
+    // 干扰句:同字数、且不属于本诗(避免用本诗其它句作干扰)
+    const own = new Set(lines)
+    const distractors = shuffle(
+      linePool.filter((l) => !own.has(l) && l.length === answer.length),
+    ).slice(0, 3)
+    return { lines, hideIdx, answer, options: shuffle([answer, ...distractors]) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, mode, linePool, idx])
+
+  // 进入每张卡时,听音选(义/字)/跟读/听写自动播放发音
   useEffect(() => {
     if (!current || phase !== 'prompt') return
     if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation') {
-      void playWordAudio(current.card.audioText ?? current.card.front)
+      playAudio(current.card.audioText ?? current.card.front)
     }
-  }, [current, phase, mode])
+  }, [current, phase, mode, playAudio])
 
   const finish = useCallback(
     async (finalCorrect: number, total: number) => {
@@ -197,7 +235,7 @@ export function StudySessionPage() {
 
   const AudioBtn = ({ big }: { big?: boolean }) => (
     <button
-      onClick={() => void playWordAudio(current.card.audioText ?? current.card.front)}
+      onClick={() => playAudio(current.card.audioText ?? current.card.front)}
       className={`inline-flex items-center justify-center rounded-full bg-brand-100 text-brand-600 active:scale-90 transition ${
         big ? 'h-16 w-16' : 'h-10 w-10'
       }`}
@@ -222,42 +260,60 @@ export function StudySessionPage() {
         </span>
       </div>
 
-      {/* ---- 认词 ---- */}
+      {/* ---- 认词 / 认字 ---- */}
       {mode === 'recognize' && (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
-          <div className="text-4xl font-bold text-gray-800 mb-2">{current.card.front}</div>
-          {current.card.phonetic && <div className="text-sm text-gray-400 mb-3">/{current.card.phonetic}/</div>}
+          <div className={`font-bold text-gray-800 mb-2 ${isHanzi ? 'text-7xl' : 'text-4xl'}`}>
+            {current.card.front}
+          </div>
+          {!isHanzi && current.card.phonetic && (
+            <div className="text-sm text-gray-400 mb-3">/{current.card.phonetic}/</div>
+          )}
           <AudioBtn />
           {phase === 'reveal' ? (
             <>
-              <div className="mt-6 text-lg text-brand-600 font-medium">{current.card.back}</div>
+              {isHanzi ? (
+                <>
+                  <div className="mt-6 text-2xl text-brand-600 font-bold">{current.card.phonetic}</div>
+                  {(current.card.extra as { word?: string } | undefined)?.word && (
+                    <div className="mt-1 text-gray-500">
+                      组词:{(current.card.extra as { word?: string }).word}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="mt-6 text-lg text-brand-600 font-medium">{current.card.back}</div>
+              )}
               <div className="mt-8 flex gap-3">
                 <button onClick={() => void advance(false)} className="rounded-2xl bg-gray-100 px-6 py-3 font-bold text-gray-500 active:scale-95">
-                  没记住
+                  {isHanzi ? '不认识' : '没记住'}
                 </button>
                 <button onClick={() => void advance(true)} className="rounded-2xl bg-mint-500 px-8 py-3 font-bold text-white active:scale-95">
-                  记住了
+                  {isHanzi ? '认识' : '记住了'}
                 </button>
               </div>
             </>
           ) : (
             <button onClick={() => setPhase('reveal')} className="mt-8 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95">
-              看意思
+              {isHanzi ? '看读音' : '看意思'}
             </button>
           )}
         </div>
       )}
 
-      {/* ---- 听音选义 ---- */}
+      {/* ---- 听音选义 / 听音选字 ---- */}
       {mode === 'listenChoose' && (
         <div className="flex-1 flex flex-col items-center px-4">
           <div className="mt-4 mb-8">
             <AudioBtn big />
           </div>
-          <p className="text-sm text-gray-400 mb-4">听发音,选出正确的意思</p>
-          <div className="w-full max-w-sm space-y-3">
+          <p className="text-sm text-gray-400 mb-4">
+            {isHanzi ? '听读音,选出正确的字' : '听发音,选出正确的意思'}
+          </p>
+          <div className={`w-full max-w-sm ${isHanzi ? 'grid grid-cols-2 gap-3' : 'space-y-3'}`}>
             {options.map((opt) => {
-              const isCorrect = opt === current.card.back
+              const answer = isHanzi ? current.card.front : current.card.back
+              const isCorrect = opt === answer
               const show = picked !== null
               return (
                 <button
@@ -265,9 +321,11 @@ export function StudySessionPage() {
                   disabled={picked !== null}
                   onClick={() => {
                     setPicked(opt)
-                    setTimeout(() => void advance(opt === current.card.back), 900)
+                    setTimeout(() => void advance(opt === answer), 900)
                   }}
-                  className={`w-full rounded-2xl px-4 py-3 text-left font-medium transition ${
+                  className={`w-full rounded-2xl px-4 py-3 font-medium transition ${
+                    isHanzi ? 'text-center text-3xl' : 'text-left'
+                  } ${
                     show && isCorrect
                       ? 'bg-mint-500 text-white'
                       : show && opt === picked
@@ -441,6 +499,77 @@ export function StudySessionPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ---- 古诗:朗读背诵 ---- */}
+      {mode === 'recite' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="text-xl font-bold text-gray-800 mt-2">{current.card.front}</div>
+          <div className="text-xs text-gray-400 mt-0.5">
+            {(current.card.extra as { dynasty?: string; author?: string } | undefined)?.dynasty}
+            ·{(current.card.extra as { author?: string } | undefined)?.author}
+          </div>
+          <div className="my-6 flex flex-col items-center gap-2 text-lg leading-relaxed text-gray-700">
+            {((current.card.extra as { lines?: string[] } | undefined)?.lines ?? []).map((l, i) => (
+              <div key={i}>{l}</div>
+            ))}
+          </div>
+          <button
+            onClick={() => playAudio(current.card.audioText ?? current.card.front)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-brand-100 px-5 py-2.5 font-medium text-brand-600 active:scale-95"
+          >
+            <Volume2 size={18} /> 朗读一遍
+          </button>
+          <p className="text-xs text-gray-400 mt-4">听一听、跟着读,试着背下来</p>
+          <div className="mt-5 flex gap-3">
+            <button onClick={() => void advance(false)} className="rounded-2xl bg-gray-100 px-6 py-3 font-bold text-gray-500 active:scale-95">
+              还不熟
+            </button>
+            <button onClick={() => void advance(true)} className="rounded-2xl bg-mint-500 px-8 py-3 font-bold text-white active:scale-95">
+              会背了
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---- 古诗:补全诗句 ---- */}
+      {mode === 'fillBlank' && blank && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="text-base font-bold text-gray-700 mt-2">{current.card.front}</div>
+          <div className="my-6 flex flex-col items-center gap-2 text-lg leading-relaxed text-gray-700">
+            {blank.lines.map((l, i) => (
+              <div key={i} className={i === blank.hideIdx ? 'font-bold text-brand-500' : ''}>
+                {i === blank.hideIdx ? (picked ? blank.answer : '　'.repeat(l.length)) : l}
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-gray-400 mb-3">选出缺少的那一句</p>
+          <div className="w-full max-w-sm space-y-3">
+            {blank.options.map((opt) => {
+              const show = picked !== null
+              const isCorrect = opt === blank.answer
+              return (
+                <button
+                  key={opt}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    setPicked(opt)
+                    setTimeout(() => void advance(opt === blank.answer), 1000)
+                  }}
+                  className={`w-full rounded-2xl px-4 py-3 text-center font-medium transition ${
+                    show && isCorrect
+                      ? 'bg-mint-500 text-white'
+                      : show && opt === picked
+                        ? 'bg-red-400 text-white'
+                        : 'bg-white/80 text-gray-700'
+                  }`}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

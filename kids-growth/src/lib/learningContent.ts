@@ -19,6 +19,21 @@ export interface BuiltinWordCard {
   pos?: string
 }
 
+export interface BuiltinPoemCard {
+  title: string
+  author: string
+  dynasty: string
+  lines: string[]
+}
+
+export interface BuiltinHanziCard {
+  c: string
+  py: string
+  w?: string
+}
+
+export type BuiltinCard = BuiltinWordCard | BuiltinPoemCard | BuiltinHanziCard
+
 export interface BuiltinPackData {
   key: string
   name: string
@@ -26,7 +41,7 @@ export interface BuiltinPackData {
   itemType: CardItemType
   source: string
   count: number
-  cards: BuiltinWordCard[]
+  cards: BuiltinCard[]
 }
 
 export const BUILTIN_PACKS: BuiltinPackMeta[] = [
@@ -56,6 +71,24 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     itemType: 'word',
     stages: ['senior'],
     load: () => import('../data/decks/words-senior.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'poems-primary',
+    name: '小学·唐诗启蒙',
+    subject: '语文',
+    icon: '📜',
+    itemType: 'poem',
+    stages: ['primary'],
+    load: () => import('../data/decks/poems-primary.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'hanzi-primary',
+    name: '小学·常用识字',
+    subject: '语文',
+    icon: '🈷️',
+    itemType: 'hanzi',
+    stages: ['primary'],
+    load: () => import('../data/decks/hanzi-primary.json').then((m) => m.default as BuiltinPackData),
   },
 ]
 
