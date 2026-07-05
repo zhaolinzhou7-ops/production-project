@@ -8,7 +8,7 @@ export type UiTone = 'playful' | 'mature'
 export type TaskCategory = '生活' | '学习' | '运动' | '品德' | '家务' | '其他'
 export type TaskType = 'daily' | 'weekly' | 'once'
 export type CheckInStatus = 'done' | 'undo'
-export type LedgerReason = 'checkin' | 'redeem' | 'achievement' | 'manual'
+export type LedgerReason = 'checkin' | 'redeem' | 'achievement' | 'manual' | 'study'
 export type RedemptionStatus = 'pending' | 'approved' | 'rejected' | 'fulfilled'
 export type PortfolioType = '画作' | '手工' | '作业' | '证书' | '奖状' | '照片' | '其他'
 export type Mood = 'happy' | 'proud' | 'calm' | 'tired' | 'sad'
@@ -79,6 +79,9 @@ export interface AchievementRule {
     | 'firstPortfolio'
     | 'firstExam'
     | 'firstAnecdote'
+    | 'firstStudy'
+    | 'wordsMastered'
+    | 'studyStreak'
     | 'level'
   days?: number
   count?: number
@@ -266,5 +269,88 @@ export interface Interest {
   active: boolean
   startedAt?: string // ISO date
   note?: string
+  createdAt: number
+}
+
+// ============ 学习引擎 ============
+
+/** 卡片内容类型,决定支持哪些练习模式 */
+export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong'
+export type DeckSource = 'builtin' | 'custom' | 'wrong'
+/** 练习模式 */
+export type PracticeMode =
+  | 'recognize' // 认词/认字:看正面想背面
+  | 'listenChoose' // 听音选义
+  | 'spell' // 拼写
+  | 'dictation' // 听写(批次1)
+  | 'speak' // 跟读(语音识别比对)
+  | 'fillBlank' // 古诗挖空(批次2)
+  | 'recite' // 朗读对照(批次2)
+  | 'review' // 错题:看题回想→自评
+
+/** SRS 记忆状态机 */
+export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'
+/** 孩子对一张卡的评分(简化版) */
+export type ReviewGrade = 'again' | 'good' | 'easy'
+
+export interface LearnDeck {
+  id: string
+  /** builtin 卡组 childId 为空(共享);custom/wrong 归属某孩子 */
+  childId?: string
+  subject: string // 英语/语文/数学…
+  name: string
+  icon: string
+  source: DeckSource
+  builtinKey?: string // 内置内容包 key,如 'words-primary'
+  itemType: CardItemType
+  createdAt: number
+}
+
+export interface LearnCard {
+  id: string
+  deckId: string
+  front: string // 正面(单词/字/题干)
+  back: string // 背面(释义/答案)
+  phonetic?: string // 音标
+  audioText?: string // 用于发音的文本(缺省用 front)
+  extra?: Record<string, unknown> // pos/例句/拼音/诗句…
+  order: number
+}
+
+export interface StudyState {
+  id: string
+  childId: string
+  cardId: string
+  deckId: string
+  due: string // ISO date,到期应复习
+  interval: number // 天
+  ease: number // 难度系数(SM-2)
+  reps: number // 连续答对次数
+  lapses: number // 遗忘次数
+  status: SrsStatus
+  lastReviewed?: number
+}
+
+export interface StudySession {
+  id: string
+  childId: string
+  deckId: string
+  mode: PracticeMode
+  date: string // ISO date
+  total: number
+  correct: number
+  durationSec: number
+  pointsAwarded: number
+  createdAt: number
+}
+
+export interface DrillResult {
+  id: string
+  childId: string
+  kind: string // add/sub/mul/div/mulTable/mixed
+  date: string
+  total: number
+  correct: number
+  durationSec: number
   createdAt: number
 }

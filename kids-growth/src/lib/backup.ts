@@ -1,6 +1,6 @@
 import { db } from '../db/db'
 
-const BACKUP_VERSION = 2
+const BACKUP_VERSION = 3
 
 export interface BackupPayload {
   version: number
@@ -24,6 +24,11 @@ export interface BackupPayload {
     examScores: unknown[]
     anecdotes: unknown[]
     interests: unknown[]
+    decks: unknown[]
+    cards: unknown[]
+    studyStates: unknown[]
+    studySessions: unknown[]
+    drillResults: unknown[]
   }
 }
 
@@ -47,6 +52,12 @@ const TABLE_NAMES = [
   'examScores',
   'anecdotes',
   'interests',
+  // v3 学习引擎新增表
+  'decks',
+  'cards',
+  'studyStates',
+  'studySessions',
+  'drillResults',
 ] as const
 
 export async function exportBackup(): Promise<BackupPayload> {

@@ -8,7 +8,7 @@ import type { Achievement } from '../types'
 
 /** Checks all not-yet-unlocked achievement rules for a child and records any newly satisfied ones. */
 export async function evaluateAchievements(childId: string): Promise<Achievement[]> {
-  const [achievements, unlocks, doneCheckIns, tasks, ledger, settings, growthCount, portfolioCount, approvedRedemptions, examCount, anecdoteCount] =
+  const [achievements, unlocks, doneCheckIns, tasks, ledger, settings, growthCount, portfolioCount, approvedRedemptions, examCount, anecdoteCount, studySessions, masteredCount] =
     await Promise.all([
       db.achievements.toArray(),
       db.unlocks.where('childId').equals(childId).toArray(),
@@ -25,8 +25,13 @@ export async function evaluateAchievements(childId: string): Promise<Achievement
         .count(),
       db.exams.where('childId').equals(childId).count(),
       db.anecdotes.where('childId').equals(childId).count(),
+      db.studySessions.where('childId').equals(childId).toArray(),
+      db.studyStates.where('childId').equals(childId).filter((s) => s.status === 'mastered').count(),
     ])
   if (!settings) return []
+
+  const studyDates = new Set(studySessions.map((s) => s.date))
+  const studyStreak = computeStreak(studyDates, todayISO())
 
   const unlockedCodes = new Set(unlocks.map((u) => u.achievementCode))
   const taskCategoryById = new Map(tasks.map((t) => [t.id, t.category]))
@@ -103,6 +108,15 @@ export async function evaluateAchievements(childId: string): Promise<Achievement
         break
       case 'firstAnecdote':
         satisfied = anecdoteCount > 0
+        break
+      case 'firstStudy':
+        satisfied = studySessions.length > 0
+        break
+      case 'wordsMastered':
+        satisfied = masteredCount >= (a.rule.count ?? Infinity)
+        break
+      case 'studyStreak':
+        satisfied = studyStreak >= (a.rule.days ?? Infinity)
         break
       case 'level':
         satisfied = level >= (a.rule.level ?? Infinity)

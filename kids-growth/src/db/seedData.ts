@@ -112,6 +112,10 @@ export const DEFAULT_ACHIEVEMENTS: Array<Omit<Achievement, 'id'>> = [
   { code: 'level_10', name: '成长大师', icon: '👑', desc: '达到Lv10', rule: { type: 'level', level: 10 } },
   { code: 'first_exam', name: '学业起步', icon: '📝', desc: '第一次记录考试成绩', rule: { type: 'firstExam' } },
   { code: 'first_anecdote', name: '闪光被看见', icon: '✨', desc: '第一条成长事例入档', rule: { type: 'firstAnecdote' } },
+  { code: 'first_study', name: '开卷有益', icon: '📖', desc: '完成第一次学习', rule: { type: 'firstStudy' } },
+  { code: 'words_50', name: '词汇小达人', icon: '🔤', desc: '掌握 50 个单词/卡片', rule: { type: 'wordsMastered', count: 50 } },
+  { code: 'words_200', name: '词汇高手', icon: '📚', desc: '掌握 200 个单词/卡片', rule: { type: 'wordsMastered', count: 200 } },
+  { code: 'study_streak_7', name: '学习之星', icon: '🔥', desc: '连续学习 7 天', rule: { type: 'studyStreak', days: 7 } },
 ]
 
 /** 分龄里程碑预设:按孩子当前阶段展示对应清单(始终附加「自定义」) */

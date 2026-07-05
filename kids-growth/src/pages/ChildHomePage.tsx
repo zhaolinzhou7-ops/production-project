@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Award, BookOpen, Flame, Gift } from 'lucide-react'
+import { Award, BookOpen, Flame, Gift, GraduationCap, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
 import { checkInTask } from '../db/checkin'
@@ -122,6 +122,20 @@ export function ChildHomePage() {
       </div>
 
       <LevelProgressCard xp={xp} balance={balance} ladder={settings.levelLadder} />
+
+      <button
+        onClick={() => navigate('/learn')}
+        className="mt-3 w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-400 to-brand-500 p-4 text-left text-white shadow-sm active:scale-[0.99] transition"
+      >
+        <div className="rounded-xl bg-white/25 p-2.5">
+          <GraduationCap size={22} />
+        </div>
+        <div className="flex-1">
+          <div className="font-bold">开始学习</div>
+          <div className="text-xs text-white/85">背单词 · 听力 · 跟读,练一练得积分</div>
+        </div>
+        <ArrowRight size={18} className="text-white/80" />
+      </button>
 
       <div className="mt-3 flex gap-3">
         <button

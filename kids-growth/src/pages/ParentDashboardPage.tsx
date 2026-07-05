@@ -358,6 +358,19 @@ export function ParentDashboardPage() {
         </button>
 
         <button
+          onClick={() => navigate('/learn')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-brand-100 p-2.5 text-brand-500">
+            <GraduationCap size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">学习中心</div>
+            <div className="text-xs text-gray-400">背单词/听力/跟读，练习得积分</div>
+          </div>
+        </button>
+
+        <button
           onClick={() => navigate('/parent/records/reading')}
           className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
         >

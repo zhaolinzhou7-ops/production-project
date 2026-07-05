@@ -5,10 +5,13 @@ import type {
   Child,
   CheckIn,
   DiaryEntry,
+  DrillResult,
   ExamRecord,
   ExamScore,
   GrowthRecord,
   Interest,
+  LearnCard,
+  LearnDeck,
   LogRecord,
   Milestone,
   PointLedger,
@@ -16,6 +19,8 @@ import type {
   Redemption,
   Reward,
   Settings,
+  StudySession,
+  StudyState,
   Task,
   Unlock,
 } from '../types'
@@ -39,6 +44,11 @@ export class GrowthDB extends Dexie {
   examScores!: EntityTable<ExamScore, 'id'>
   anecdotes!: EntityTable<Anecdote, 'id'>
   interests!: EntityTable<Interest, 'id'>
+  decks!: EntityTable<LearnDeck, 'id'>
+  cards!: EntityTable<LearnCard, 'id'>
+  studyStates!: EntityTable<StudyState, 'id'>
+  studySessions!: EntityTable<StudySession, 'id'>
+  drillResults!: EntityTable<DrillResult, 'id'>
 
   constructor() {
     super('kids-growth-db')
@@ -64,6 +74,15 @@ export class GrowthDB extends Dexie {
       examScores: 'id, examId, childId, subject, [childId+subject]',
       anecdotes: 'id, childId, date, kind',
       interests: 'id, childId, active',
+    })
+    // v3:学习引擎 — 卡组/卡片/SRS 状态/会话/口算结果(纯新增表)
+    this.version(3).stores({
+      decks: 'id, childId, subject, source, builtinKey',
+      cards: 'id, deckId',
+      studyStates:
+        'id, childId, cardId, deckId, due, status, [childId+due], [childId+deckId], [childId+cardId]',
+      studySessions: 'id, childId, deckId, date, [childId+date]',
+      drillResults: 'id, childId, date',
     })
   }
 }
