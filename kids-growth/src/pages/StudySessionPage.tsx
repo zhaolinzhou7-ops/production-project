@@ -572,6 +572,47 @@ export function StudySessionPage() {
           </div>
         </div>
       )}
+
+      {/* ---- 错题本:看题回想 → 翻答案自评 ---- */}
+      {mode === 'review' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          {(current.card.extra as { subject?: string } | undefined)?.subject && (
+            <span className="mb-2 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600">
+              {(current.card.extra as { subject?: string }).subject}
+            </span>
+          )}
+          <div className="w-full max-w-md rounded-2xl bg-white/80 p-4 text-gray-800 whitespace-pre-line leading-relaxed">
+            {current.card.front}
+          </div>
+          {(current.card.extra as { photo?: string } | undefined)?.photo && (
+            <img
+              src={(current.card.extra as { photo?: string }).photo}
+              alt="错题图片"
+              className="mt-3 max-h-60 rounded-2xl object-contain"
+            />
+          )}
+          {phase === 'reveal' ? (
+            <>
+              <div className="mt-4 w-full max-w-md rounded-2xl bg-mint-400/15 p-4 text-gray-800 whitespace-pre-line leading-relaxed">
+                <div className="text-xs text-mint-600 font-bold mb-1">答案</div>
+                {current.card.back}
+              </div>
+              <div className="mt-6 flex gap-3">
+                <button onClick={() => void advance(false)} className="rounded-2xl bg-gray-100 px-6 py-3 font-bold text-gray-500 active:scale-95">
+                  还没掌握
+                </button>
+                <button onClick={() => void advance(true)} className="rounded-2xl bg-mint-500 px-8 py-3 font-bold text-white active:scale-95">
+                  已掌握
+                </button>
+              </div>
+            </>
+          ) : (
+            <button onClick={() => setPhase('reveal')} className="mt-6 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95">
+              看答案
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

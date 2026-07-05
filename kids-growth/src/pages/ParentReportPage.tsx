@@ -101,6 +101,24 @@ export function ParentReportPage() {
             <StatTile emoji="🎨" value={String(report.portfolioCount)} label="作品入档" />
           </div>
 
+          {report.learning && (
+            <div className="rounded-3xl bg-white/70 p-4 shadow-sm mb-3">
+              <h2 className="font-bold text-gray-700 mb-2">📖 今年的学习</h2>
+              <div className="grid grid-cols-3 gap-2">
+                <StatTile emoji="🔤" value={String(report.learning.wordsMastered)} label="掌握单词" />
+                <StatTile emoji="🈷️" value={String(report.learning.hanziMastered)} label="掌握汉字" />
+                <StatTile emoji="📜" value={String(report.learning.poemsMastered)} label="背会古诗" />
+                <StatTile emoji="🧮" value={String(report.learning.drillProblems)} label="口算题数" />
+                <StatTile
+                  emoji="🎯"
+                  value={report.learning.drillAccuracy != null ? `${report.learning.drillAccuracy}%` : '—'}
+                  label="口算正确率"
+                />
+                <StatTile emoji="🔥" value={String(report.learning.studyDays)} label="学习天数" />
+              </div>
+            </div>
+          )}
+
           {report.subjectAvgRates.length > 0 && (
             <div className="rounded-3xl bg-white/70 p-4 shadow-sm mb-3">
               <h2 className="font-bold text-gray-700 mb-2">各科平均得分率</h2>

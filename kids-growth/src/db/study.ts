@@ -299,7 +299,7 @@ export async function ensureWrongDeck(childId: string): Promise<string> {
   const existing = await db.decks
     .where('childId')
     .equals(childId)
-    .filter((d) => d.source === 'wrong')
+    .filter((d) => d.source === 'wrong' && d.itemType === 'word')
     .first()
   if (existing) return existing.id
 
@@ -354,6 +354,74 @@ export async function addWrongCard(
       deckId: wrongDeckId,
       ...initialSrs(),
     })
+  })
+}
+
+// ============ 全学科错题本(手动录入,跨学科) ============
+
+/** 错题本卡组名称(每个孩子一个,存手动录入的各学科错题) */
+const ERROR_DECK_NAME = '错题本'
+
+/** 确保该孩子的(跨学科)错题本卡组存在。返回 deckId。幂等。 */
+export async function ensureErrorDeck(childId: string): Promise<string> {
+  const existing = await db.decks
+    .where('childId')
+    .equals(childId)
+    .filter((d) => d.source === 'wrong' && d.itemType === 'wrong')
+    .first()
+  if (existing) return existing.id
+
+  const deckId = newId()
+  await db.decks.add({
+    id: deckId,
+    childId,
+    subject: '错题',
+    name: ERROR_DECK_NAME,
+    icon: '📕',
+    source: 'wrong',
+    itemType: 'wrong',
+    createdAt: Date.now(),
+  })
+  return deckId
+}
+
+/** 手动录入一道错题(题干/答案,可选学科与照片)。返回 cardId。 */
+export async function addErrorCard(
+  childId: string,
+  entry: { front: string; back: string; subject?: string; photo?: string },
+): Promise<string> {
+  const deckId = await ensureErrorDeck(childId)
+  const count = await db.cards.where('deckId').equals(deckId).count()
+  const cardId = newId()
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await db.cards.add({
+      id: cardId,
+      deckId,
+      front: entry.front.trim(),
+      back: entry.back.trim(),
+      extra: {
+        ...(entry.subject ? { subject: entry.subject } : {}),
+        ...(entry.photo ? { photo: entry.photo } : {}),
+      },
+      order: count,
+    })
+    await db.studyStates.add({ id: newId(), childId, cardId, deckId, ...initialSrs() })
+  })
+  return cardId
+}
+
+/** 列出错题本中的卡片(用于家长/孩子端管理) */
+export async function listErrorCards(childId: string): Promise<LearnCard[]> {
+  const deckId = await ensureErrorDeck(childId)
+  const cards = await db.cards.where('deckId').equals(deckId).toArray()
+  return cards.sort((a, b) => a.order - b.order)
+}
+
+/** 删除一张错题卡(连同其 SRS 状态) */
+export async function deleteCard(cardId: string): Promise<void> {
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await db.cards.delete(cardId)
+    await db.studyStates.where('cardId').equals(cardId).delete()
   })
 }
 

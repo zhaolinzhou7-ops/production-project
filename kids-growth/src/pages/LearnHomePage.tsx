@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Calculator, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Calculator, NotebookPen, ChevronRight } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
@@ -34,7 +34,9 @@ export function LearnHomePage() {
 
   const decks = useLiveQuery(async (): Promise<LearnDeck[]> => {
     if (!currentChildId) return []
-    return db.decks.where('childId').equals(currentChildId).toArray()
+    const all = await db.decks.where('childId').equals(currentChildId).toArray()
+    // 手动错题本(itemType 'wrong')单独由「错题本」入口管理,不进通用卡组列表
+    return all.filter((d) => !(d.source === 'wrong' && d.itemType === 'wrong'))
   }, [currentChildId, provisioning])
 
   const dueCounts = useLiveQuery(async () => {
@@ -71,6 +73,20 @@ export function LearnHomePage() {
           <div className="text-xs text-white/85">加减乘除 · 乘法口诀,限时闯关得积分</div>
         </div>
         <ChevronRight size={18} className="text-white/80" />
+      </button>
+
+      <button
+        onClick={() => navigate('/learn/errorbook')}
+        className="mb-3 w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
+      >
+        <div className="rounded-xl bg-red-100 p-2.5 text-red-500">
+          <NotebookPen size={22} />
+        </div>
+        <div className="flex-1">
+          <div className="font-bold text-gray-800">错题本</div>
+          <div className="text-xs text-gray-400">各科错题拍照记录 · 按遗忘曲线重做</div>
+        </div>
+        <ChevronRight size={18} className="text-gray-300" />
       </button>
 
       {provisioning || !decks ? (

@@ -20,12 +20,21 @@ export interface AnnualReport {
   shineHighlights: string[]
   portfolioCount: number
   diaryCount: number
+  /** 学习引擎数据(年内);无学习记录时为 null */
+  learning: {
+    wordsMastered: number
+    hanziMastered: number
+    poemsMastered: number
+    drillProblems: number
+    drillAccuracy: number | null // %,无口算记录时 null
+    studyDays: number
+  } | null
 }
 
 const inYear = (dateISO: string, year: number) => dateISO.startsWith(`${year}-`)
 
 export async function buildAnnualReport(childId: string, year?: number): Promise<AnnualReport | null> {
-  const [growth, exams, examScores, records, unlocks, checkIns, ledger, milestones, anecdotes, portfolios, diaries] =
+  const [growth, exams, examScores, records, unlocks, checkIns, ledger, milestones, anecdotes, portfolios, diaries, studyStates, studySessions, drillResults, decks] =
     await Promise.all([
       db.growthRecords.where('childId').equals(childId).toArray(),
       db.exams.where('childId').equals(childId).toArray(),
@@ -38,6 +47,10 @@ export async function buildAnnualReport(childId: string, year?: number): Promise
       db.anecdotes.where('childId').equals(childId).toArray(),
       db.portfolios.where('childId').equals(childId).toArray(),
       db.diaryEntries.where('childId').equals(childId).toArray(),
+      db.studyStates.where('childId').equals(childId).toArray(),
+      db.studySessions.where('childId').equals(childId).toArray(),
+      db.drillResults.where('childId').equals(childId).toArray(),
+      db.decks.toArray(),
     ])
 
   // 有数据的年份集合
@@ -55,6 +68,8 @@ export async function buildAnnualReport(childId: string, year?: number): Promise
   portfolios.forEach((r) => collect(r.date))
   diaries.forEach((r) => collect(r.date))
   unlocks.forEach((u) => collect(toISODate(new Date(u.unlockedAt))))
+  studySessions.forEach((s) => collect(s.date))
+  drillResults.forEach((d) => collect(d.date))
 
   const availableYears = [...years].sort((a, b) => b - a)
   if (availableYears.length === 0) return null
@@ -100,6 +115,30 @@ export async function buildAnnualReport(childId: string, year?: number): Promise
   const yearStart = new Date(y, 0, 1).getTime()
   const yearEnd = new Date(y + 1, 0, 1).getTime()
 
+  // 学习引擎年度汇总
+  const itemTypeByDeck = new Map(decks.map((d) => [d.id, d.itemType]))
+  const masteredInYear = studyStates.filter(
+    (s) => s.status === 'mastered' && s.lastReviewed != null && s.lastReviewed >= yearStart && s.lastReviewed < yearEnd,
+  )
+  const countType = (t: string) => masteredInYear.filter((s) => itemTypeByDeck.get(s.deckId) === t).length
+  const yearDrills = drillResults.filter((d) => inYear(d.date, y))
+  const drillTotal = yearDrills.reduce((sum, d) => sum + d.total, 0)
+  const drillCorrect = yearDrills.reduce((sum, d) => sum + d.correct, 0)
+  const yearSessions = studySessions.filter((s) => inYear(s.date, y))
+  const studyDays = new Set<string>([...yearSessions.map((s) => s.date), ...yearDrills.map((d) => d.date)]).size
+  const hasLearning =
+    masteredInYear.length > 0 || drillTotal > 0 || yearSessions.length > 0
+  const learning = hasLearning
+    ? {
+        wordsMastered: countType('word'),
+        hanziMastered: countType('hanzi'),
+        poemsMastered: countType('poem'),
+        drillProblems: drillTotal,
+        drillAccuracy: drillTotal > 0 ? Math.round((drillCorrect / drillTotal) * 100) : null,
+        studyDays,
+      }
+    : null
+
   return {
     year: y,
     availableYears,
@@ -119,5 +158,6 @@ export async function buildAnnualReport(childId: string, year?: number): Promise
     shineHighlights: yearShine.slice(0, 3).map((a) => a.content),
     portfolioCount: portfolios.filter((p) => inYear(p.date, y)).length,
     diaryCount: diaries.filter((d) => inYear(d.date, y)).length,
+    learning,
   }
 }

@@ -4,7 +4,7 @@ import type { LevelStep } from '../types'
 
 export interface TimelineItem {
   id: string
-  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge' | 'exam' | 'anecdote' | 'talent'
+  kind: 'milestone' | 'portfolio' | 'diary' | 'levelup' | 'badge' | 'exam' | 'anecdote' | 'talent' | 'study'
   date: string // ISO date used for ordering
   sortKey: number // secondary ordering within a day
   title: string
@@ -36,7 +36,7 @@ function deriveLevelUps(
 }
 
 export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
-  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings, exams, examScores, anecdotes, talentRecords] =
+  const [milestones, portfolios, diaryEntries, ledger, unlocks, achievements, settings, exams, examScores, anecdotes, talentRecords, studyStates, decks, allCards] =
     await Promise.all([
       db.milestones.where('childId').equals(childId).toArray(),
       db.portfolios.where('childId').equals(childId).toArray(),
@@ -53,6 +53,9 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
         .equals(childId)
         .filter((r) => r.module === 'grading' || r.module === 'award')
         .toArray(),
+      db.studyStates.where('childId').equals(childId).toArray(),
+      db.decks.toArray(),
+      db.cards.toArray(),
     ])
 
   const items: TimelineItem[] = []
@@ -160,6 +163,52 @@ export async function buildTimeline(childId: string): Promise<TimelineItem[]> {
       icon: isGrading ? '🏅' : '🏆',
       photos: r.photos,
     })
+  }
+
+  // 学习里程碑:背会古诗(逐首) + 掌握词汇/汉字(阈值)
+  const itemTypeByDeck = new Map(decks.map((d) => [d.id, d.itemType]))
+  const cardById = new Map(allCards.map((c) => [c.id, c]))
+  const mastered = studyStates
+    .filter((s) => s.status === 'mastered' && s.lastReviewed != null)
+    .sort((a, b) => (a.lastReviewed ?? 0) - (b.lastReviewed ?? 0))
+
+  // 背会的古诗,逐首上时间线
+  for (const s of mastered) {
+    if (itemTypeByDeck.get(s.deckId) !== 'poem') continue
+    const card = cardById.get(s.cardId)
+    if (!card) continue
+    items.push({
+      id: `poem-${s.id}`,
+      kind: 'study',
+      date: toISODate(new Date(s.lastReviewed!)),
+      sortKey: s.lastReviewed!,
+      title: `背会古诗《${card.front}》`,
+      icon: '📜',
+      photos: [],
+    })
+  }
+
+  // 词汇/汉字掌握量阈值里程碑
+  const THRESHOLDS = [10, 50, 100, 200, 500, 1000]
+  for (const [type, label] of [
+    ['word', '单词'],
+    ['hanzi', '汉字'],
+  ] as const) {
+    const seq = mastered.filter((s) => itemTypeByDeck.get(s.deckId) === type)
+    for (const th of THRESHOLDS) {
+      if (seq.length >= th) {
+        const at = seq[th - 1]
+        items.push({
+          id: `vocab-${type}-${th}`,
+          kind: 'study',
+          date: toISODate(new Date(at.lastReviewed!)),
+          sortKey: at.lastReviewed!,
+          title: `掌握 ${th} 个${label}`,
+          icon: type === 'word' ? '🔤' : '🈷️',
+          photos: [],
+        })
+      }
+    }
   }
 
   const achievementByCode = new Map(achievements.map((a) => [a.code, a]))

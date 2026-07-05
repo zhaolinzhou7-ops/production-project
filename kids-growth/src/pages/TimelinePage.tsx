@@ -16,6 +16,7 @@ const KIND_COLOR: Record<string, string> = {
   exam: 'bg-brand-100',
   anecdote: 'bg-sun-400/20',
   talent: 'bg-mint-400/20',
+  study: 'bg-brand-100',
 }
 
 export function TimelinePage() {
