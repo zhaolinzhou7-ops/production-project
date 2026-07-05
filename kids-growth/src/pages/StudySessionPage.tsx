@@ -5,13 +5,13 @@ import { Volume2, ArrowRight, Mic } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { getSessionCards, applyGrade, finishSession, type DueCard } from '../db/study'
+import { getSessionCards, applyGrade, finishSession, addWrongCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { playWordAudio, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
-import type { Achievement, LevelStep, PracticeMode } from '../types'
+import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
 
 type Phase = 'prompt' | 'reveal' | 'done'
 
@@ -31,6 +31,7 @@ export function StudySessionPage() {
   const { child, tone } = useCurrentChild()
 
   const [cards, setCards] = useState<DueCard[] | null>(null)
+  const [deck, setDeck] = useState<LearnDeck | null>(null)
   const [pool, setPool] = useState<string[]>([]) // 干扰项池(同卡组的所有释义)
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('prompt')
@@ -49,8 +50,10 @@ export function StudySessionPage() {
     void (async () => {
       const list = await getSessionCards(currentChildId, deckId, 12)
       const allCards = await db.cards.where('deckId').equals(deckId).toArray()
+      const d = await db.decks.get(deckId)
       if (!alive) return
       setPool(allCards.map((c) => c.back))
+      setDeck(d ?? null)
       setCards(list)
     })()
     return () => {
@@ -67,10 +70,10 @@ export function StudySessionPage() {
     return shuffle([current.card.back, ...distractors])
   }, [current, mode, pool])
 
-  // 进入每张卡时,认词/听音/跟读自动播放发音
+  // 进入每张卡时,听音选义/跟读/听写自动播放发音
   useEffect(() => {
     if (!current || phase !== 'prompt') return
-    if (mode === 'listenChoose' || mode === 'speak') {
+    if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation') {
       void playWordAudio(current.card.audioText ?? current.card.front)
     }
   }, [current, phase, mode])
@@ -107,6 +110,16 @@ export function StudySessionPage() {
     async (wasCorrect: boolean) => {
       if (!current) return
       await applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
+      // 答错的单词自动收进错词本(错词本自身除外)
+      if (!wasCorrect && currentChildId && deck && deck.source !== 'wrong' && deck.itemType === 'word') {
+        await addWrongCard(currentChildId, {
+          front: current.card.front,
+          back: current.card.back,
+          phonetic: current.card.phonetic,
+          audioText: current.card.audioText,
+          extra: current.card.extra,
+        })
+      }
       const nextCorrect = correctCount + (wasCorrect ? 1 : 0)
       setCorrectCount(nextCorrect)
       const total = cards!.length
@@ -120,7 +133,7 @@ export function StudySessionPage() {
         setSpeakMsg('')
       }
     },
-    [current, correctCount, cards, idx, finish],
+    [current, correctCount, cards, idx, finish, currentChildId, deck],
   )
 
   if (!child || !currentChildId) return null
@@ -314,6 +327,64 @@ export function StudySessionPage() {
                 spellCheck={false}
                 className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-center text-2xl outline-none focus:border-brand-400"
                 placeholder="输入英文"
+              />
+              <button type="submit" className="mt-5 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95">
+                检查
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* ---- 听写(只听发音,写出单词) ---- */}
+      {mode === 'dictation' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="mt-4 mb-6">
+            <AudioBtn big />
+          </div>
+          <p className="text-sm text-gray-400 mb-4">听发音,写出这个单词</p>
+          {phase === 'reveal' ? (
+            <div className="flex flex-col items-center">
+              <div
+                className={`text-3xl font-bold ${
+                  normalizeForCompare(spellInput) === normalizeForCompare(current.card.front)
+                    ? 'text-mint-500'
+                    : 'text-red-400'
+                }`}
+              >
+                {current.card.front}
+              </div>
+              {current.card.phonetic && (
+                <div className="text-sm text-gray-400 mt-0.5">/{current.card.phonetic}/</div>
+              )}
+              <div className="text-brand-600 mt-1">{current.card.back}</div>
+              {normalizeForCompare(spellInput) !== normalizeForCompare(current.card.front) && (
+                <div className="text-sm text-gray-400 mt-1">你写的:{spellInput || '(空)'}</div>
+              )}
+              <button
+                onClick={() => void advance(normalizeForCompare(spellInput) === normalizeForCompare(current.card.front))}
+                className="mt-6 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95 flex items-center gap-1"
+              >
+                下一个 <ArrowRight size={16} />
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                setPhase('reveal')
+              }}
+              className="w-full max-w-xs flex flex-col items-center"
+            >
+              <input
+                autoFocus
+                value={spellInput}
+                onChange={(e) => setSpellInput(e.target.value)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border-2 border-gray-200 px-4 py-3 text-center text-2xl outline-none focus:border-brand-400"
+                placeholder="听写英文"
               />
               <button type="submit" className="mt-5 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95">
                 检查

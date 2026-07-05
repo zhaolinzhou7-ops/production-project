@@ -26,6 +26,7 @@ import { KidRewardsPage } from './pages/KidRewardsPage'
 import { KidBadgesPage } from './pages/KidBadgesPage'
 import { LearnHomePage } from './pages/LearnHomePage'
 import { StudySessionPage } from './pages/StudySessionPage'
+import { ParentLearningPage } from './pages/ParentLearningPage'
 
 function AppRoutes() {
   const childCount = useLiveQuery(() => db.children.count(), [])
@@ -48,6 +49,14 @@ function AppRoutes() {
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/learn" element={<LearnHomePage />} />
         <Route path="/learn/session/:deckId/:mode" element={<StudySessionPage />} />
+        <Route
+          path="/parent/learn"
+          element={
+            <RequireParent>
+              <ParentLearningPage />
+            </RequireParent>
+          }
+        />
         <Route path="/parent/pin" element={<ParentPinPage />} />
         <Route
           path="/parent"

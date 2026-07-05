@@ -177,6 +177,8 @@ export interface Settings {
   enablePenalty: boolean
   levelLadder: LevelStep[]
   lastBackupAt?: number
+  /** 每个孩子的每日学习目标(练习卡次),按 childId 索引 */
+  learnGoals?: Record<string, number>
 }
 
 // ============ 通用记录引擎 ============

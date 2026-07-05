@@ -18,6 +18,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'recognize', label: '认词', icon: '👀', desc: '看英文想中文', lowAgeFriendly: true },
     { mode: 'listenChoose', label: '听音选义', icon: '👂', desc: '听发音选意思', lowAgeFriendly: true },
     { mode: 'spell', label: '拼写', icon: '⌨️', desc: '看中文拼单词', lowAgeFriendly: true },
+    { mode: 'dictation', label: '听写', icon: '✍️', desc: '听发音写单词', lowAgeFriendly: true },
     { mode: 'speak', label: '跟读', icon: '🎤', desc: '跟着读一遍', needsMic: true, lowAgeFriendly: true },
   ],
   poem: [

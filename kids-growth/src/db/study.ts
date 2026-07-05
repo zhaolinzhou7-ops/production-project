@@ -3,11 +3,15 @@ import { newId } from '../lib/id'
 import { getChildPointStats } from '../lib/points'
 import { initialSrs, gradeCard, isDue } from '../lib/srs'
 import { getPackMeta } from '../lib/learningContent'
-import { todayISO } from '../lib/dateUtils'
+import { computeStreak } from '../lib/streak'
+import { addDays, todayISO } from '../lib/dateUtils'
 import type { LearnCard, LearnDeck, PracticeMode, ReviewGrade, StudyState } from '../types'
 
 /** 每答对一张卡的积分 */
 const POINTS_PER_CORRECT = 2
+
+/** 错词本卡组名称(每个孩子一个,存答错的单词) */
+const WRONG_DECK_NAME = '错词本'
 
 /**
  * 确保某内置卡组已为该孩子实例化(建 deck + cards + 每卡的 SRS 初始状态)。幂等。
@@ -195,4 +199,316 @@ export async function countMastered(childId: string): Promise<number> {
     .equals(childId)
     .filter((s) => s.status === 'mastered')
     .count()
+}
+
+// ============ 错词本 ============
+
+/** 确保该孩子的错词本卡组存在(单词类型,便于用真人音源重练)。返回 deckId。幂等。 */
+export async function ensureWrongDeck(childId: string): Promise<string> {
+  const existing = await db.decks
+    .where('childId')
+    .equals(childId)
+    .filter((d) => d.source === 'wrong')
+    .first()
+  if (existing) return existing.id
+
+  const deckId = newId()
+  const deck: LearnDeck = {
+    id: deckId,
+    childId,
+    subject: '英语',
+    name: WRONG_DECK_NAME,
+    icon: '❗',
+    source: 'wrong',
+    itemType: 'word',
+    createdAt: Date.now(),
+  }
+  await db.decks.add(deck)
+  return deckId
+}
+
+/**
+ * 把一张答错的单词卡收进错词本(按单词去重)。已在错词本或已掌握的不再重复加入。
+ * 传入原卡的展示字段而非引用,避免耦合来源卡组。
+ */
+export async function addWrongCard(
+  childId: string,
+  src: Pick<LearnCard, 'front' | 'back' | 'phonetic' | 'audioText' | 'extra'>,
+): Promise<void> {
+  const wrongDeckId = await ensureWrongDeck(childId)
+  const dup = await db.cards
+    .where('deckId')
+    .equals(wrongDeckId)
+    .filter((c) => c.front === src.front)
+    .first()
+  if (dup) return
+
+  const count = await db.cards.where('deckId').equals(wrongDeckId).count()
+  const cardId = newId()
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await db.cards.add({
+      id: cardId,
+      deckId: wrongDeckId,
+      front: src.front,
+      back: src.back,
+      phonetic: src.phonetic,
+      audioText: src.audioText ?? src.front,
+      extra: src.extra,
+      order: count,
+    })
+    await db.studyStates.add({
+      id: newId(),
+      childId,
+      cardId,
+      deckId: wrongDeckId,
+      ...initialSrs(),
+    })
+  })
+}
+
+// ============ 自定义词本 / 卡组管理 ============
+
+export interface CustomWordEntry {
+  front: string
+  back: string
+  phonetic?: string
+}
+
+/** 新建一个自定义英语词本并写入词条(每词一张卡 + SRS 初始状态)。返回 deckId。 */
+export async function createCustomWordDeck(
+  childId: string,
+  name: string,
+  entries: CustomWordEntry[],
+): Promise<string> {
+  const deckId = newId()
+  const now = Date.now()
+  await db.transaction('rw', db.decks, db.cards, db.studyStates, async () => {
+    const deck: LearnDeck = {
+      id: deckId,
+      childId,
+      subject: '英语',
+      name: name.trim() || '我的词本',
+      icon: '📒',
+      source: 'custom',
+      itemType: 'word',
+      createdAt: now,
+    }
+    await db.decks.add(deck)
+    await addEntriesTx(deckId, childId, entries, 0)
+  })
+  return deckId
+}
+
+/** 往已有卡组追加词条(用于自定义词本继续加词)。返回新增数量。 */
+export async function addEntriesToDeck(
+  deckId: string,
+  childId: string,
+  entries: CustomWordEntry[],
+): Promise<number> {
+  const start = await db.cards.where('deckId').equals(deckId).count()
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await addEntriesTx(deckId, childId, entries, start)
+  })
+  return entries.length
+}
+
+async function addEntriesTx(
+  deckId: string,
+  childId: string,
+  entries: CustomWordEntry[],
+  startOrder: number,
+): Promise<void> {
+  const init = initialSrs()
+  const cards: LearnCard[] = entries.map((e, i) => ({
+    id: newId(),
+    deckId,
+    front: e.front.trim(),
+    back: e.back.trim(),
+    phonetic: e.phonetic?.trim() || undefined,
+    audioText: e.front.trim(),
+    order: startOrder + i,
+  }))
+  await db.cards.bulkAdd(cards)
+  await db.studyStates.bulkAdd(
+    cards.map((c) => ({ id: newId(), childId, cardId: c.id, deckId, ...init })),
+  )
+}
+
+/** 解析用户粘贴的词表:每行「word 释义」或「word,释义」或「word 音标 释义」。 */
+export function parseWordList(text: string): CustomWordEntry[] {
+  const out: CustomWordEntry[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    // 支持逗号/制表符/多空格分隔
+    const parts = line.split(/\s*[,，\t]\s*|\s{2,}/).filter(Boolean)
+    let front = ''
+    let back = ''
+    let phonetic: string | undefined
+    if (parts.length >= 2) {
+      front = parts[0]
+      back = parts.slice(1).join(' ')
+    } else {
+      // 单空格分隔:第一个 token 作单词,其余作释义
+      const sp = line.split(/\s+/)
+      front = sp[0]
+      back = sp.slice(1).join(' ')
+    }
+    // 若释义里以 /.../ 开头,拆出音标
+    const m = back.match(/^\/([^/]+)\/\s*(.*)$/)
+    if (m) {
+      phonetic = m[1]
+      back = m[2]
+    }
+    if (front && back) out.push({ front, back, phonetic })
+  }
+  return out
+}
+
+/** 删除一个卡组及其全部卡片、SRS 状态、会话记录(仅限 custom/wrong,内置不删)。 */
+export async function deleteDeck(deckId: string): Promise<void> {
+  await db.transaction(
+    'rw',
+    db.decks,
+    db.cards,
+    db.studyStates,
+    db.studySessions,
+    async () => {
+      await db.decks.delete(deckId)
+      await db.cards.where('deckId').equals(deckId).delete()
+      await db.studyStates.where('deckId').equals(deckId).delete()
+      await db.studySessions.where('deckId').equals(deckId).delete()
+    },
+  )
+}
+
+/** 列出该孩子的全部卡组 */
+export async function listChildDecks(childId: string): Promise<LearnDeck[]> {
+  const decks = await db.decks.where('childId').equals(childId).toArray()
+  return decks.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+// ============ 学习统计(家长学习管理页) ============
+
+export interface WeakCard {
+  front: string
+  back: string
+  lapses: number
+}
+
+export interface DeckStat {
+  deckId: string
+  name: string
+  icon: string
+  source: LearnDeck['source']
+  total: number
+  mastered: number
+  due: number
+}
+
+export interface LearningStats {
+  totalCards: number
+  mastered: number
+  learning: number
+  fresh: number // 'new' 状态
+  dueToday: number
+  todayReviewed: number // 今日已练卡次(会话 total 之和)
+  studyStreak: number
+  totalSessions: number
+  /** 近 14 天每天练习卡次 */
+  curve: { date: string; count: number }[]
+  weak: WeakCard[]
+  decks: DeckStat[]
+}
+
+/** 汇总该孩子的学习数据,供家长管理页展示 */
+export async function getLearningStats(childId: string): Promise<LearningStats> {
+  const today = todayISO()
+  const [states, sessions, decks, cards] = await Promise.all([
+    db.studyStates.where('childId').equals(childId).toArray(),
+    db.studySessions.where('childId').equals(childId).toArray(),
+    listChildDecks(childId),
+    db.cards.toArray(),
+  ])
+
+  const cardById = new Map(cards.map((c) => [c.id, c]))
+  const deckIds = new Set(decks.map((d) => d.id))
+  // 只统计仍归属该孩子现有卡组的状态
+  const own = states.filter((s) => deckIds.has(s.deckId))
+
+  const mastered = own.filter((s) => s.status === 'mastered').length
+  const fresh = own.filter((s) => s.status === 'new').length
+  const learning = own.filter((s) => s.status === 'learning' || s.status === 'review').length
+  const dueToday = own.filter((s) => isDue(s, today)).length
+
+  // 近 14 天曲线 + 今日练习卡次
+  const curve: { date: string; count: number }[] = []
+  for (let i = 13; i >= 0; i--) {
+    const d = addDays(today, -i)
+    const count = sessions.filter((s) => s.date === d).reduce((sum, s) => sum + s.total, 0)
+    curve.push({ date: d, count })
+  }
+  const todayReviewed = curve[curve.length - 1]?.count ?? 0
+  const studyDates = new Set(sessions.map((s) => s.date))
+  const studyStreak = computeStreak(studyDates, today)
+
+  // 薄弱词:遗忘次数多、尚未掌握,按 lapses 降序取前 12
+  const weak: WeakCard[] = own
+    .filter((s) => s.lapses >= 1 && s.status !== 'mastered')
+    .sort((a, b) => b.lapses - a.lapses)
+    .slice(0, 12)
+    .map((s) => {
+      const c = cardById.get(s.cardId)
+      return { front: c?.front ?? '?', back: c?.back ?? '', lapses: s.lapses }
+    })
+
+  // 每个卡组的分项统计
+  const statesByDeck = new Map<string, StudyState[]>()
+  for (const s of own) {
+    const arr = statesByDeck.get(s.deckId) ?? []
+    arr.push(s)
+    statesByDeck.set(s.deckId, arr)
+  }
+  const deckStats: DeckStat[] = decks.map((d) => {
+    const arr = statesByDeck.get(d.id) ?? []
+    return {
+      deckId: d.id,
+      name: d.name,
+      icon: d.icon,
+      source: d.source,
+      total: arr.length,
+      mastered: arr.filter((s) => s.status === 'mastered').length,
+      due: arr.filter((s) => isDue(s, today)).length,
+    }
+  })
+
+  return {
+    totalCards: own.length,
+    mastered,
+    learning,
+    fresh,
+    dueToday,
+    todayReviewed,
+    studyStreak,
+    totalSessions: sessions.length,
+    curve,
+    weak,
+    decks: deckStats,
+  }
+}
+
+// ============ 每日目标(存于 settings.learnGoals,随备份一起保存) ============
+
+const DEFAULT_DAILY_GOAL = 15
+
+export async function getDailyGoal(childId: string): Promise<number> {
+  const settings = await db.settings.get('singleton')
+  return settings?.learnGoals?.[childId] ?? DEFAULT_DAILY_GOAL
+}
+
+export async function setDailyGoal(childId: string, goal: number): Promise<void> {
+  const settings = await db.settings.get('singleton')
+  if (!settings) return
+  const learnGoals = { ...(settings.learnGoals ?? {}), [childId]: Math.max(1, Math.round(goal)) }
+  await db.settings.update('singleton', { learnGoals })
 }
