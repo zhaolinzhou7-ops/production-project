@@ -1,8 +1,10 @@
 # 小朋友成长系统
 
-家庭自用的小朋友成长记录与习惯养成系统。本地优先、离线可用、无需账号登录，数据只存在本机浏览器中。
+家庭自用的小朋友成长记录与习惯养成系统，覆盖 3 岁幼儿园小班 → 18 岁。本地优先、离线可用、无需账号登录，数据只存在本机浏览器中。在「成长记录」之上，还内建一个**学科无关的学习引擎**（间隔重复 SRS + 配置化练习模式），接入英语 / 语文 / 数学 / 全学科错题本。
 
-> 详细需求见 [`docs/SPEC.md`](docs/SPEC.md) 与种子数据 [`docs/SEED.md`](docs/SEED.md)。
+> 📱 **在线体验（手机可打开、可添加到主屏幕）**：https://zhaolinzhou7-ops.github.io/production-project/
+>
+> 详细需求见 [`docs/SPEC.md`](docs/SPEC.md) 与种子数据 [`docs/SEED.md`](docs/SEED.md)；产品长期规划见 [`docs/PRODUCT_OS_PLAN.md`](docs/PRODUCT_OS_PLAN.md)。
 
 ## 技术栈
 
