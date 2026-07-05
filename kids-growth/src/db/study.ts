@@ -231,6 +231,58 @@ export async function finishSession(params: {
   }
 }
 
+/** 每答对一道口算题的积分 */
+const POINTS_PER_CORRECT_MATH = 1
+
+/** 口算练习结束:记录 drillResults、按答对数加分。返回结算数据。 */
+export async function finishDrill(params: {
+  childId: string
+  kind: string
+  total: number
+  correct: number
+  durationSec: number
+}): Promise<SessionResult> {
+  const { childId, kind, total, correct, durationSec } = params
+  const points = correct * POINTS_PER_CORRECT_MATH
+
+  const result = await db.transaction('rw', db.drillResults, db.pointLedger, async () => {
+    const stats = await getChildPointStats(childId)
+    const balanceAfter = stats.balance + points
+    const drillId = newId()
+    await db.drillResults.add({
+      id: drillId,
+      childId,
+      kind,
+      date: todayISO(),
+      total,
+      correct,
+      durationSec,
+      createdAt: Date.now(),
+    })
+    if (points > 0) {
+      await db.pointLedger.add({
+        id: newId(),
+        childId,
+        delta: points,
+        reason: 'study',
+        refType: undefined,
+        refId: drillId,
+        balanceAfter,
+        timestamp: Date.now(),
+      })
+    }
+    return { balanceAfter, xpAfter: stats.xp + points }
+  })
+
+  return {
+    correct,
+    total,
+    pointsAwarded: points,
+    newBalance: result.balanceAfter,
+    newXp: result.xpAfter,
+  }
+}
+
 /** 该孩子已掌握(mastered)的卡片总数,用于成就/统计 */
 export async function countMastered(childId: string): Promise<number> {
   return db.studyStates
@@ -463,9 +515,10 @@ export interface LearningStats {
 /** 汇总该孩子的学习数据,供家长管理页展示 */
 export async function getLearningStats(childId: string): Promise<LearningStats> {
   const today = todayISO()
-  const [states, sessions, decks, cards] = await Promise.all([
+  const [states, sessions, drills, decks, cards] = await Promise.all([
     db.studyStates.where('childId').equals(childId).toArray(),
     db.studySessions.where('childId').equals(childId).toArray(),
+    db.drillResults.where('childId').equals(childId).toArray(),
     listChildDecks(childId),
     db.cards.toArray(),
   ])
@@ -480,15 +533,16 @@ export async function getLearningStats(childId: string): Promise<LearningStats> 
   const learning = own.filter((s) => s.status === 'learning' || s.status === 'review').length
   const dueToday = own.filter((s) => isDue(s, today)).length
 
-  // 近 14 天曲线 + 今日练习卡次
+  // 近 14 天曲线 + 今日练习量(单词/古诗/识字会话 + 口算题数)
   const curve: { date: string; count: number }[] = []
   for (let i = 13; i >= 0; i--) {
     const d = addDays(today, -i)
-    const count = sessions.filter((s) => s.date === d).reduce((sum, s) => sum + s.total, 0)
-    curve.push({ date: d, count })
+    const sCount = sessions.filter((s) => s.date === d).reduce((sum, s) => sum + s.total, 0)
+    const dCount = drills.filter((s) => s.date === d).reduce((sum, s) => sum + s.total, 0)
+    curve.push({ date: d, count: sCount + dCount })
   }
   const todayReviewed = curve[curve.length - 1]?.count ?? 0
-  const studyDates = new Set(sessions.map((s) => s.date))
+  const studyDates = new Set<string>([...sessions.map((s) => s.date), ...drills.map((s) => s.date)])
   const studyStreak = computeStreak(studyDates, today)
 
   // 薄弱词:遗忘次数多、尚未掌握,按 lapses 降序取前 12

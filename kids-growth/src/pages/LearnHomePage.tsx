@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Calculator, ChevronRight } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
@@ -58,6 +58,20 @@ export function LearnHomePage() {
           {tone === 'playful' ? '开始学习 📚' : '学习中心'}
         </h1>
       </div>
+
+      <button
+        onClick={() => navigate('/learn/math')}
+        className="mb-3 w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sun-400 to-sun-500 p-4 text-left text-white shadow-sm active:scale-[0.99] transition"
+      >
+        <div className="rounded-xl bg-white/25 p-2.5">
+          <Calculator size={22} />
+        </div>
+        <div className="flex-1">
+          <div className="font-bold">口算练习</div>
+          <div className="text-xs text-white/85">加减乘除 · 乘法口诀,限时闯关得积分</div>
+        </div>
+        <ChevronRight size={18} className="text-white/80" />
+      </button>
 
       {provisioning || !decks ? (
         <div className="pt-10 text-center text-3xl">📚</div>
