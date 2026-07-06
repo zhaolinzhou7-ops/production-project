@@ -1,0 +1,48 @@
+{
+  "name": "kids-growth-mp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "儿童学习小程序（Taro + React，编译到微信小程序）",
+  "templateInfo": {
+    "name": "default",
+    "typescript": true,
+    "css": "sass",
+    "framework": "react"
+  },
+  "scripts": {
+    "build:weapp": "taro build --type weapp",
+    "dev:weapp": "taro build --type weapp --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "browserslist": [
+    "defaults and fully supports es6-module",
+    "maintained node versions"
+  ],
+  "dependencies": {
+    "@babel/runtime": "^7.24.4",
+    "@tarojs/components": "4.2.0",
+    "@tarojs/helper": "4.2.0",
+    "@tarojs/plugin-framework-react": "4.2.0",
+    "@tarojs/plugin-platform-weapp": "4.2.0",
+    "@tarojs/react": "4.2.0",
+    "@tarojs/runtime": "4.2.0",
+    "@tarojs/shared": "4.2.0",
+    "@tarojs/taro": "4.2.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.4",
+    "@babel/preset-react": "^7.29.7",
+    "@babel/preset-typescript": "^7.29.7",
+    "@tarojs/cli": "4.2.0",
+    "@tarojs/taro-loader": "4.2.0",
+    "@tarojs/webpack5-runner": "4.2.0",
+    "@types/node": "^18.19.0",
+    "@types/react": "^18.0.0",
+    "@types/webpack-env": "^1.13.6",
+    "babel-preset-taro": "4.2.0",
+    "react-refresh": "^0.14.0",
+    "typescript": "^5.4.5"
+  }
+}

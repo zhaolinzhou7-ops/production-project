@@ -1,0 +1,19 @@
+{
+  "miniprogramRoot": "dist/",
+  "projectname": "kids-growth-mp",
+  "description": "儿童学习小程序",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "enhance": false,
+    "postcss": false,
+    "minified": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "compileType": "miniprogram"
+}

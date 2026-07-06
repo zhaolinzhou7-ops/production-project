@@ -1,0 +1,106 @@
+.home {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+
+  &__title {
+    font-size: 44px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__xp {
+    font-size: 24px;
+    color: #f9497a;
+    background: rgba(249, 73, 122, 0.1);
+    padding: 8px 20px;
+    border-radius: 999px;
+  }
+
+  &__note {
+    display: block;
+    margin-top: 28px;
+    font-size: 20px;
+    color: #9ca3af;
+    line-height: 1.6;
+  }
+}
+
+.deck {
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 28px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+
+  &__head {
+    display: flex;
+    align-items: center;
+  }
+
+  &__icon {
+    font-size: 44px;
+    margin-right: 20px;
+  }
+
+  &__meta {
+    flex: 1;
+  }
+
+  &__name {
+    display: block;
+    font-size: 30px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__sub {
+    font-size: 22px;
+    color: #9ca3af;
+  }
+
+  &__badge {
+    font-size: 22px;
+    color: #fff;
+    background: #f9497a;
+    padding: 6px 18px;
+    border-radius: 999px;
+
+    &--done {
+      color: #34d399;
+      background: rgba(52, 211, 153, 0.15);
+    }
+  }
+
+  &__modes {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+  }
+}
+
+.mode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8f8fa;
+  border-radius: 18px;
+  padding: 18px 26px;
+
+  &__icon {
+    font-size: 30px;
+  }
+
+  &__label {
+    font-size: 26px;
+    color: #374151;
+    font-weight: 500;
+  }
+}
