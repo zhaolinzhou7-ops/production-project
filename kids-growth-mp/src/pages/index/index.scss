@@ -105,3 +105,60 @@
     font-weight: 500;
   }
 }
+
+/* 批次 C:连续天数 / 护眼 / 口算·错题入口 */
+.home__stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.home__streak {
+  font-size: 24px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 8px 18px;
+  border-radius: 999px;
+}
+
+.rest {
+  background: rgba(52, 211, 153, 0.14);
+  border-radius: 22px;
+  padding: 22px;
+  margin-bottom: 20px;
+  &__t {
+    font-size: 24px;
+    color: #059669;
+    line-height: 1.5;
+  }
+}
+
+.entries {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.entry {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 24px;
+  padding: 26px;
+  &--math {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  }
+  &--eb {
+    background: rgba(255, 255, 255, 0.8);
+  }
+  &__icon {
+    font-size: 40px;
+  }
+  &__t {
+    font-size: 30px;
+    font-weight: bold;
+    color: #fff;
+  }
+  &--eb .entry__t {
+    color: #374151;
+  }
+}

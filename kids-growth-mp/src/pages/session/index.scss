@@ -292,3 +292,97 @@
   font-size: 48px;
   margin-top: 8px;
 }
+
+/* 批次 C:古诗 / 错题 / 连击 / 汉字选项 */
+.combo {
+  display: block;
+  text-align: center;
+  font-size: 26px;
+  color: #f59e0b;
+  margin-bottom: 12px;
+}
+
+.opts--grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.opt--hz {
+  width: 45%;
+  text-align: center;
+  .opt__t {
+    font-size: 52px;
+  }
+}
+
+.poem {
+  &__title {
+    font-size: 38px;
+    font-weight: bold;
+    color: #374151;
+    margin-top: 20px;
+  }
+  &__meta {
+    font-size: 24px;
+    color: #9ca3af;
+    margin: 6px 0 20px;
+  }
+  &__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  &__line {
+    font-size: 36px;
+    color: #374151;
+    line-height: 1.8;
+    &--blank {
+      color: #f9497a;
+      font-weight: bold;
+    }
+  }
+}
+
+.tag {
+  align-self: flex-start;
+  background: rgba(255, 143, 163, 0.15);
+  color: #f9497a;
+  font-size: 22px;
+  padding: 6px 20px;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.qbox {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 32px;
+  box-sizing: border-box;
+  &__t {
+    font-size: 32px;
+    color: #374151;
+    line-height: 1.6;
+  }
+}
+
+.abox {
+  width: 100%;
+  background: rgba(52, 211, 153, 0.12);
+  border-radius: 24px;
+  padding: 28px;
+  box-sizing: border-box;
+  margin-top: 20px;
+  &__lab {
+    display: block;
+    font-size: 22px;
+    color: #34d399;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+  &__t {
+    font-size: 30px;
+    color: #374151;
+    line-height: 1.6;
+  }
+}

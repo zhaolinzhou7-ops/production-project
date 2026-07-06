@@ -1,0 +1,134 @@
+.eb {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__actions {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  &__note {
+    display: block;
+    margin-top: 24px;
+    font-size: 20px;
+    color: #9ca3af;
+    line-height: 1.6;
+  }
+}
+
+.btn {
+  flex: 1;
+  padding: 22px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &--primary {
+    background: #f9497a;
+  }
+  &--mint {
+    background: #34d399;
+  }
+  &__t {
+    font-size: 28px;
+    font-weight: bold;
+    color: #fff;
+  }
+}
+
+.form {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sub {
+  background: #f0f0f2;
+  border-radius: 999px;
+  padding: 10px 24px;
+  &--on {
+    background: #f9497a;
+  }
+  &__t {
+    font-size: 24px;
+    color: #6b7280;
+  }
+  &--on .sub__t {
+    color: #fff;
+  }
+}
+.ta {
+  width: 100%;
+  box-sizing: border-box;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 18px;
+  font-size: 26px;
+  height: 120px;
+  margin-bottom: 16px;
+  &--sm {
+    height: 90px;
+  }
+}
+
+.empty {
+  text-align: center;
+  padding: 80px 24px;
+  &__e {
+    font-size: 80px;
+  }
+  &__t {
+    display: block;
+    margin-top: 16px;
+    font-size: 24px;
+    color: #9ca3af;
+    line-height: 1.6;
+  }
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 22px;
+  padding: 22px;
+  margin-bottom: 16px;
+
+  &__main {
+    flex: 1;
+    min-width: 0;
+  }
+  &__tag {
+    display: inline-block;
+    background: rgba(255, 143, 163, 0.15);
+    color: #f9497a;
+    font-size: 20px;
+    padding: 4px 16px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  &__q {
+    display: block;
+    font-size: 28px;
+    color: #374151;
+    line-height: 1.5;
+  }
+  &__a {
+    display: block;
+    font-size: 24px;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+  &__del {
+    font-size: 34px;
+    margin-left: 16px;
+  }
+}

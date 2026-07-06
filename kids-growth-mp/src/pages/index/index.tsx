@@ -8,6 +8,8 @@ import {
   listChildDecks,
   countDue,
   getPoints,
+  getStudyStreak,
+  getTodayStudyMinutes,
 } from '../../store/study'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -17,19 +19,27 @@ interface DeckRow {
   due: number
 }
 
+/** 每日建议学习时长上限(分钟),超过给护眼提醒 */
+const DAILY_LIMIT_MIN = 30
+
 export default function Index() {
   const [rows, setRows] = useState<DeckRow[]>([])
   const [xp, setXp] = useState(0)
+  const [streak, setStreak] = useState(0)
+  const [minutes, setMinutes] = useState(0)
 
   const refresh = () => {
     const childId = getCurrentChildId()
-    // 小学学段默认分配:英语高频词 + 唐诗启蒙 + 常用识字
     for (const p of packsForStage('primary')) {
       ensureBuiltinDeck(childId, p.key)
     }
-    const decks = listChildDecks(childId)
+    const decks = listChildDecks(childId).filter(
+      (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
+    )
     setRows(decks.map((deck) => ({ deck, due: countDue(childId, deck.id) })))
     setXp(getPoints().xp)
+    setStreak(getStudyStreak())
+    setMinutes(getTodayStudyMinutes())
   }
 
   useLoad(refresh)
@@ -39,58 +49,82 @@ export default function Index() {
     Taro.navigateTo({ url: `/pages/session/index?deckId=${deckId}&mode=${mode}` })
   }
 
+  const wordModes: Array<[string, string, string]> = [
+    ['recognize', '👀', '认词'],
+    ['listenChoose', '👂', '听音选义'],
+    ['spell', '⌨️', '拼写'],
+    ['dictation', '✍️', '听写'],
+    ['speak', '🎤', '跟读'],
+  ]
+
   return (
     <View className='home'>
       <View className='home__hero'>
         <Text className='home__title'>成长学习 🌱</Text>
-        <Text className='home__xp'>成长值 {xp}</Text>
+        <View className='home__stat'>
+          <Text className='home__xp'>成长值 {xp}</Text>
+          {streak > 0 ? <Text className='home__streak'>🔥 {streak} 天</Text> : null}
+        </View>
       </View>
 
-      {rows.map(({ deck, due }) => (
-        <View key={deck.id} className='deck'>
-          <View className='deck__head'>
-            <Text className='deck__icon'>{deck.icon}</Text>
-            <View className='deck__meta'>
-              <Text className='deck__name'>{deck.name}</Text>
-              <Text className='deck__sub'>{deck.subject}</Text>
-            </View>
-            {due > 0 ? (
-              <Text className='deck__badge'>待学 {due}</Text>
-            ) : (
-              <Text className='deck__badge deck__badge--done'>已清空</Text>
-            )}
-          </View>
-          <View className='deck__modes'>
-            <View className='mode' onClick={() => go(deck.id, 'recognize')}>
-              <Text className='mode__icon'>👀</Text>
-              <Text className='mode__label'>{deck.itemType === 'hanzi' ? '认字' : '认词'}</Text>
-            </View>
-            {deck.itemType === 'word' && (
-              <>
-                <View className='mode' onClick={() => go(deck.id, 'listenChoose')}>
-                  <Text className='mode__icon'>👂</Text>
-                  <Text className='mode__label'>听音选义</Text>
-                </View>
-                <View className='mode' onClick={() => go(deck.id, 'spell')}>
-                  <Text className='mode__icon'>⌨️</Text>
-                  <Text className='mode__label'>拼写</Text>
-                </View>
-                <View className='mode' onClick={() => go(deck.id, 'dictation')}>
-                  <Text className='mode__icon'>✍️</Text>
-                  <Text className='mode__label'>听写</Text>
-                </View>
-                <View className='mode' onClick={() => go(deck.id, 'speak')}>
-                  <Text className='mode__icon'>🎤</Text>
-                  <Text className='mode__label'>跟读</Text>
-                </View>
-              </>
-            )}
-          </View>
+      {minutes >= DAILY_LIMIT_MIN ? (
+        <View className='rest'>
+          <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
         </View>
-      ))}
+      ) : null}
+
+      <View className='entries'>
+        <View className='entry entry--math' onClick={() => Taro.navigateTo({ url: '/pages/math/index' })}>
+          <Text className='entry__icon'>🧮</Text>
+          <Text className='entry__t'>口算练习</Text>
+        </View>
+        <View className='entry entry--eb' onClick={() => Taro.navigateTo({ url: '/pages/errorbook/index' })}>
+          <Text className='entry__icon'>📕</Text>
+          <Text className='entry__t'>错题本</Text>
+        </View>
+      </View>
+
+      {rows.map(({ deck, due }) => {
+        const modes: Array<[string, string, string]> =
+          deck.itemType === 'word'
+            ? wordModes
+            : deck.itemType === 'poem'
+              ? [
+                  ['recite', '📖', '朗读背诵'],
+                  ['fillBlank', '✏️', '补全诗句'],
+                ]
+              : [
+                  ['recognize', '👀', '认字'],
+                  ['listenChoose', '👂', '听音选字'],
+                ]
+        return (
+          <View key={deck.id} className='deck'>
+            <View className='deck__head'>
+              <Text className='deck__icon'>{deck.icon}</Text>
+              <View className='deck__meta'>
+                <Text className='deck__name'>{deck.name}</Text>
+                <Text className='deck__sub'>{deck.subject}</Text>
+              </View>
+              {due > 0 ? (
+                <Text className='deck__badge'>待学 {due}</Text>
+              ) : (
+                <Text className='deck__badge deck__badge--done'>已清空</Text>
+              )}
+            </View>
+            <View className='deck__modes'>
+              {modes.map(([m, icon, label]) => (
+                <View key={m} className='mode' onClick={() => go(deck.id, m)}>
+                  <Text className='mode__icon'>{icon}</Text>
+                  <Text className='mode__label'>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )
+      })}
 
       <Text className='home__note'>
-        单词发音为网络真人音源(需联网);开发者工具里请勾选「不校验合法域名」或在后台配置 dict.youdao.com。
+        单词发音为网络真人音源(需联网);古诗/识字用系统语音朗读。跟读的录音只在本地处理、不上传。
       </Text>
     </View>
   )

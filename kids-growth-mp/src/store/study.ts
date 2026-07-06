@@ -9,6 +9,7 @@ import type {
   BuiltinWordCard,
 } from '../core/learningContent'
 import { todayISO } from '../core/dateUtils'
+import { computeStreak } from '../core/streak'
 import type {
   CardItemType,
   LearnCard,
@@ -224,4 +225,129 @@ export function finishSession(params: {
     newBalance: after.balance,
     newXp: after.xp,
   }
+}
+
+// ============ 口算(数学) ============
+
+const POINTS_PER_CORRECT_MATH = 1
+
+export function finishDrill(params: {
+  childId: string
+  kind: string
+  total: number
+  correct: number
+  durationSec: number
+}): SessionResult {
+  const { childId, kind, total, correct, durationSec } = params
+  const points = correct * POINTS_PER_CORRECT_MATH
+  const drills = readTable(KEYS.drills)
+  drills.push({
+    id: newId(),
+    childId,
+    kind,
+    date: todayISO(),
+    total,
+    correct,
+    durationSec,
+    createdAt: Date.now(),
+  })
+  writeTable(KEYS.drills, drills)
+  const after = addPoints(points)
+  return { correct, total, pointsAwarded: points, newBalance: after.balance, newXp: after.xp }
+}
+
+// ============ 错题本(手动录入,跨学科) ============
+
+const ERROR_DECK_NAME = '错题本'
+
+export function ensureErrorDeck(childId: string): string {
+  const decks = readTable<LearnDeck>(KEYS.decks)
+  const existing = decks.find((d) => d.childId === childId && d.source === 'wrong' && d.itemType === 'wrong')
+  if (existing) return existing.id
+  const deckId = newId()
+  decks.push({
+    id: deckId,
+    childId,
+    subject: '错题',
+    name: ERROR_DECK_NAME,
+    icon: '📕',
+    source: 'wrong',
+    itemType: 'wrong',
+    createdAt: Date.now(),
+  })
+  writeTable(KEYS.decks, decks)
+  return deckId
+}
+
+export function addErrorCard(
+  childId: string,
+  entry: { front: string; back: string; subject?: string },
+): string {
+  const deckId = ensureErrorDeck(childId)
+  const cards = readTable<LearnCard>(KEYS.cards)
+  const count = cards.filter((c) => c.deckId === deckId).length
+  const states = readTable<StudyState>(KEYS.states)
+  const cardId = newId()
+  cards.push({
+    id: cardId,
+    deckId,
+    front: entry.front.trim(),
+    back: entry.back.trim(),
+    extra: entry.subject ? { subject: entry.subject } : undefined,
+    order: count,
+  })
+  states.push({ id: newId(), childId, cardId, deckId, ...initialSrs() })
+  writeTable(KEYS.cards, cards)
+  writeTable(KEYS.states, states)
+  return cardId
+}
+
+export function getErrorDeckId(childId: string): string | undefined {
+  return readTable<LearnDeck>(KEYS.decks).find(
+    (d) => d.childId === childId && d.source === 'wrong' && d.itemType === 'wrong',
+  )?.id
+}
+
+export function listErrorCards(childId: string): LearnCard[] {
+  const deckId = getErrorDeckId(childId)
+  if (!deckId) return []
+  return readTable<LearnCard>(KEYS.cards)
+    .filter((c) => c.deckId === deckId)
+    .sort((a, b) => a.order - b.order)
+}
+
+export function deleteCard(cardId: string): void {
+  const cards = readTable<LearnCard>(KEYS.cards).filter((c) => c.id !== cardId)
+  const states = readTable<StudyState>(KEYS.states).filter((s) => s.cardId !== cardId)
+  writeTable(KEYS.cards, cards)
+  writeTable(KEYS.states, states)
+}
+
+// ============ 防沉迷 / 连续天数 ============
+
+interface DailyTime {
+  date: string
+  seconds: number
+}
+
+/** 累加今日学习秒数(用于护眼/防沉迷提醒) */
+export function addStudyTime(seconds: number): void {
+  const today = todayISO()
+  const cur = readObject<DailyTime>('studyTime', { date: today, seconds: 0 })
+  const next = cur.date === today ? { date: today, seconds: cur.seconds + seconds } : { date: today, seconds }
+  writeObject('studyTime', next)
+}
+
+export function getTodayStudyMinutes(): number {
+  const today = todayISO()
+  const cur = readObject<DailyTime>('studyTime', { date: today, seconds: 0 })
+  return cur.date === today ? Math.round(cur.seconds / 60) : 0
+}
+
+/** 连续学习天数(会话 + 口算) */
+export function getStudyStreak(): number {
+  const sessions = readTable<{ date: string }>(KEYS.sessions)
+  const drills = readTable<{ date: string }>(KEYS.drills)
+  const dates = new Set<string>([...sessions.map((s) => s.date), ...drills.map((d) => d.date)])
+  return computeStreak(dates, todayISO())
 }
