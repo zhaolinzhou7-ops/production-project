@@ -66,10 +66,24 @@ export default function Index() {
               <Text className='mode__label'>{deck.itemType === 'hanzi' ? '认字' : '认词'}</Text>
             </View>
             {deck.itemType === 'word' && (
-              <View className='mode' onClick={() => go(deck.id, 'listenChoose')}>
-                <Text className='mode__icon'>👂</Text>
-                <Text className='mode__label'>听音选义</Text>
-              </View>
+              <>
+                <View className='mode' onClick={() => go(deck.id, 'listenChoose')}>
+                  <Text className='mode__icon'>👂</Text>
+                  <Text className='mode__label'>听音选义</Text>
+                </View>
+                <View className='mode' onClick={() => go(deck.id, 'spell')}>
+                  <Text className='mode__icon'>⌨️</Text>
+                  <Text className='mode__label'>拼写</Text>
+                </View>
+                <View className='mode' onClick={() => go(deck.id, 'dictation')}>
+                  <Text className='mode__icon'>✍️</Text>
+                  <Text className='mode__label'>听写</Text>
+                </View>
+                <View className='mode' onClick={() => go(deck.id, 'speak')}>
+                  <Text className='mode__icon'>🎤</Text>
+                  <Text className='mode__label'>跟读</Text>
+                </View>
+              </>
             )}
           </View>
         </View>

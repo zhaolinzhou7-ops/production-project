@@ -11,6 +11,10 @@ declare module '*.scss'
 declare module '*.sass'
 declare module '*.styl'
 
+// 微信小程序插件加载(运行时全局,tsc 需声明)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare function requirePlugin(name: string): any
+
 declare namespace NodeJS {
   interface ProcessEnv {
     /** NODE 内置环境变量, 会影响到最终构建生成产物 */

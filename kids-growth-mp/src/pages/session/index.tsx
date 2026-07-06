@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { View, Text, Input } from '@tarojs/components'
 import Taro, { useRouter, useLoad } from '@tarojs/taro'
 import {
   getCurrentChildId,
@@ -11,6 +11,9 @@ import {
   type DueCard,
 } from '../../store/study'
 import { playWordAudio } from '../../lib/audio'
+import { startRecognize, stopRecognize } from '../../lib/speech'
+import { startRecord, stopRecord, playFile } from '../../lib/recorder'
+import { scorePronunciation, normalizeForCompare } from '../../core/score'
 import type { LearnDeck, PracticeMode } from '../../types'
 import './index.scss'
 
@@ -38,6 +41,12 @@ export default function Session() {
   const [phase, setPhase] = useState<Phase>('prompt')
   const [correct, setCorrect] = useState(0)
   const [picked, setPicked] = useState<string | null>(null)
+  const [spellInput, setSpellInput] = useState('')
+  const [listening, setListening] = useState(false)
+  const [stars, setStars] = useState(-1)
+  const [speakMsg, setSpeakMsg] = useState('')
+  const [recPath, setRecPath] = useState('')
+  const [recording, setRecording] = useState(false)
   const [startedAt] = useState(Date.now())
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number } | null>(null)
   const [ready, setReady] = useState(false)
@@ -50,7 +59,7 @@ export default function Session() {
     setPool(getDeckCards(deckId).map((c) => c.back))
     setCards(list)
     setReady(true)
-    if (list[0] && mode === 'listenChoose') {
+    if (list[0] && (mode === 'listenChoose' || mode === 'dictation')) {
       playWordAudio(list[0].card.audioText ?? list[0].card.front)
     }
   })
@@ -82,22 +91,73 @@ export default function Session() {
     setPhase('done')
   }
 
+  const resetPerCard = (nextIdx: number) => {
+    setPhase('prompt')
+    setPicked(null)
+    setSpellInput('')
+    setListening(false)
+    setStars(-1)
+    setSpeakMsg('')
+    setRecPath('')
+    setRecording(false)
+    if (mode === 'listenChoose' || mode === 'dictation') {
+      playWordAudio(cards[nextIdx].card.audioText ?? cards[nextIdx].card.front)
+    }
+  }
+
   const advance = (wasCorrect: boolean) => {
     if (!current) return
     applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     const nextCorrect = correct + (wasCorrect ? 1 : 0)
     setCorrect(nextCorrect)
     const total = cards.length
-    if (idx + 1 >= total) {
-      finish(nextCorrect, total)
-    } else {
+    if (idx + 1 >= total) finish(nextCorrect, total)
+    else {
       const nextIdx = idx + 1
       setIdx(nextIdx)
-      setPhase('prompt')
-      setPicked(null)
-      if (mode === 'listenChoose') {
-        playWordAudio(cards[nextIdx].card.audioText ?? cards[nextIdx].card.front)
-      }
+      resetPerCard(nextIdx)
+    }
+  }
+
+  // 跟读:WechatSI 录音+识别 → 打分
+  const toggleSpeak = () => {
+    if (!current) return
+    if (!listening) {
+      setListening(true)
+      setSpeakMsg('聆听中…请读出来,读完点「读完了」')
+      setStars(-1)
+      startRecognize('en_US', {
+        onResult: (text) => {
+          setListening(false)
+          const r = scorePronunciation(text, current.card.front)
+          setStars(r.stars)
+          setSpeakMsg(r.message + (text ? `(听到:${text})` : ''))
+          if (r.stars >= 2) setTimeout(() => advance(true), 1400)
+        },
+        onError: (msg) => {
+          setListening(false)
+          setSpeakMsg(msg + '(可点「我读对了」或跳过)')
+        },
+      })
+    } else {
+      stopRecognize()
+      setSpeakMsg('识别中…')
+    }
+  }
+
+  // 录我读的 → 回放(A/B 对比)
+  const toggleRecord = () => {
+    if (!recording) {
+      setRecording(true)
+      startRecord(
+        (path) => {
+          setRecPath(path)
+          setRecording(false)
+        },
+        () => setRecording(false),
+      )
+    } else {
+      stopRecord()
     }
   }
 
@@ -141,6 +201,9 @@ export default function Session() {
 
   if (!current) return <View className='sess' />
 
+  const spellCorrect =
+    normalizeForCompare(spellInput) === normalizeForCompare(current.card.front)
+
   return (
     <View className='sess'>
       <View className='sess__bar'>
@@ -151,79 +214,121 @@ export default function Session() {
         <Text className='sess__count'>{idx + 1}/{cards.length}</Text>
       </View>
 
+      {/* 认词 / 认字 */}
       {mode === 'recognize' && (
         <View className='card'>
-          <Text className={isHanzi ? 'card__front card__front--hz' : 'card__front'}>
-            {current.card.front}
-          </Text>
-          {!isHanzi && current.card.phonetic ? (
-            <Text className='card__ph'>/{current.card.phonetic}/</Text>
-          ) : null}
-          <View className='audio' onClick={playCurrent}>
-            <Text className='audio__t'>🔊</Text>
-          </View>
+          <Text className={isHanzi ? 'card__front card__front--hz' : 'card__front'}>{current.card.front}</Text>
+          {!isHanzi && current.card.phonetic ? <Text className='card__ph'>/{current.card.phonetic}/</Text> : null}
+          <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
           {phase === 'reveal' ? (
             <View className='card__reveal'>
               {isHanzi ? (
                 <View>
                   <Text className='card__back card__back--hz'>{current.card.phonetic}</Text>
                   {(current.card.extra as { word?: string } | undefined)?.word ? (
-                    <Text className='card__extra'>
-                      组词:{(current.card.extra as { word?: string }).word}
-                    </Text>
+                    <Text className='card__extra'>组词:{(current.card.extra as { word?: string }).word}</Text>
                   ) : null}
                 </View>
               ) : (
                 <Text className='card__back'>{current.card.back}</Text>
               )}
               <View className='row'>
-                <View className='btn btn--gray' onClick={() => advance(false)}>
-                  <Text className='btn__t'>{isHanzi ? '不认识' : '没记住'}</Text>
-                </View>
-                <View className='btn btn--mint' onClick={() => advance(true)}>
-                  <Text className='btn__t'>{isHanzi ? '认识' : '记住了'}</Text>
-                </View>
+                <View className='btn btn--gray' onClick={() => advance(false)}><Text className='btn__t'>{isHanzi ? '不认识' : '没记住'}</Text></View>
+                <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>{isHanzi ? '认识' : '记住了'}</Text></View>
               </View>
             </View>
           ) : (
-            <View className='btn btn--primary' onClick={() => setPhase('reveal')}>
-              <Text className='btn__t'>{isHanzi ? '看读音' : '看意思'}</Text>
-            </View>
+            <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>{isHanzi ? '看读音' : '看意思'}</Text></View>
           )}
         </View>
       )}
 
+      {/* 听音选义 */}
       {mode === 'listenChoose' && (
         <View className='card'>
-          <View className='audio audio--big' onClick={playCurrent}>
-            <Text className='audio__t'>🔊</Text>
-          </View>
+          <View className='audio audio--big' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
           <Text className='card__tip'>听发音,选出正确的意思</Text>
           <View className='opts'>
             {options.map((opt) => {
               const show = picked !== null
               const isRight = opt === current.card.back
-              const cls = show
-                ? isRight
-                  ? 'opt opt--right'
-                  : opt === picked
-                    ? 'opt opt--wrong'
-                    : 'opt'
-                : 'opt'
+              const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View
-                  key={opt}
-                  className={cls}
-                  onClick={() => {
-                    if (picked) return
-                    setPicked(opt)
-                    setTimeout(() => advance(opt === current.card.back), 800)
-                  }}
-                >
+                <View key={opt} className={cls} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === current.card.back), 800) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
             })}
+          </View>
+        </View>
+      )}
+
+      {/* 拼写:看中文写英文 */}
+      {mode === 'spell' && (
+        <View className='card'>
+          <Text className='card__back'>{current.card.back}</Text>
+          <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          {phase === 'reveal' ? (
+            <View className='card__reveal'>
+              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{current.card.front}</Text>
+              {!spellCorrect ? <Text className='card__extra'>你写的:{spellInput || '(空)'}</Text> : null}
+              <View className='btn btn--primary' onClick={() => advance(spellCorrect)}><Text className='btn__t'>下一个</Text></View>
+            </View>
+          ) : (
+            <View className='card__form'>
+              <Input className='inp' value={spellInput} onInput={(e) => setSpellInput(e.detail.value)} placeholder='输入英文' />
+              <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>检查</Text></View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* 听写:只听发音写单词 */}
+      {mode === 'dictation' && (
+        <View className='card'>
+          <View className='audio audio--big' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          <Text className='card__tip'>听发音,写出这个单词</Text>
+          {phase === 'reveal' ? (
+            <View className='card__reveal'>
+              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{current.card.front}</Text>
+              <Text className='card__back'>{current.card.back}</Text>
+              {!spellCorrect ? <Text className='card__extra'>你写的:{spellInput || '(空)'}</Text> : null}
+              <View className='btn btn--primary' onClick={() => advance(spellCorrect)}><Text className='btn__t'>下一个</Text></View>
+            </View>
+          ) : (
+            <View className='card__form'>
+              <Input className='inp' value={spellInput} onInput={(e) => setSpellInput(e.detail.value)} placeholder='听写英文' />
+              <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>检查</Text></View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* 跟读:范读 + 录音回放 + 打分 */}
+      {mode === 'speak' && (
+        <View className='card'>
+          <Text className='card__front'>{current.card.front}</Text>
+          {current.card.phonetic ? <Text className='card__ph'>/{current.card.phonetic}/</Text> : null}
+          <Text className='card__back'>{current.card.back}</Text>
+
+          <View className='row'>
+            <View className='chip' onClick={playCurrent}><Text className='chip__t'>🔊 范读</Text></View>
+            <View className='chip' onClick={toggleRecord}><Text className='chip__t'>{recording ? '⏹ 停止' : '🔴 录我读的'}</Text></View>
+            {recPath ? <View className='chip' onClick={() => playFile(recPath)}><Text className='chip__t'>▶️ 回放</Text></View> : null}
+          </View>
+
+          <View className={listening ? 'mic mic--on' : 'mic'} onClick={toggleSpeak}>
+            <Text className='mic__t'>{listening ? '🎙 读完了' : '🎤 跟读打分'}</Text>
+          </View>
+
+          {stars >= 0 ? (
+            <Text className='stars'>{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</Text>
+          ) : null}
+          {speakMsg ? <Text className='card__extra'>{speakMsg}</Text> : null}
+
+          <View className='row'>
+            <View className='btn btn--gray' onClick={() => advance(false)}><Text className='btn__t'>跳过</Text></View>
+            <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>我读对了</Text></View>
           </View>
         </View>
       )}
