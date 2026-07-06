@@ -11,6 +11,7 @@ import {
   getStudyStreak,
   getTodayStudyMinutes,
 } from '../../store/study'
+import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
 
@@ -49,6 +50,23 @@ export default function Index() {
     Taro.navigateTo({ url: `/pages/session/index?deckId=${deckId}&mode=${mode}` })
   }
 
+  const sync = async () => {
+    Taro.showLoading({ title: '同步中…' })
+    const up = await pushToCloud()
+    const down = await pullFromCloud()
+    Taro.hideLoading()
+    if (up === 'nocloud' || down === 'nocloud') {
+      Taro.showModal({
+        title: '未开启云同步',
+        content: '请先在云开发控制台创建环境,并把环境 ID 填入 src/cloud/config.ts 的 CLOUD_ENV。',
+        showCancel: false,
+      })
+      return
+    }
+    refresh()
+    Taro.showToast({ title: up === 'ok' ? '已同步' : '同步完成', icon: 'success' })
+  }
+
   const wordModes: Array<[string, string, string]> = [
     ['recognize', '👀', '认词'],
     ['listenChoose', '👂', '听音选义'],
@@ -64,6 +82,9 @@ export default function Index() {
         <View className='home__stat'>
           <Text className='home__xp'>成长值 {xp}</Text>
           {streak > 0 ? <Text className='home__streak'>🔥 {streak} 天</Text> : null}
+          <Text className='home__sync' onClick={() => void sync()}>
+            {isCloudConfigured() ? '☁️ 同步' : '☁️'}
+          </Text>
         </View>
       </View>
 
