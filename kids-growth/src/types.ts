@@ -295,6 +295,9 @@ export type PracticeMode =
   | 'review' // 错题:看题回想→自评
   | 'picChoose' // 幼儿:看图选名字
   | 'listenPic' // 幼儿:听音选图
+  | 'picChooseEn' // 幼儿英语:看图选英语单词
+  | 'listenPicEn' // 幼儿英语:听英语选图
+  | 'earTrain' // 幼儿英语:磨耳朵(中英自动连播)
 
 /** SRS 记忆状态机 */
 export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'

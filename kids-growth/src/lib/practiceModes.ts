@@ -33,6 +33,9 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
   pic: [
     { mode: 'picChoose', label: '看图选一选', icon: '🖼️', desc: '看图片选名字', lowAgeFriendly: true },
     { mode: 'listenPic', label: '听音选图', icon: '👂', desc: '听声音点图片', lowAgeFriendly: true },
+    { mode: 'picChooseEn', label: '英语·看图选词', icon: '🅰️', desc: '看图选英语单词', lowAgeFriendly: true },
+    { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true },
+    { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播', lowAgeFriendly: true },
   ],
 }
 

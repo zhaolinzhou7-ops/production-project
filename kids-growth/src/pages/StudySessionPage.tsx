@@ -26,6 +26,8 @@ import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
 const PRAISE = ['棒!', '真快!', '厉害!', '就是这样!', '太对了!', '哇!']
 /** 幼儿:答对时用语音读出来的夸奖 */
 const VOICE_PRAISE = ['真棒', '太厉害啦', '答对啦', '你真聪明', '好棒哦', '真了不起']
+/** 幼儿英语模式:用英语夸,顺便磨耳朵 */
+const VOICE_PRAISE_EN = ['Good job', 'Well done', 'Great', 'Awesome', 'Perfect', 'Super']
 
 type Phase = 'prompt' | 'reveal' | 'done'
 
@@ -69,7 +71,7 @@ export function StudySessionPage() {
   const recorderRef = useRef<Recorder | null>(null)
   const [speakStars, setSpeakStars] = useState(-1)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
-  const [poolPic, setPoolPic] = useState<{ front: string; emoji: string }[]>([])
+  const [poolPic, setPoolPic] = useState<{ front: string; en: string; emoji: string }[]>([])
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
 
   useEffect(() => {
@@ -83,12 +85,12 @@ export function StudySessionPage() {
       setPool(allCards.map((c) => c.back))
       setPoolFront(allCards.map((c) => c.front))
       const lines: string[] = []
-      const pics: { front: string; emoji: string }[] = []
+      const pics: { front: string; en: string; emoji: string }[] = []
       for (const c of allCards) {
         const ls = (c.extra as { lines?: string[] } | undefined)?.lines
         if (Array.isArray(ls)) lines.push(...ls)
-        const emoji = (c.extra as { emoji?: string } | undefined)?.emoji
-        if (emoji) pics.push({ front: c.front, emoji })
+        const ext = c.extra as { emoji?: string; en?: string } | undefined
+        if (ext?.emoji) pics.push({ front: c.front, en: ext.en ?? '', emoji: ext.emoji })
       }
       setLinePool(lines)
       setPoolPic(pics)
@@ -122,11 +124,22 @@ export function StudySessionPage() {
   }, [current, mode, poolPic])
 
   const listenPicOptions = useMemo(() => {
-    if (!current || mode !== 'listenPic') return []
-    const answer = { front: current.card.front, emoji: (current.card.extra as { emoji?: string })?.emoji ?? '' }
+    if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
+    const ext = current.card.extra as { emoji?: string; en?: string } | undefined
+    const answer = { front: current.card.front, en: ext?.en ?? '', emoji: ext?.emoji ?? '' }
     const distractors = shuffle(poolPic.filter((p) => p.front !== answer.front)).slice(0, 3)
     return shuffle([answer, ...distractors])
   }, [current, mode, poolPic])
+
+  // 英语·看图选词:3 个英语单词选项
+  const picOptionsEn = useMemo(() => {
+    if (!current || mode !== 'picChooseEn') return []
+    const answer = (current.card.extra as { en?: string })?.en ?? current.card.back
+    const distractors = shuffle(poolPic.map((p) => p.en).filter((e) => e && e !== answer)).slice(0, 2)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, poolPic])
+
+  const currentEn = (current?.card.extra as { en?: string } | undefined)?.en ?? current?.card.back ?? ''
 
   // 听音选(义/字) 4 选项:汉字选正面,单词选释义
   const options = useMemo(() => {
@@ -159,6 +172,11 @@ export function StudySessionPage() {
     if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation' || mode === 'listenPic') {
       const delay = isToddler ? 1200 : 0
       const t = setTimeout(() => playAudio(current.card.audioText ?? current.card.front), delay)
+      return () => clearTimeout(t)
+    }
+    if (mode === 'listenPicEn') {
+      const en = (current.card.extra as { en?: string })?.en ?? current.card.back
+      const t = setTimeout(() => void playWordAudio(en), isToddler ? 1200 : 0)
       return () => clearTimeout(t)
     }
   }, [current, phase, mode, playAudio, isToddler])
@@ -227,7 +245,9 @@ export function StudySessionPage() {
         if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
         else sfxCorrect()
         if (isToddler) {
-          speak(VOICE_PRAISE[Math.floor(Math.random() * VOICE_PRAISE.length)], 'zh-CN', 1.05)
+          const enMode = mode === 'picChooseEn' || mode === 'listenPicEn'
+          if (enMode) speak(VOICE_PRAISE_EN[Math.floor(Math.random() * VOICE_PRAISE_EN.length)], 'en-US', 1)
+          else speak(VOICE_PRAISE[Math.floor(Math.random() * VOICE_PRAISE.length)], 'zh-CN', 1.05)
         }
         const praise =
           nextCombo >= 3
@@ -255,8 +275,24 @@ export function StudySessionPage() {
         setRecBlob(null)
       }
     },
-    [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler],
+    [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode],
   )
+
+  // 磨耳朵:每张卡自动「英语(真人音)→中文」连播,然后翻下一张;不评分、听完整组照常结算
+  useEffect(() => {
+    if (mode !== 'earTrain' || !current || phase === 'done' || !cards) return
+    const en = (current.card.extra as { en?: string })?.en ?? current.card.back
+    void playWordAudio(en)
+    const t1 = setTimeout(() => speak(current.card.audioText ?? current.card.front, 'zh-CN', 0.9), 1700)
+    const t2 = setTimeout(() => {
+      if (idx + 1 >= cards.length) void finish(cards.length, cards.length)
+      else setIdx((i) => i + 1)
+    }, 4300)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [mode, current, phase, cards, idx, finish])
 
   // 录我读的 → 回放
   const toggleRecord = useCallback(async () => {
@@ -870,13 +906,25 @@ export function StudySessionPage() {
         </div>
       )}
 
-      {/* ---- 幼儿:听音选图(听声音 → 4 张大图) ---- */}
-      {mode === 'listenPic' && (
+      {/* ---- 幼儿:听音选图(中文/英语共用,听声音 → 4 张大图) ---- */}
+      {(mode === 'listenPic' || mode === 'listenPicEn') && (
         <div className="flex-1 flex flex-col items-center px-4">
           <div className="mt-4 mb-6">
-            <AudioBtn big />
+            <button
+              onClick={() =>
+                mode === 'listenPicEn'
+                  ? void playWordAudio(currentEn)
+                  : playAudio(current.card.audioText ?? current.card.front)
+              }
+              className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-brand-600 active:scale-90 transition"
+              aria-label="播放发音"
+            >
+              <Volume2 size={28} />
+            </button>
           </div>
-          <p className="text-sm text-gray-400 mb-4">听一听,点对应的图片</p>
+          <p className="text-sm text-gray-400 mb-4">
+            {mode === 'listenPicEn' ? '听英语,点对应的图片' : '听一听,点对应的图片'}
+          </p>
           <div className="grid w-full max-w-sm grid-cols-2 gap-3">
             {listenPicOptions.map((opt) => {
               const show = picked !== null
@@ -902,6 +950,68 @@ export function StudySessionPage() {
               )
             })}
           </div>
+          {mode === 'listenPicEn' && picked && (
+            <div className="mt-4 text-lg font-bold text-brand-600">
+              {currentEn} <span className="text-sm font-normal text-gray-400">{current.card.front}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---- 幼儿英语:看图选词(大图 → 3 个英语单词) ---- */}
+      {mode === 'picChooseEn' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="my-4 flex min-h-36 items-center justify-center">
+            <span className="text-8xl leading-none break-all text-center">
+              {(current.card.extra as { emoji?: string })?.emoji}
+            </span>
+          </div>
+          <button
+            onClick={() => void playWordAudio(currentEn)}
+            className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
+          >
+            <Volume2 size={15} /> 听英语
+          </button>
+          <p className="text-sm text-gray-400 mb-3">What is it? 点一点</p>
+          <div className="w-full max-w-sm space-y-3">
+            {picOptionsEn.map((opt) => {
+              const show = picked !== null
+              const isRight = opt === currentEn
+              return (
+                <button
+                  key={opt}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    setPicked(opt)
+                    void playWordAudio(currentEn)
+                    setTimeout(() => void advance(opt === currentEn), 1200)
+                  }}
+                  className={`w-full rounded-2xl px-4 py-4 text-center text-2xl font-bold transition ${
+                    show && isRight
+                      ? 'bg-mint-500 text-white'
+                      : show && opt === picked
+                        ? 'bg-red-400 text-white'
+                        : 'bg-white/80 text-gray-700'
+                  }`}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+          </div>
+          {picked && <div className="mt-3 text-sm text-gray-400">{current.card.front}</div>}
+        </div>
+      )}
+
+      {/* ---- 幼儿英语:磨耳朵(英语→中文自动连播,不用操作) ---- */}
+      {mode === 'earTrain' && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+          <span className="text-8xl leading-none break-all">
+            {(current.card.extra as { emoji?: string })?.emoji}
+          </span>
+          <div className="mt-6 text-4xl font-bold text-brand-600">{currentEn}</div>
+          <div className="mt-2 text-xl text-gray-600">{current.card.front}</div>
+          <p className="mt-8 text-xs text-gray-400">🎵 磨耳朵中…会自动翻页,听完这组就好啦</p>
         </div>
       )}
     </div>
