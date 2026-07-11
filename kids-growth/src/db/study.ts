@@ -6,6 +6,7 @@ import { getPackMeta } from '../lib/learningContent'
 import type {
   BuiltinCard,
   BuiltinHanziCard,
+  BuiltinPicCard,
   BuiltinPoemCard,
   BuiltinWordCard,
 } from '../lib/learningContent'
@@ -46,6 +47,16 @@ function builtinCardToLearnCard(
       phonetic: h.py,
       audioText: h.c,
       extra: h.w ? { word: h.w } : undefined,
+    }
+  }
+  if (itemType === 'pic') {
+    const p = c as BuiltinPicCard
+    return {
+      ...base,
+      front: p.front,
+      back: p.en,
+      audioText: p.say ?? p.front,
+      extra: { emoji: p.emoji, en: p.en },
     }
   }
   const w = c as BuiltinWordCard

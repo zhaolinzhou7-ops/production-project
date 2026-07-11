@@ -181,6 +181,8 @@ export interface Settings {
   learnGoals?: Record<string, number>
   /** 每个孩子已收集的贴纸 key 列表,按 childId 索引 */
   stickers?: Record<string, string[]>
+  /** 每个孩子的学习宠物(养成),按 childId 索引 */
+  pets?: Record<string, { line: string; fed: number }>
 }
 
 // ============ 通用记录引擎 ============
@@ -279,7 +281,7 @@ export interface Interest {
 // ============ 学习引擎 ============
 
 /** 卡片内容类型,决定支持哪些练习模式 */
-export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong'
+export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong' | 'pic'
 export type DeckSource = 'builtin' | 'custom' | 'wrong'
 /** 练习模式 */
 export type PracticeMode =
@@ -291,6 +293,8 @@ export type PracticeMode =
   | 'fillBlank' // 古诗挖空(批次2)
   | 'recite' // 朗读对照(批次2)
   | 'review' // 错题:看题回想→自评
+  | 'picChoose' // 幼儿:看图选名字
+  | 'listenPic' // 幼儿:听音选图
 
 /** SRS 记忆状态机 */
 export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'

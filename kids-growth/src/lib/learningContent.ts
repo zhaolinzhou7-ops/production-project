@@ -32,7 +32,14 @@ export interface BuiltinHanziCard {
   w?: string
 }
 
-export type BuiltinCard = BuiltinWordCard | BuiltinPoemCard | BuiltinHanziCard
+export interface BuiltinPicCard {
+  front: string // 中文名(答案文字)
+  en: string // 英文/辅助信息
+  emoji: string // 大图(emoji,数一数为重复串)
+  say?: string // 朗读文本(缺省用 front)
+}
+
+export type BuiltinCard = BuiltinWordCard | BuiltinPoemCard | BuiltinHanziCard | BuiltinPicCard
 
 export interface BuiltinPackData {
   key: string
@@ -45,13 +52,51 @@ export interface BuiltinPackData {
 }
 
 export const BUILTIN_PACKS: BuiltinPackMeta[] = [
+  // ---- 幼儿启蒙(3–6 岁):看大图 + 语音,不认字也能玩 ----
+  {
+    key: 'enlight-animals',
+    name: '认识动物',
+    subject: '启蒙',
+    icon: '🐼',
+    itemType: 'pic',
+    stages: ['toddler'],
+    load: () => import('../data/decks/enlight-animals.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'enlight-food',
+    name: '水果食物',
+    subject: '启蒙',
+    icon: '🍎',
+    itemType: 'pic',
+    stages: ['toddler'],
+    load: () => import('../data/decks/enlight-food.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'enlight-colors',
+    name: '颜色形状',
+    subject: '启蒙',
+    icon: '🌈',
+    itemType: 'pic',
+    stages: ['toddler'],
+    load: () => import('../data/decks/enlight-colors.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'enlight-numbers',
+    name: '数一数',
+    subject: '启蒙',
+    icon: '🔢',
+    itemType: 'pic',
+    stages: ['toddler'],
+    load: () => import('../data/decks/enlight-numbers.json').then((m) => m.default as BuiltinPackData),
+  },
+  // ---- 小学及以上 ----
   {
     key: 'words-primary',
     name: '小学·基础高频词',
     subject: '英语',
     icon: '🔤',
     itemType: 'word',
-    stages: ['toddler', 'primary'],
+    stages: ['primary'],
     load: () => import('../data/decks/words-primary.json').then((m) => m.default as BuiltinPackData),
   },
   {

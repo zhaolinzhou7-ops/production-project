@@ -18,11 +18,14 @@ import {
   type Recorder,
 } from '../lib/pronounce'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
+import { feedPet, type FeedResult } from '../lib/pets'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
 
 const PRAISE = ['棒!', '真快!', '厉害!', '就是这样!', '太对了!', '哇!']
+/** 幼儿:答对时用语音读出来的夸奖 */
+const VOICE_PRAISE = ['真棒', '太厉害啦', '答对啦', '你真聪明', '好棒哦', '真了不起']
 
 type Phase = 'prompt' | 'reveal' | 'done'
 
@@ -39,7 +42,8 @@ export function StudySessionPage() {
   const navigate = useNavigate()
   const { deckId, mode } = useParams<{ deckId: string; mode: PracticeMode }>()
   const currentChildId = useAppStore((s) => s.currentChildId)
-  const { child, tone } = useCurrentChild()
+  const { child, tone, stage } = useCurrentChild()
+  const isToddler = stage === 'toddler'
 
   const [cards, setCards] = useState<DueCard[] | null>(null)
   const [deck, setDeck] = useState<LearnDeck | null>(null)
@@ -65,6 +69,8 @@ export function StudySessionPage() {
   const recorderRef = useRef<Recorder | null>(null)
   const [speakStars, setSpeakStars] = useState(-1)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
+  const [poolPic, setPoolPic] = useState<{ front: string; emoji: string }[]>([])
+  const [petResult, setPetResult] = useState<FeedResult | null>(null)
 
   useEffect(() => {
     if (!currentChildId || !deckId) return
@@ -77,11 +83,15 @@ export function StudySessionPage() {
       setPool(allCards.map((c) => c.back))
       setPoolFront(allCards.map((c) => c.front))
       const lines: string[] = []
+      const pics: { front: string; emoji: string }[] = []
       for (const c of allCards) {
         const ls = (c.extra as { lines?: string[] } | undefined)?.lines
         if (Array.isArray(ls)) lines.push(...ls)
+        const emoji = (c.extra as { emoji?: string } | undefined)?.emoji
+        if (emoji) pics.push({ front: c.front, emoji })
       }
       setLinePool(lines)
+      setPoolPic(pics)
       setDeck(d ?? null)
       setCards(list)
     })()
@@ -94,7 +104,7 @@ export function StudySessionPage() {
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
 
-  /** 按学科播放:英语用真人音源,语文(古诗/识字)用中文 TTS。 */
+  /** 按学科播放:英语用真人音源,语文/启蒙用中文 TTS。 */
   const playAudio = useCallback(
     (text: string) => {
       if (itemType === 'word') void playWordAudio(text)
@@ -102,6 +112,21 @@ export function StudySessionPage() {
     },
     [itemType],
   )
+
+  // 幼儿看图:3 个名字选项(picChoose) / 4 张图选项(listenPic)
+  const picOptions = useMemo(() => {
+    if (!current || mode !== 'picChoose') return []
+    const answer = current.card.front
+    const distractors = shuffle(poolPic.map((p) => p.front).filter((f) => f !== answer)).slice(0, 2)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, poolPic])
+
+  const listenPicOptions = useMemo(() => {
+    if (!current || mode !== 'listenPic') return []
+    const answer = { front: current.card.front, emoji: (current.card.extra as { emoji?: string })?.emoji ?? '' }
+    const distractors = shuffle(poolPic.filter((p) => p.front !== answer.front)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, poolPic])
 
   // 听音选(义/字) 4 选项:汉字选正面,单词选释义
   const options = useMemo(() => {
@@ -128,13 +153,15 @@ export function StudySessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, mode, linePool, idx])
 
-  // 进入每张卡时,听音选(义/字)/跟读/听写自动播放发音
+  // 进入每张卡时,听音类模式自动播放发音;幼儿延迟一点,给语音夸奖留时间
   useEffect(() => {
     if (!current || phase !== 'prompt') return
-    if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation') {
-      playAudio(current.card.audioText ?? current.card.front)
+    if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation' || mode === 'listenPic') {
+      const delay = isToddler ? 1200 : 0
+      const t = setTimeout(() => playAudio(current.card.audioText ?? current.card.front), delay)
+      return () => clearTimeout(t)
     }
-  }, [current, phase, mode, playAudio])
+  }, [current, phase, mode, playAudio, isToddler])
 
   const finish = useCallback(
     async (finalCorrect: number, total: number) => {
@@ -166,6 +193,12 @@ export function StudySessionPage() {
           setTimeout(sfxSticker, 500)
         }
       }
+      // 喂宠物:每答对一题喂一口
+      const fedRes = await feedPet(currentChildId, finalCorrect)
+      if (fedRes) {
+        setPetResult(fedRes)
+        if (fedRes.evolved) setTimeout(sfxSticker, 900)
+      }
       sfxFanfare()
       if (tone === 'playful') confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } })
       setPhase('done')
@@ -187,12 +220,15 @@ export function StudySessionPage() {
           extra: current.card.extra,
         })
       }
-      // 趣味反馈:音效 + 连击 + 飘字 / 抖动
+      // 趣味反馈:音效 + 连击 + 飘字 / 抖动;幼儿加语音夸奖
       if (wasCorrect) {
         const nextCombo = combo + 1
         setCombo(nextCombo)
         if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
         else sfxCorrect()
+        if (isToddler) {
+          speak(VOICE_PRAISE[Math.floor(Math.random() * VOICE_PRAISE.length)], 'zh-CN', 1.05)
+        }
         const praise =
           nextCombo >= 3
             ? `${PRAISE[nextCombo % PRAISE.length]} 连对${nextCombo}!`
@@ -219,7 +255,7 @@ export function StudySessionPage() {
         setRecBlob(null)
       }
     },
-    [current, correctCount, cards, idx, finish, currentChildId, deck, combo],
+    [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler],
   )
 
   // 录我读的 → 回放
@@ -293,6 +329,36 @@ export function StudySessionPage() {
               <div className="animate-sticker-pop text-6xl">{wonSticker.emoji}</div>
               <div className="mt-1 text-sm font-medium text-gray-700">{wonSticker.name}</div>
               <div className="text-[11px] text-gray-400 mt-0.5">已放进你的贴纸册</div>
+            </div>
+          )}
+          {petResult && (
+            <div className="mt-4 mx-auto max-w-xs rounded-3xl bg-mint-400/15 p-4">
+              {petResult.evolved && petResult.fromStage ? (
+                <>
+                  <div className="text-xs font-bold text-mint-600 mb-1">✨ 进化啦!</div>
+                  <div className="text-3xl">
+                    {petResult.fromStage.emoji} <span className="text-gray-400">→</span>{' '}
+                    <span className="animate-sticker-pop inline-block text-5xl">{petResult.pet.stage.emoji}</span>
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-gray-700">
+                    变成了「{petResult.pet.stage.label}」!
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-4xl">{petResult.pet.stage.emoji}</span>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-700">
+                      {petResult.pet.stage.label}吃了 {summary.correct} 口,好开心
+                    </div>
+                    {petResult.pet.toNext && (
+                      <div className="text-[11px] text-gray-400">
+                        再喂 {petResult.pet.toNext.need - petResult.pet.toNext.have} 口就进化啦
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <button
@@ -754,6 +820,88 @@ export function StudySessionPage() {
               看答案
             </button>
           )}
+        </div>
+      )}
+
+      {/* ---- 幼儿:看图选一选(大图 → 3 个名字) ---- */}
+      {mode === 'picChoose' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="my-4 flex min-h-36 items-center justify-center">
+            <span className="text-8xl leading-none break-all text-center" style={{ wordBreak: 'break-all' }}>
+              {(current.card.extra as { emoji?: string })?.emoji}
+            </span>
+          </div>
+          <button
+            onClick={() => playAudio(current.card.audioText ?? current.card.front)}
+            className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
+          >
+            <Volume2 size={15} /> 听一听
+          </button>
+          <p className="text-sm text-gray-400 mb-3">这是什么呀?点一点</p>
+          <div className="w-full max-w-sm space-y-3">
+            {picOptions.map((opt) => {
+              const show = picked !== null
+              const isRight = opt === current.card.front
+              return (
+                <button
+                  key={opt}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    setPicked(opt)
+                    playAudio(current.card.audioText ?? current.card.front)
+                    setTimeout(() => void advance(opt === current.card.front), 1100)
+                  }}
+                  className={`w-full rounded-2xl px-4 py-4 text-center text-2xl font-bold transition ${
+                    show && isRight
+                      ? 'bg-mint-500 text-white'
+                      : show && opt === picked
+                        ? 'bg-red-400 text-white'
+                        : 'bg-white/80 text-gray-700'
+                  }`}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3 text-xs text-gray-400">
+            {(current.card.extra as { en?: string })?.en}
+          </div>
+        </div>
+      )}
+
+      {/* ---- 幼儿:听音选图(听声音 → 4 张大图) ---- */}
+      {mode === 'listenPic' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="mt-4 mb-6">
+            <AudioBtn big />
+          </div>
+          <p className="text-sm text-gray-400 mb-4">听一听,点对应的图片</p>
+          <div className="grid w-full max-w-sm grid-cols-2 gap-3">
+            {listenPicOptions.map((opt) => {
+              const show = picked !== null
+              const isRight = opt.front === current.card.front
+              return (
+                <button
+                  key={opt.front}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    setPicked(opt.front)
+                    setTimeout(() => void advance(opt.front === current.card.front), 1000)
+                  }}
+                  className={`flex min-h-28 items-center justify-center rounded-3xl p-3 transition ${
+                    show && isRight
+                      ? 'bg-mint-500'
+                      : show && opt.front === picked
+                        ? 'bg-red-400'
+                        : 'bg-white/80'
+                  }`}
+                >
+                  <span className="text-6xl leading-none break-all text-center">{opt.emoji}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

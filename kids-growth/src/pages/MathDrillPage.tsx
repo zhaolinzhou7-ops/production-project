@@ -11,6 +11,7 @@ import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../lib/mathDrill'
 import { sfxCorrect, sfxWrong, sfxCombo, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
+import { feedPet, type FeedResult } from '../lib/pets'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LevelStep } from '../types'
@@ -38,6 +39,7 @@ export function MathDrillPage() {
   const [newAch, setNewAch] = useState<Achievement | null>(null)
   const [combo, setCombo] = useState(0)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
+  const [petResult, setPetResult] = useState<FeedResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // 计时器
@@ -81,6 +83,12 @@ export function MathDrillPage() {
           setWonSticker(win)
           setTimeout(sfxSticker, 500)
         }
+      }
+      // 喂宠物
+      const fedRes = await feedPet(currentChildId, finalCorrect)
+      if (fedRes) {
+        setPetResult(fedRes)
+        if (fedRes.evolved) setTimeout(sfxSticker, 900)
       }
       sfxFanfare()
       if (tone === 'playful') confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } })
@@ -208,6 +216,36 @@ export function MathDrillPage() {
               <div className="animate-sticker-pop text-6xl">{wonSticker.emoji}</div>
               <div className="mt-1 text-sm font-medium text-gray-700">{wonSticker.name}</div>
               <div className="text-[11px] text-gray-400 mt-0.5">已放进你的贴纸册</div>
+            </div>
+          )}
+          {petResult && (
+            <div className="mt-4 mx-auto max-w-xs rounded-3xl bg-mint-400/15 p-4">
+              {petResult.evolved && petResult.fromStage ? (
+                <>
+                  <div className="text-xs font-bold text-mint-600 mb-1">✨ 进化啦!</div>
+                  <div className="text-3xl">
+                    {petResult.fromStage.emoji} <span className="text-gray-400">→</span>{' '}
+                    <span className="animate-sticker-pop inline-block text-5xl">{petResult.pet.stage.emoji}</span>
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-gray-700">
+                    变成了「{petResult.pet.stage.label}」!
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-4xl">{petResult.pet.stage.emoji}</span>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-700">
+                      {petResult.pet.stage.label}吃了 {summary.correct} 口,好开心
+                    </div>
+                    {petResult.pet.toNext && (
+                      <div className="text-[11px] text-gray-400">
+                        再喂 {petResult.pet.toNext.need - petResult.pet.toNext.have} 口就进化啦
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <div className="mt-8 flex gap-3 justify-center">

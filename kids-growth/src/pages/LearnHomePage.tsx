@@ -10,6 +10,7 @@ import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
 import { STICKER_CATALOG, getOwnedStickers } from '../lib/stickers'
+import { PET_LINES, getPet, choosePet } from '../lib/pets'
 import { todayISO } from '../lib/dateUtils'
 import type { LearnDeck, PracticeMode } from '../types'
 
@@ -74,6 +75,11 @@ export function LearnHomePage() {
     [currentChildId],
   )
 
+  const pet = useLiveQuery(
+    async () => (currentChildId ? getPet(currentChildId) : null),
+    [currentChildId],
+  )
+
   const [openDeck, setOpenDeck] = useState<string | null>(null)
 
   if (!child || !currentChildId) return null
@@ -105,6 +111,55 @@ export function LearnHomePage() {
           {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
       </div>
+
+      {/* 学习宠物(童趣模式) */}
+      {tone === 'playful' && pet !== undefined && (
+        <div className="mb-3 rounded-2xl bg-gradient-to-br from-mint-400/20 to-sun-400/15 p-4 shadow-sm">
+          {pet === null ? (
+            <>
+              <div className="mb-2 text-sm font-bold text-gray-700">🥚 选一颗蛋,孵出你的学习宠物!</div>
+              <p className="mb-3 text-[11px] text-gray-500">每答对一题就喂它一口,吃饱就会长大、进化</p>
+              <div className="flex gap-2">
+                {PET_LINES.map((line) => (
+                  <button
+                    key={line.key}
+                    onClick={() => void choosePet(currentChildId, line.key)}
+                    className="flex-1 rounded-2xl bg-white/80 py-3 text-center shadow-sm active:scale-95 transition"
+                  >
+                    <div className="text-3xl">🥚</div>
+                    <div className="mt-1 text-xs font-medium text-gray-600">
+                      {line.eggName} {line.hint}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-5xl">{pet.stage.emoji}</span>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-gray-700">{pet.stage.label}</div>
+                {pet.toNext ? (
+                  <>
+                    <div className="mt-1 h-2 rounded-full bg-white/70 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-mint-400 to-mint-500 transition-all"
+                        style={{ width: `${Math.min(100, Math.round((pet.toNext.have / pet.toNext.need) * 100))}%` }}
+                      />
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-500">
+                      再喂 {pet.toNext.need - pet.toNext.have} 口进化 · 答对一题喂一口
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[11px] text-gray-500">已经是最终形态啦,好厉害! 🎉</div>
+                )}
+              </div>
+              <span className="text-xs text-gray-400 tabular-nums">已喂 {pet.fed}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 每日挑战 */}
       {challenge && (
