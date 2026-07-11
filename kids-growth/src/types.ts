@@ -179,6 +179,8 @@ export interface Settings {
   lastBackupAt?: number
   /** 每个孩子的每日学习目标(练习卡次),按 childId 索引 */
   learnGoals?: Record<string, number>
+  /** 每个孩子已收集的贴纸 key 列表,按 childId 索引 */
+  stickers?: Record<string, string[]>
 }
 
 // ============ 通用记录引擎 ============

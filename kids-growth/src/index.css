@@ -42,3 +42,57 @@ body {
   background: #ffd3b0;
   border-radius: 999px;
 }
+
+/* ============ 学习趣味包动画 ============ */
+
+/* 答对飘字:向上飘起并淡出 */
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(8px) scale(0.8); }
+  20% { opacity: 1; transform: translateY(0) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-46px) scale(1); }
+}
+.animate-float-up {
+  animation: float-up 0.9s ease-out forwards;
+}
+
+/* 答错抖动 */
+@keyframes shake-x {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+.animate-shake {
+  animation: shake-x 0.4s ease-in-out;
+}
+
+/* 贴纸开箱:弹跳放大登场 */
+@keyframes sticker-pop {
+  0% { opacity: 0; transform: scale(0.2) rotate(-20deg); }
+  60% { opacity: 1; transform: scale(1.25) rotate(6deg); }
+  80% { transform: scale(0.95) rotate(-2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.animate-sticker-pop {
+  animation: sticker-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* 连击徽标脉冲 */
+@keyframes combo-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.animate-combo-pulse {
+  animation: combo-pulse 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-up,
+  .animate-shake,
+  .animate-sticker-pop,
+  .animate-combo-pulse {
+    animation: none;
+  }
+}

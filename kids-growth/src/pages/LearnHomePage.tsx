@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Calculator, NotebookPen, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Calculator, NotebookPen, ChevronRight, Volume2, VolumeX } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage } from '../lib/learningContent'
-import { ensureBuiltinDeck, countDue } from '../db/study'
+import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
+import { isMuted, setMuted } from '../lib/sfx'
+import { STICKER_CATALOG, getOwnedStickers } from '../lib/stickers'
+import { todayISO } from '../lib/dateUtils'
 import type { LearnDeck, PracticeMode } from '../types'
 
 export function LearnHomePage() {
@@ -15,6 +18,8 @@ export function LearnHomePage() {
   const currentChildId = useAppStore((s) => s.currentChildId)
   const { child, stage, tone } = useCurrentChild()
   const [provisioning, setProvisioning] = useState(true)
+  const [muted, setMutedState] = useState(isMuted())
+  const [showStickers, setShowStickers] = useState(false)
 
   // 首次进入:按学段自动实例化默认词库(幂等)
   useEffect(() => {
@@ -46,9 +51,42 @@ export function LearnHomePage() {
     return out
   }, [currentChildId, decks])
 
+  // 每日挑战:今日已练卡次(单词/古诗/识字会话 + 口算题数) vs 每日目标
+  const challenge = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const today = todayISO()
+    const [sessions, drills, goal] = await Promise.all([
+      db.studySessions.where('[childId+date]').equals([currentChildId, today]).toArray(),
+      db.drillResults
+        .where('childId')
+        .equals(currentChildId)
+        .filter((d) => d.date === today)
+        .toArray(),
+      getDailyGoal(currentChildId),
+    ])
+    const done =
+      sessions.reduce((s, x) => s + x.total, 0) + drills.reduce((s, x) => s + x.total, 0)
+    return { done, goal }
+  }, [currentChildId])
+
+  const ownedStickers = useLiveQuery(
+    async () => (currentChildId ? getOwnedStickers(currentChildId) : []),
+    [currentChildId],
+  )
+
   const [openDeck, setOpenDeck] = useState<string | null>(null)
 
   if (!child || !currentChildId) return null
+
+  const owned = new Set(ownedStickers ?? [])
+  const challengeDone = challenge && challenge.done >= challenge.goal
+  const challengePct = challenge ? Math.min(100, Math.round((challenge.done / Math.max(1, challenge.goal)) * 100)) : 0
+
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
 
   return (
     <div className="pt-4 pb-10">
@@ -56,10 +94,79 @@ export function LearnHomePage() {
         <button onClick={() => navigate('/')} className="p-1 text-gray-500">
           <ArrowLeft size={22} />
         </button>
-        <h1 className="text-xl font-bold text-gray-800">
+        <h1 className="flex-1 text-xl font-bold text-gray-800">
           {tone === 'playful' ? '开始学习 📚' : '学习中心'}
         </h1>
+        <button
+          onClick={toggleMute}
+          className="rounded-full bg-white/70 p-2 text-gray-500 shadow-sm active:scale-90 transition"
+          aria-label={muted ? '打开音效' : '关闭音效'}
+        >
+          {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </button>
       </div>
+
+      {/* 每日挑战 */}
+      {challenge && (
+        <div className="mb-3 rounded-2xl bg-white/70 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-bold text-gray-700">
+              {challengeDone ? '🎉 今日挑战完成!' : '🎯 今日挑战'}
+            </span>
+            <span className="text-xs text-gray-400 tabular-nums">
+              {challenge.done}/{challenge.goal} 题
+            </span>
+          </div>
+          <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                challengeDone ? 'bg-mint-500' : 'bg-gradient-to-r from-sun-400 to-brand-400'
+              }`}
+              style={{ width: `${challengePct}%` }}
+            />
+          </div>
+          {!challengeDone && (
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              再练 {challenge.goal - challenge.done} 题就完成今天的小目标啦
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 贴纸册 */}
+      <button
+        onClick={() => setShowStickers((v) => !v)}
+        className="mb-3 w-full rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">🎁</div>
+          <div className="flex-1">
+            <div className="font-bold text-gray-800">我的贴纸册</div>
+            <div className="text-xs text-gray-400">
+              已集 {owned.size}/{STICKER_CATALOG.length} 张 · 练得好(正确率80%+)就掉落新贴纸
+            </div>
+          </div>
+          <ChevronRight
+            size={18}
+            className={`text-gray-300 transition-transform ${showStickers ? 'rotate-90' : ''}`}
+          />
+        </div>
+        {showStickers && (
+          <div className="mt-3 grid grid-cols-8 gap-1.5">
+            {STICKER_CATALOG.map((s) => (
+              <div
+                key={s.key}
+                title={owned.has(s.key) ? s.name : '???'}
+                className={`flex h-9 items-center justify-center rounded-lg text-xl ${
+                  owned.has(s.key) ? 'bg-sun-400/15' : 'bg-gray-100 opacity-40 grayscale'
+                }`}
+              >
+                {owned.has(s.key) ? s.emoji : '❔'}
+              </div>
+            ))}
+          </div>
+        )}
+      </button>
 
       <button
         onClick={() => navigate('/learn/math')}
@@ -146,7 +253,7 @@ export function LearnHomePage() {
       )}
 
       <p className="mt-4 text-[11px] text-gray-400">
-        单词发音为网络真人音源(需联网播放),取不到时自动改用系统朗读;古诗/识字用系统中文朗读,需设备装有中文语音。跟读的语音识别需联网,且仅部分浏览器(Chrome/Safari)支持。
+        单词发音为网络真人音源(需联网播放),取不到时自动改用系统朗读;古诗/识字用系统中文朗读,需设备装有中文语音。跟读的语音识别需联网,且仅部分浏览器(Chrome/Safari)支持;录音只在本机播放、不上传。
       </p>
     </div>
   )

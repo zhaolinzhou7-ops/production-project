@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import confetti from 'canvas-confetti'
-import { Volume2, ArrowRight, Mic } from 'lucide-react'
+import { Volume2, ArrowRight, Mic, Play, Square, Disc } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
@@ -9,9 +9,20 @@ import { getSessionCards, applyGrade, finishSession, addWrongCard, type DueCard 
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { playWordAudio, speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import { sfxCorrect, sfxWrong, sfxCombo, sfxFanfare, sfxSticker } from '../lib/sfx'
+import {
+  scorePronunciation,
+  isRecordingSupported,
+  startRecording,
+  playRecording,
+  type Recorder,
+} from '../lib/pronounce'
+import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
+
+const PRAISE = ['棒!', '真快!', '厉害!', '就是这样!', '太对了!', '哇!']
 
 type Phase = 'prompt' | 'reveal' | 'done'
 
@@ -45,6 +56,15 @@ export function StudySessionPage() {
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number } | null>(null)
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
   const [newAch, setNewAch] = useState<Achievement | null>(null)
+  // 趣味包:连击 / 飘字 / 抖动 / 录音回放 / 跟读星级 / 贴纸
+  const [combo, setCombo] = useState(0)
+  const [floatText, setFloatText] = useState<{ id: number; text: string } | null>(null)
+  const [shaking, setShaking] = useState(false)
+  const [recBlob, setRecBlob] = useState<Blob | null>(null)
+  const [recording, setRecording] = useState(false)
+  const recorderRef = useRef<Recorder | null>(null)
+  const [speakStars, setSpeakStars] = useState(-1)
+  const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
 
   useEffect(() => {
     if (!currentChildId || !deckId) return
@@ -138,6 +158,15 @@ export function StudySessionPage() {
       }
       const unlocked = await evaluateAchievements(currentChildId)
       if (unlocked.length > 0) setNewAch(unlocked[0])
+      // 练得好掉落贴纸(正确率≥80% 且答对≥5)
+      if (qualifiesForSticker(finalCorrect, total)) {
+        const win = await awardSticker(currentChildId)
+        if (win) {
+          setWonSticker(win)
+          setTimeout(sfxSticker, 500)
+        }
+      }
+      sfxFanfare()
       if (tone === 'playful') confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } })
       setPhase('done')
     },
@@ -158,6 +187,23 @@ export function StudySessionPage() {
           extra: current.card.extra,
         })
       }
+      // 趣味反馈:音效 + 连击 + 飘字 / 抖动
+      if (wasCorrect) {
+        const nextCombo = combo + 1
+        setCombo(nextCombo)
+        if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
+        else sfxCorrect()
+        const praise =
+          nextCombo >= 3
+            ? `${PRAISE[nextCombo % PRAISE.length]} 连对${nextCombo}!`
+            : PRAISE[Math.floor(Math.random() * PRAISE.length)]
+        setFloatText({ id: Date.now(), text: `+2 ${praise}` })
+      } else {
+        setCombo(0)
+        sfxWrong()
+        setShaking(true)
+        setTimeout(() => setShaking(false), 450)
+      }
       const nextCorrect = correctCount + (wasCorrect ? 1 : 0)
       setCorrectCount(nextCorrect)
       const total = cards!.length
@@ -169,10 +215,30 @@ export function StudySessionPage() {
         setSpellInput('')
         setPicked(null)
         setSpeakMsg('')
+        setSpeakStars(-1)
+        setRecBlob(null)
       }
     },
-    [current, correctCount, cards, idx, finish, currentChildId, deck],
+    [current, correctCount, cards, idx, finish, currentChildId, deck, combo],
   )
+
+  // 录我读的 → 回放
+  const toggleRecord = useCallback(async () => {
+    if (recording) {
+      setRecording(false)
+      const rec = recorderRef.current
+      recorderRef.current = null
+      if (rec) setRecBlob(await rec.stop())
+      return
+    }
+    try {
+      setRecBlob(null)
+      recorderRef.current = await startRecording()
+      setRecording(true)
+    } catch {
+      setSpeakMsg('麦克风不可用,检查浏览器授权')
+    }
+  }, [recording])
 
   if (!child || !currentChildId) return null
 
@@ -197,12 +263,17 @@ export function StudySessionPage() {
   // 结算页
   if (phase === 'done' && summary) {
     const pct = summary.total > 0 ? Math.round((summary.correct / summary.total) * 100) : 0
+    const sessStars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct > 0 ? 1 : 0
     return (
       <>
         <div className="pt-12 text-center px-6">
-          <div className="text-6xl mb-3">{pct >= 80 ? '🌟' : pct >= 60 ? '👍' : '💪'}</div>
+          <div className="text-6xl mb-2">{pct >= 80 ? '🌟' : pct >= 60 ? '👍' : '💪'}</div>
           <h1 className="text-2xl font-bold text-gray-800">练完啦!</h1>
-          <div className="mt-6 rounded-3xl bg-white/70 p-6 shadow-sm max-w-xs mx-auto">
+          <div className="mt-2 text-3xl tracking-wider" aria-label={`${sessStars}星`}>
+            {'⭐'.repeat(sessStars)}
+            <span className="opacity-30">{'⭐'.repeat(3 - sessStars)}</span>
+          </div>
+          <div className="mt-5 rounded-3xl bg-white/70 p-6 shadow-sm max-w-xs mx-auto">
             <div className="flex justify-around">
               <div>
                 <div className="text-2xl font-bold text-gray-800">
@@ -216,6 +287,14 @@ export function StudySessionPage() {
               </div>
             </div>
           </div>
+          {wonSticker && (
+            <div className="mt-5 mx-auto max-w-xs rounded-3xl bg-gradient-to-br from-sun-400/25 to-brand-100 p-5">
+              <div className="text-xs font-bold text-sun-500 mb-1">🎁 获得新贴纸!</div>
+              <div className="animate-sticker-pop text-6xl">{wonSticker.emoji}</div>
+              <div className="mt-1 text-sm font-medium text-gray-700">{wonSticker.name}</div>
+              <div className="text-[11px] text-gray-400 mt-0.5">已放进你的贴纸册</div>
+            </div>
+          )}
           <button
             onClick={() => navigate('/learn')}
             className="mt-8 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95 transition"
@@ -246,9 +325,9 @@ export function StudySessionPage() {
   )
 
   return (
-    <div className="pt-4 pb-10 min-h-screen flex flex-col">
+    <div className={`pt-4 pb-10 min-h-screen flex flex-col relative ${shaking ? 'animate-shake' : ''}`}>
       {/* 顶部进度 */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-2">
         <button onClick={() => navigate('/learn')} className="text-gray-400 text-sm">
           退出
         </button>
@@ -259,6 +338,28 @@ export function StudySessionPage() {
           {idx + 1}/{cards.length}
         </span>
       </div>
+
+      {/* 连击徽标 */}
+      <div className="h-7 mb-1 text-center">
+        {combo >= 2 && (
+          <span
+            key={combo}
+            className="animate-combo-pulse inline-block rounded-full bg-orange-100 px-3 py-0.5 text-sm font-bold text-orange-500"
+          >
+            🔥 连对 {combo}
+          </span>
+        )}
+      </div>
+
+      {/* 答对飘字 */}
+      {floatText && (
+        <div
+          key={floatText.id}
+          className="animate-float-up pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2 text-xl font-bold text-mint-500"
+        >
+          {floatText.text}
+        </div>
+      )}
 
       {/* ---- 认词 / 认字 ---- */}
       {mode === 'recognize' && (
@@ -452,26 +553,60 @@ export function StudySessionPage() {
         </div>
       )}
 
-      {/* ---- 跟读 ---- */}
+      {/* ---- 跟读(范读 → 录音回放 → 星级打分) ---- */}
       {mode === 'speak' && (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
           <div className="text-4xl font-bold text-gray-800 mb-2">{current.card.front}</div>
           {current.card.phonetic && <div className="text-sm text-gray-400 mb-1">/{current.card.phonetic}/</div>}
           <div className="text-brand-600 mb-4">{current.card.back}</div>
-          <AudioBtn big />
-          <p className="text-xs text-gray-400 mt-3">先听范读,再点麦克风跟读一遍</p>
+
+          {/* 范读 / 录我读的 / 回放 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => playAudio(current.card.audioText ?? current.card.front)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
+            >
+              <Volume2 size={15} /> 范读
+            </button>
+            {isRecordingSupported() && (
+              <button
+                onClick={() => void toggleRecord()}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium active:scale-95 ${
+                  recording ? 'bg-orange-100 text-orange-600' : 'bg-brand-100 text-brand-600'
+                }`}
+              >
+                {recording ? <Square size={15} /> : <Disc size={15} />}
+                {recording ? '停止' : '录我读的'}
+              </button>
+            )}
+            {recBlob && (
+              <button
+                onClick={() => playRecording(recBlob)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-mint-400/25 px-4 py-2 text-sm font-medium text-mint-600 active:scale-95"
+              >
+                <Play size={15} /> 回放
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            先听范读 → 录一遍听听自己的 → 点麦克风打分
+          </p>
+
           {isSpeechRecognitionSupported() ? (
             <>
               <button
                 onClick={async () => {
                   setSpeakMsg('聆听中…请读出来')
+                  setSpeakStars(-1)
                   try {
                     const r = await recognizeOnce(current.card.front, 'en-US')
-                    if (r.matched) {
-                      setSpeakMsg('👍 读得很棒!')
-                      setTimeout(() => void advance(true), 800)
-                    } else {
-                      setSpeakMsg(`听到的是"${r.transcript || '…'}",再试一次或跳过`)
+                    const score = scorePronunciation(r.transcript, current.card.front)
+                    setSpeakStars(score.stars)
+                    setSpeakMsg(
+                      score.message + (r.transcript ? `(听到:${r.transcript})` : ''),
+                    )
+                    if (score.stars >= 2) {
+                      setTimeout(() => void advance(true), 1300)
                     }
                   } catch {
                     setSpeakMsg('没听清,可再试或跳过(识别需联网)')
@@ -479,9 +614,15 @@ export function StudySessionPage() {
                 }}
                 className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-brand-500 px-6 py-3 font-bold text-white active:scale-95"
               >
-                <Mic size={18} /> 跟读
+                <Mic size={18} /> 跟读打分
               </button>
-              {speakMsg && <div className="mt-3 text-sm text-gray-500">{speakMsg}</div>}
+              {speakStars >= 0 && (
+                <div className="mt-3 text-3xl tracking-wider">
+                  {'⭐'.repeat(speakStars)}
+                  <span className="opacity-30">{'⭐'.repeat(3 - speakStars)}</span>
+                </div>
+              )}
+              {speakMsg && <div className="mt-2 text-sm text-gray-500">{speakMsg}</div>}
               <div className="mt-5 flex gap-3">
                 <button onClick={() => void advance(false)} className="rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-500">
                   跳过
@@ -493,7 +634,9 @@ export function StudySessionPage() {
             </>
           ) : (
             <div className="mt-5">
-              <p className="text-sm text-orange-500 mb-3">此设备不支持语音识别,可自己跟读后点"读好了"</p>
+              <p className="text-sm text-orange-500 mb-3">
+                此设备不支持语音识别打分,可录音回放自查后点"读好了"
+              </p>
               <button onClick={() => void advance(true)} className="rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95">
                 读好了
               </button>

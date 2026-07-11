@@ -9,6 +9,8 @@ import { finishDrill } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../lib/mathDrill'
+import { sfxCorrect, sfxWrong, sfxCombo, sfxFanfare, sfxSticker } from '../lib/sfx'
+import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LevelStep } from '../types'
@@ -34,6 +36,8 @@ export function MathDrillPage() {
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number; sec: number } | null>(null)
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
   const [newAch, setNewAch] = useState<Achievement | null>(null)
+  const [combo, setCombo] = useState(0)
+  const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // 计时器
@@ -47,6 +51,8 @@ export function MathDrillPage() {
     setProblems(generateDrill(kind, count, stage))
     setIdx(0)
     setCorrect(0)
+    setCombo(0)
+    setWonSticker(null)
     setInput('')
     setFeedback('none')
     setStartedAt(Date.now())
@@ -68,6 +74,15 @@ export function MathDrillPage() {
       }
       const unlocked = await evaluateAchievements(currentChildId)
       if (unlocked.length > 0) setNewAch(unlocked[0])
+      // 练得好掉落贴纸
+      if (qualifiesForSticker(finalCorrect, total)) {
+        const win = await awardSticker(currentChildId)
+        if (win) {
+          setWonSticker(win)
+          setTimeout(sfxSticker, 500)
+        }
+      }
+      sfxFanfare()
       if (tone === 'playful') confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } })
       setScreen('done')
     },
@@ -81,6 +96,15 @@ export function MathDrillPage() {
     const nextCorrect = correct + (isRight ? 1 : 0)
     setCorrect(nextCorrect)
     setFeedback(isRight ? 'ok' : 'no')
+    if (isRight) {
+      const nextCombo = combo + 1
+      setCombo(nextCombo)
+      if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
+      else sfxCorrect()
+    } else {
+      setCombo(0)
+      sfxWrong()
+    }
     setTimeout(() => {
       if (idx + 1 >= problems.length) {
         void finish(nextCorrect, problems.length, Math.floor((Date.now() - startedAt) / 1000))
@@ -178,6 +202,14 @@ export function MathDrillPage() {
               </div>
             </div>
           </div>
+          {wonSticker && (
+            <div className="mt-5 mx-auto max-w-xs rounded-3xl bg-gradient-to-br from-sun-400/25 to-brand-100 p-5">
+              <div className="text-xs font-bold text-sun-500 mb-1">🎁 获得新贴纸!</div>
+              <div className="animate-sticker-pop text-6xl">{wonSticker.emoji}</div>
+              <div className="mt-1 text-sm font-medium text-gray-700">{wonSticker.name}</div>
+              <div className="text-[11px] text-gray-400 mt-0.5">已放进你的贴纸册</div>
+            </div>
+          )}
           <div className="mt-8 flex gap-3 justify-center">
             <button
               onClick={() => setScreen('config')}
@@ -215,6 +247,17 @@ export function MathDrillPage() {
           <Timer size={13} /> {elapsed}s
         </span>
         <span className="text-xs text-gray-400 tabular-nums">{idx + 1}/{problems.length}</span>
+      </div>
+
+      <div className="h-7 text-center">
+        {combo >= 2 && (
+          <span
+            key={combo}
+            className="animate-combo-pulse inline-block rounded-full bg-orange-100 px-3 py-0.5 text-sm font-bold text-orange-500"
+          >
+            🔥 连对 {combo}
+          </span>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4">
