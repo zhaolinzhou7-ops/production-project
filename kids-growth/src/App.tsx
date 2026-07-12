@@ -27,6 +27,7 @@ import { KidBadgesPage } from './pages/KidBadgesPage'
 import { LearnHomePage } from './pages/LearnHomePage'
 import { StudySessionPage } from './pages/StudySessionPage'
 import { MathDrillPage } from './pages/MathDrillPage'
+import { EnglishTalkPage } from './pages/EnglishTalkPage'
 import { ErrorBookPage } from './pages/ErrorBookPage'
 import { ParentLearningPage } from './pages/ParentLearningPage'
 
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/learn" element={<LearnHomePage />} />
         <Route path="/learn/math" element={<MathDrillPage />} />
+        <Route path="/learn/talk" element={<EnglishTalkPage />} />
         <Route path="/learn/errorbook" element={<ErrorBookPage />} />
         <Route path="/learn/session/:deckId/:mode" element={<StudySessionPage />} />
         <Route

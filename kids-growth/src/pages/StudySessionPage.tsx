@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { Volume2, ArrowRight, Mic, Play, Square, Disc } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { getSessionCards, applyGrade, finishSession, addWrongCard, type DueCard } from '../db/study'
+import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { playWordAudio, speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
@@ -43,6 +43,9 @@ function shuffle<T>(arr: T[]): T[] {
 export function StudySessionPage() {
   const navigate = useNavigate()
   const { deckId, mode } = useParams<{ deckId: string; mode: PracticeMode }>()
+  const [searchParams] = useSearchParams()
+  /** 自由练习:随机抽卡、不改记忆排期、不限组数 */
+  const isFree = searchParams.get('free') === '1'
   const currentChildId = useAppStore((s) => s.currentChildId)
   const { child, tone, stage } = useCurrentChild()
   const isToddler = stage === 'toddler'
@@ -78,7 +81,9 @@ export function StudySessionPage() {
     if (!currentChildId || !deckId) return
     let alive = true
     void (async () => {
-      const list = await getSessionCards(currentChildId, deckId, 12)
+      const list = isFree
+        ? await getFreeSessionCards(currentChildId, deckId, 12)
+        : await getSessionCards(currentChildId, deckId, 12)
       const allCards = await db.cards.where('deckId').equals(deckId).toArray()
       const d = await db.decks.get(deckId)
       if (!alive) return
@@ -100,6 +105,25 @@ export function StudySessionPage() {
     return () => {
       alive = false
     }
+  }, [currentChildId, deckId, isFree])
+
+  /** 自由练习:重新抽一组,原地重开 */
+  const restartFree = useCallback(async () => {
+    if (!currentChildId || !deckId) return
+    const list = await getFreeSessionCards(currentChildId, deckId, 12)
+    setCards(list)
+    setIdx(0)
+    setPhase('prompt')
+    setCorrectCount(0)
+    setCombo(0)
+    setPicked(null)
+    setSpellInput('')
+    setSpeakMsg('')
+    setSpeakStars(-1)
+    setRecBlob(null)
+    setSummary(null)
+    setWonSticker(null)
+    setPetResult(null)
   }, [currentChildId, deckId])
 
   const current = cards?.[idx]
@@ -227,9 +251,10 @@ export function StudySessionPage() {
   const advance = useCallback(
     async (wasCorrect: boolean) => {
       if (!current) return
-      await applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
+      // 自由练习不动 SRS 排期(想练多少组都不打乱明日计划)
+      if (!isFree) await applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
       // 答错的单词自动收进错词本(错词本自身除外)
-      if (!wasCorrect && currentChildId && deck && deck.source !== 'wrong' && deck.itemType === 'word') {
+      if (!isFree && !wasCorrect && currentChildId && deck && deck.source !== 'wrong' && deck.itemType === 'word') {
         await addWrongCard(currentChildId, {
           front: current.card.front,
           back: current.card.back,
@@ -275,7 +300,7 @@ export function StudySessionPage() {
         setRecBlob(null)
       }
     },
-    [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode],
+    [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode, isFree],
   )
 
   // 磨耳朵:每张卡自动「英语(真人音)→中文」连播,然后翻下一张;不评分、听完整组照常结算
@@ -319,13 +344,21 @@ export function StudySessionPage() {
       <div className="pt-16 text-center px-6">
         <div className="text-5xl mb-3">🎉</div>
         <p className="text-gray-600 font-medium">这个词库今天已经学完啦!</p>
-        <p className="text-sm text-gray-400 mt-1">明天到期的卡片会自动出现</p>
-        <button
-          onClick={() => navigate('/learn')}
-          className="mt-6 rounded-2xl bg-brand-500 px-6 py-3 font-bold text-white active:scale-95 transition"
-        >
-          返回
-        </button>
+        <p className="text-sm text-gray-400 mt-1">明天到期的卡片会自动出现;也可以自由再练,不限次数</p>
+        <div className="mt-6 flex justify-center gap-3">
+          <button
+            onClick={() => navigate('/learn')}
+            className="rounded-2xl bg-gray-100 px-6 py-3 font-bold text-gray-500 active:scale-95 transition"
+          >
+            返回
+          </button>
+          <button
+            onClick={() => navigate(`/learn/session/${deckId}/${mode}?free=1`, { replace: true })}
+            className="rounded-2xl bg-brand-500 px-6 py-3 font-bold text-white active:scale-95 transition"
+          >
+            🔁 自由再练一组
+          </button>
+        </div>
       </div>
     )
   }
@@ -397,12 +430,22 @@ export function StudySessionPage() {
               )}
             </div>
           )}
-          <button
-            onClick={() => navigate('/learn')}
-            className="mt-8 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95 transition"
-          >
-            完成
-          </button>
+          <div className="mt-8 flex justify-center gap-3">
+            {isFree && (
+              <button
+                onClick={() => void restartFree()}
+                className="rounded-2xl bg-white/80 px-6 py-3 font-bold text-gray-600 active:scale-95 transition"
+              >
+                🔁 再来一组
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/learn')}
+              className="rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95 transition"
+            >
+              完成
+            </button>
+          </div>
         </div>
         <LevelUpModal level={levelUp} tone={tone} onClose={() => setLevelUp(null)} />
         <AchievementUnlockModal achievement={newAch} tone={tone} onClose={() => setNewAch(null)} />
@@ -438,6 +481,7 @@ export function StudySessionPage() {
         </div>
         <span className="text-xs text-gray-400 tabular-nums">
           {idx + 1}/{cards.length}
+          {isFree ? ' · 自由' : ''}
         </span>
       </div>
 

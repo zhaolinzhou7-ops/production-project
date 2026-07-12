@@ -161,6 +161,31 @@ export async function getSessionCards(
   return result
 }
 
+/** 自由练习:不看到期排期,从卡组随机抽一组(不改 SRS,想练多少组都行) */
+export async function getFreeSessionCards(
+  childId: string,
+  deckId: string,
+  limit = 12,
+): Promise<DueCard[]> {
+  const states = await db.studyStates
+    .where('[childId+deckId]')
+    .equals([childId, deckId])
+    .toArray()
+  const shuffled = [...states]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  const chosen = shuffled.slice(0, limit)
+  const cards = await db.cards.bulkGet(chosen.map((s) => s.cardId))
+  const out: DueCard[] = []
+  chosen.forEach((state, i) => {
+    const card = cards[i]
+    if (card) out.push({ card, state })
+  })
+  return out
+}
+
 /** 今天该卡组的应练数量(用于首页展示) */
 export async function countDue(childId: string, deckId: string): Promise<number> {
   const today = todayISO()

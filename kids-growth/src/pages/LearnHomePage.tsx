@@ -224,6 +224,18 @@ export function LearnHomePage() {
       </button>
 
       <button
+        onClick={() => navigate('/learn/talk')}
+        className="mb-3 w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-mint-400 to-mint-500 p-4 text-left text-white shadow-sm active:scale-[0.99] transition"
+      >
+        <div className="rounded-xl bg-white/25 p-2.5 text-2xl leading-none">🎭</div>
+        <div className="flex-1">
+          <div className="font-bold">英语小剧场</div>
+          <div className="text-xs text-white/85">情景对话 · 听力复述 · 英文儿歌,开口就有分</div>
+        </div>
+        <ChevronRight size={18} className="text-white/80" />
+      </button>
+
+      <button
         onClick={() => navigate('/learn/math')}
         className="mb-3 w-full flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sun-400 to-sun-500 p-4 text-left text-white shadow-sm active:scale-[0.99] transition"
       >
