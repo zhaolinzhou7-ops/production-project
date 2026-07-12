@@ -11,6 +11,7 @@ import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { feedPet, type FeedResult } from '../lib/pets'
 import { DIALOGS, retellSentencesFor, RHYMES, type Dialog, type Rhyme } from '../lib/talkContent'
+import { getMelody, playMelodyLine, stopMelody } from '../lib/melody'
 
 type Tab = 'dialog' | 'retell' | 'rhyme'
 
@@ -69,6 +70,7 @@ export function EnglishTalkPage() {
   // ---- 儿歌状态 ----
   const [rhyme, setRhyme] = useState<Rhyme | null>(null)
   const [lineIdx, setLineIdx] = useState(-1)
+  const [rhymeMode, setRhymeMode] = useState<'melody' | 'read'>('melody')
   const rhymeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const recognitionOk = isSpeechRecognitionSupported()
@@ -219,7 +221,9 @@ export function EnglishTalkPage() {
   const playRhyme = useCallback(
     (r: Rhyme, from = 0) => {
       if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+      stopMelody()
       setRhyme(r)
+      setRhymeMode('read')
       setLineIdx(from)
       sayEn(r.lines[from], 0.8)
       const step = (i: number) => {
@@ -238,8 +242,40 @@ export function EnglishTalkPage() {
     [],
   )
 
+  // ---- 儿歌逻辑:音乐盒旋律 + 逐行高亮(无旋律数据时回退朗读) ----
+  const playRhymeMelody = useCallback(
+    (r: Rhyme, from = 0) => {
+      const melody = getMelody(r.key)
+      if (!melody) {
+        playRhyme(r, from)
+        return
+      }
+      if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+      stopMelody()
+      setRhyme(r)
+      setRhymeMode('melody')
+      const step = (i: number) => {
+        setLineIdx(i)
+        const durMs = playMelodyLine(melody[i] ?? [], 100)
+        rhymeTimer.current = setTimeout(() => {
+          if (i + 1 < r.lines.length) step(i + 1)
+          else setLineIdx(-1)
+        }, durMs + 350)
+      }
+      step(from)
+    },
+    [playRhyme],
+  )
+
+  const stopRhymePlayback = useCallback(() => {
+    if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+    stopMelody()
+    setLineIdx(-1)
+  }, [])
+
   useEffect(() => () => {
     if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+    stopMelody()
   }, [])
 
   if (!child || !currentChildId) return null
@@ -253,7 +289,7 @@ export function EnglishTalkPage() {
         setRhyme(null)
         setRetellStarted(false)
         resetPerTurn()
-        if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+        stopRhymePlayback()
       }}
       className={`rounded-full px-4 py-1.5 text-sm font-bold transition ${
         tab === t ? 'bg-brand-500 text-white' : 'bg-white/70 text-gray-500'
@@ -505,11 +541,11 @@ export function EnglishTalkPage() {
       {/* ---- 儿歌 ---- */}
       {tab === 'rhyme' && !rhyme && (
         <div className="space-y-2">
-          <p className="text-xs text-gray-400 mb-2">经典英文童谣,逐句朗读磨耳朵(公有领域曲目)</p>
+          <p className="text-xs text-gray-400 mb-2">经典英文童谣:🎼 音乐盒旋律 + 📖 逐句朗读磨耳朵(公有领域曲目)</p>
           {RHYMES.map((r) => (
             <button
               key={r.key}
-              onClick={() => playRhyme(r)}
+              onClick={() => playRhymeMelody(r)}
               className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
             >
               <span className="text-2xl">{r.icon}</span>
@@ -530,12 +566,24 @@ export function EnglishTalkPage() {
               <div className="font-bold text-gray-800">{rhyme.icon} {rhyme.title}</div>
               <div className="text-xs text-gray-400">{rhyme.titleZh}</div>
             </div>
-            <button
-              onClick={() => playRhyme(rhyme)}
-              className="rounded-full bg-brand-100 px-4 py-1.5 text-sm font-medium text-brand-600 active:scale-95"
-            >
-              ▶ 重播
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => playRhymeMelody(rhyme)}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium active:scale-95 ${
+                  rhymeMode === 'melody' ? 'bg-brand-500 text-white' : 'bg-brand-100 text-brand-600'
+                }`}
+              >
+                🎼 听旋律
+              </button>
+              <button
+                onClick={() => playRhyme(rhyme)}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium active:scale-95 ${
+                  rhymeMode === 'read' ? 'bg-brand-500 text-white' : 'bg-brand-100 text-brand-600'
+                }`}
+              >
+                📖 朗读
+              </button>
+            </div>
           </div>
           <div className="rounded-3xl bg-white/75 p-4 shadow-sm space-y-1.5">
             {rhyme.lines.map((line, i) => (
@@ -550,11 +598,13 @@ export function EnglishTalkPage() {
               </button>
             ))}
           </div>
-          <p className="mt-3 text-[11px] text-gray-400">点任意一句可单独重听;高亮行为正在朗读的句子。</p>
+          <p className="mt-3 text-[11px] text-gray-400">
+            旋律为简化音乐盒版(合成音,非真人演唱);点任意一句可单独重听;高亮行为正在播放的句子。
+          </p>
           <button
             onClick={() => {
               setRhyme(null)
-              if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+              stopRhymePlayback()
             }}
             className="mt-4 rounded-2xl bg-gray-100 px-6 py-2.5 text-sm font-bold text-gray-500 active:scale-95"
           >

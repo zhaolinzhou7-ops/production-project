@@ -3,6 +3,7 @@ import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { ensureInitialized } from './db/init'
+import { initAudioUnlock } from './lib/audio'
 import { AppShell } from './components/layout/AppShell'
 import { RequireParent } from './components/layout/RequireParent'
 import { OnboardingPage } from './pages/OnboardingPage'
@@ -181,6 +182,7 @@ export default function App() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    initAudioUnlock()
     ensureInitialized().then(() => setReady(true))
   }, [])
 
