@@ -73,11 +73,22 @@ export function initAudioUnlock(): void {
   window.addEventListener('pointerdown', unlock, { once: true, capture: true })
 }
 
-/** 系统语音合成(TTS):中文、句子、离线兜底。 */
-export function speak(text: string, lang = 'en-US', rate = 0.9): void {
+// Chrome/安卓两个已知坑,都表现为「偶尔漏读一个词」:
+// ① utterance 对象在播放中被垃圾回收 → 该句被静默吞掉 → 播放期间强持引用;
+// ② 上一次 speak 的"延迟一拍"定时器还没触发,新的 speak 又来了 → 迟到的旧
+//    定时器把旧词插播进来、互相 cancel → 全局只保留最新一个待播定时器。
+const liveUtterances: SpeechSynthesisUtterance[] = []
+let pendingSpeakTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 系统语音合成(TTS):中文、句子、离线兜底。times=2 自动复读一遍。 */
+export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1): void {
   if (typeof speechSynthesis === 'undefined') return
   warmVoices()
-  const doSpeak = () => {
+  if (pendingSpeakTimer) {
+    clearTimeout(pendingSpeakTimer)
+    pendingSpeakTimer = null
+  }
+  const speakOnce = (remaining: number) => {
     try {
       speechSynthesis.resume()
       const u = new SpeechSynthesisUtterance(text)
@@ -88,42 +99,62 @@ export function speak(text: string, lang = 'en-US', rate = 0.9): void {
         .getVoices()
         .find((v) => v.lang?.toLowerCase().startsWith(prefix))
       if (voice) u.voice = voice
+      liveUtterances.push(u)
+      const release = () => {
+        const i = liveUtterances.indexOf(u)
+        if (i >= 0) liveUtterances.splice(i, 1)
+      }
+      u.onend = () => {
+        release()
+        if (remaining > 1) {
+          pendingSpeakTimer = setTimeout(() => speakOnce(remaining - 1), 450)
+        }
+      }
+      u.onerror = release
       speechSynthesis.speak(u)
     } catch {
       /* 忽略:部分环境不支持 */
     }
   }
   try {
-    // Chrome/安卓已知竞态:cancel() 后立刻 speak() 会被静默吞掉 → 延迟一拍
+    // cancel() 后立刻 speak() 会被静默吞掉 → 延迟一拍
     if (speechSynthesis.speaking || speechSynthesis.pending) {
       speechSynthesis.cancel()
-      setTimeout(doSpeak, 60)
+      pendingSpeakTimer = setTimeout(() => speakOnce(times), 80)
     } else {
-      doSpeak()
+      speakOnce(times)
     }
   } catch {
-    doSpeak()
+    speakOnce(times)
   }
 }
 
 /**
  * 播放单词的**真人发音**(有道 dictvoice)。
  * 复用单例 <audio> 元素(经首次手势解锁后,翻卡自动播放也不会被移动端拦截);
- * 拉取失败(离线/被拦截)时自动回退到系统 TTS。
+ * 拉取失败(离线/被拦截)时自动回退到系统 TTS。times=2 自动复读一遍。
  */
-export function playWordAudio(word: string, accent: Accent = 2): void {
+export function playWordAudio(word: string, accent: Accent = 2, times = 1): void {
   const fallbackLang = accent === 1 ? 'en-GB' : 'en-US'
   const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${accent}`
   try {
     const el = ensureWordEl()
     let settled = false
+    let played = 0
     const fallback = () => {
       if (settled) return
       settled = true
-      speak(word, fallbackLang)
+      speak(word, fallbackLang, 0.9, times)
     }
     el.onplaying = () => {
       settled = true
+    }
+    el.onended = () => {
+      played += 1
+      if (played < times) {
+        el.currentTime = 0
+        void el.play().catch(() => {})
+      }
     }
     el.onerror = fallback
     el.pause()
@@ -134,7 +165,7 @@ export function playWordAudio(word: string, accent: Accent = 2): void {
       })
       .catch(fallback)
   } catch {
-    speak(word, fallbackLang)
+    speak(word, fallbackLang, 0.9, times)
   }
 }
 

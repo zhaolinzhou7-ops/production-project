@@ -537,6 +537,22 @@ export async function addErrorCard(
   return cardId
 }
 
+/** 练习答错时自动收进错题本(按题干去重,已有同题不重复加) */
+export async function autoAddErrorCard(
+  childId: string,
+  entry: { front: string; back: string; subject?: string },
+): Promise<void> {
+  const deckId = await ensureErrorDeck(childId)
+  const front = entry.front.trim()
+  const dup = await db.cards
+    .where('deckId')
+    .equals(deckId)
+    .filter((c) => c.front === front)
+    .count()
+  if (dup > 0) return
+  await addErrorCard(childId, entry)
+}
+
 /** 列出错题本中的卡片(用于家长/孩子端管理) */
 export async function listErrorCards(childId: string): Promise<LearnCard[]> {
   const deckId = await ensureErrorDeck(childId)

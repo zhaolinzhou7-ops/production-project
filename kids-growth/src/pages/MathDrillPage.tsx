@@ -5,7 +5,7 @@ import { ArrowLeft, Timer } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { finishDrill } from '../db/study'
+import { finishDrill, autoAddErrorCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../lib/mathDrill'
@@ -112,6 +112,14 @@ export function MathDrillPage() {
     } else {
       setCombo(0)
       sfxWrong()
+      // 算错的题自动进错题本(同题去重)
+      if (currentChildId) {
+        void autoAddErrorCard(currentChildId, {
+          front: problems[idx].text.trim(),
+          back: String(problems[idx].answer),
+          subject: '数学',
+        })
+      }
     }
     setTimeout(() => {
       if (idx + 1 >= problems.length) {

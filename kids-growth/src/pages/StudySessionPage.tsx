@@ -5,7 +5,7 @@ import { Volume2, ArrowRight, Mic, Play, Square, Disc } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, type DueCard } from '../db/study'
+import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, autoAddErrorCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { playWordAudio, speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
@@ -130,11 +130,11 @@ export function StudySessionPage() {
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
 
-  /** 按学科播放:英语用真人音源,语文/启蒙用中文 TTS。 */
+  /** 按学科播放:英语用真人音源,语文/启蒙用中文 TTS。times=2 自动复读一遍。 */
   const playAudio = useCallback(
-    (text: string) => {
-      if (itemType === 'word') void playWordAudio(text)
-      else speak(text, 'zh-CN', itemType === 'poem' ? 0.85 : 0.8)
+    (text: string, times = 1) => {
+      if (itemType === 'word') void playWordAudio(text, 2, times)
+      else speak(text, 'zh-CN', itemType === 'poem' ? 0.85 : 0.8, times)
     },
     [itemType],
   )
@@ -195,12 +195,14 @@ export function StudySessionPage() {
     if (!current || phase !== 'prompt') return
     if (mode === 'listenChoose' || mode === 'speak' || mode === 'dictation' || mode === 'listenPic') {
       const delay = isToddler ? 1200 : 0
-      const t = setTimeout(() => playAudio(current.card.audioText ?? current.card.front), delay)
+      // 听音类题目自动读两遍,防止走神/环境吵漏听
+      const times = mode === 'speak' ? 1 : 2
+      const t = setTimeout(() => playAudio(current.card.audioText ?? current.card.front, times), delay)
       return () => clearTimeout(t)
     }
     if (mode === 'listenPicEn') {
       const en = (current.card.extra as { en?: string })?.en ?? current.card.back
-      const t = setTimeout(() => void playWordAudio(en), isToddler ? 1200 : 0)
+      const t = setTimeout(() => void playWordAudio(en, 2, 2), isToddler ? 1200 : 0)
       return () => clearTimeout(t)
     }
   }, [current, phase, mode, playAudio, isToddler])
@@ -263,6 +265,30 @@ export function StudySessionPage() {
           extra: current.card.extra,
         })
       }
+      // 其他学科答错自动进错题本(识字/看图/古诗;英语单词走上面的错词本)
+      if (!isFree && !wasCorrect && currentChildId && deck && deck.source !== 'wrong') {
+        if (deck.itemType === 'hanzi') {
+          const word = (current.card.extra as { word?: string })?.word
+          await autoAddErrorCard(currentChildId, {
+            front: `认字:${current.card.front}`,
+            back: `读音 ${current.card.back}${word ? ` · 组词 ${word}` : ''}`,
+            subject: '语文',
+          })
+        } else if (deck.itemType === 'pic') {
+          const ex = current.card.extra as { emoji?: string; en?: string }
+          await autoAddErrorCard(currentChildId, {
+            front: `${ex?.emoji ?? ''} 这是什么?`,
+            back: `${current.card.front}${ex?.en ? ` (${ex.en})` : ''}`,
+            subject: deck.subject,
+          })
+        } else if (deck.itemType === 'poem') {
+          await autoAddErrorCard(currentChildId, {
+            front: `背诵《${current.card.front}》`,
+            back: current.card.back,
+            subject: '语文',
+          })
+        }
+      }
       // 趣味反馈:音效 + 连击 + 飘字 / 抖动;幼儿加语音夸奖
       if (wasCorrect) {
         const nextCombo = combo + 1
@@ -303,16 +329,16 @@ export function StudySessionPage() {
     [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode, isFree],
   )
 
-  // 磨耳朵:每张卡自动「英语(真人音)→中文」连播,然后翻下一张;不评分、听完整组照常结算
+  // 磨耳朵:每张卡自动「英语×2(真人音)→中文」连播,然后翻下一张;不评分、听完整组照常结算
   useEffect(() => {
     if (mode !== 'earTrain' || !current || phase === 'done' || !cards) return
     const en = (current.card.extra as { en?: string })?.en ?? current.card.back
-    void playWordAudio(en)
-    const t1 = setTimeout(() => speak(current.card.audioText ?? current.card.front, 'zh-CN', 0.9), 1700)
+    void playWordAudio(en, 2, 2)
+    const t1 = setTimeout(() => speak(current.card.audioText ?? current.card.front, 'zh-CN', 0.9), 3100)
     const t2 = setTimeout(() => {
       if (idx + 1 >= cards.length) void finish(cards.length, cards.length)
       else setIdx((i) => i + 1)
-    }, 4300)
+    }, 5700)
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)
