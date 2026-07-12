@@ -17,6 +17,21 @@ import type { CardItemType, LearnCard, LearnDeck, PracticeMode, ReviewGrade, Stu
 /** 每答对一张卡的积分 */
 const POINTS_PER_CORRECT = 2
 
+/** 每天通过学习最多能赚的积分(防反复刷同一练习白拿分;练习记录不受限) */
+export const DAILY_STUDY_POINTS_CAP = 100
+
+/** 今天已经通过学习赚到的积分 */
+async function studyPointsToday(childId: string): Promise<number> {
+  const dayStart = new Date()
+  dayStart.setHours(0, 0, 0, 0)
+  const rows = await db.pointLedger
+    .where('childId')
+    .equals(childId)
+    .and((l) => l.reason === 'study' && l.delta > 0 && l.timestamp >= dayStart.getTime())
+    .toArray()
+  return rows.reduce((s, l) => s + l.delta, 0)
+}
+
 /** 错词本卡组名称(每个孩子一个,存答错的单词) */
 const WRONG_DECK_NAME = '错词本'
 
@@ -210,6 +225,8 @@ export interface SessionResult {
   pointsAwarded: number
   newBalance: number
   newXp: number
+  /** 因触发每日学习积分上限而被少发/不发积分 */
+  capped: boolean
 }
 
 /** 会话结束:记录 session、按答对数加分。返回结算数据供庆祝页。 */
@@ -222,9 +239,11 @@ export async function finishSession(params: {
   durationSec: number
 }): Promise<SessionResult> {
   const { childId, deckId, mode, total, correct, durationSec } = params
-  const points = correct * POINTS_PER_CORRECT
+  const rawPoints = correct * POINTS_PER_CORRECT
 
   const result = await db.transaction('rw', db.studySessions, db.pointLedger, async () => {
+    const earnedToday = await studyPointsToday(childId)
+    const points = Math.max(0, Math.min(rawPoints, DAILY_STUDY_POINTS_CAP - earnedToday))
     const stats = await getChildPointStats(childId)
     const balanceAfter = stats.balance + points
 
@@ -255,15 +274,16 @@ export async function finishSession(params: {
       })
     }
 
-    return { balanceAfter, xpAfter: stats.xp + points }
+    return { balanceAfter, xpAfter: stats.xp + points, points }
   })
 
   return {
     correct,
     total,
-    pointsAwarded: points,
+    pointsAwarded: result.points,
     newBalance: result.balanceAfter,
     newXp: result.xpAfter,
+    capped: result.points < rawPoints,
   }
 }
 
@@ -279,9 +299,11 @@ export async function finishDrill(params: {
   durationSec: number
 }): Promise<SessionResult> {
   const { childId, kind, total, correct, durationSec } = params
-  const points = correct * POINTS_PER_CORRECT_MATH
+  const rawPoints = correct * POINTS_PER_CORRECT_MATH
 
   const result = await db.transaction('rw', db.drillResults, db.pointLedger, async () => {
+    const earnedToday = await studyPointsToday(childId)
+    const points = Math.max(0, Math.min(rawPoints, DAILY_STUDY_POINTS_CAP - earnedToday))
     const stats = await getChildPointStats(childId)
     const balanceAfter = stats.balance + points
     const drillId = newId()
@@ -307,15 +329,16 @@ export async function finishDrill(params: {
         timestamp: Date.now(),
       })
     }
-    return { balanceAfter, xpAfter: stats.xp + points }
+    return { balanceAfter, xpAfter: stats.xp + points, points }
   })
 
   return {
     correct,
     total,
-    pointsAwarded: points,
+    pointsAwarded: result.points,
     newBalance: result.balanceAfter,
     newXp: result.xpAfter,
+    capped: result.points < rawPoints,
   }
 }
 

@@ -62,7 +62,7 @@ export function StudySessionPage() {
   const [spellInput, setSpellInput] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
   const [speakMsg, setSpeakMsg] = useState('')
-  const [summary, setSummary] = useState<{ correct: number; total: number; points: number } | null>(null)
+  const [summary, setSummary] = useState<{ correct: number; total: number; points: number; capped: boolean } | null>(null)
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
   const [newAch, setNewAch] = useState<Achievement | null>(null)
   // 趣味包:连击 / 飘字 / 抖动 / 录音回放 / 跟读星级 / 贴纸
@@ -218,7 +218,7 @@ export function StudySessionPage() {
         correct: finalCorrect,
         durationSec: Math.round((Date.now() - startedAt) / 1000),
       })
-      setSummary({ correct: finalCorrect, total, points: res.pointsAwarded })
+      setSummary({ correct: finalCorrect, total, points: res.pointsAwarded, capped: res.capped })
       // 升级判定
       if (settings) {
         const lvBefore = computeLevelInfo(before.xp, settings.levelLadder).level
@@ -392,6 +392,9 @@ export function StudySessionPage() {
               </div>
             </div>
           </div>
+          {summary.capped && (
+            <p className="mt-2 text-[11px] text-gray-400">今天的学习积分已经拿满啦,继续练习照样有记录,明天再来赚积分~</p>
+          )}
           {wonSticker && (
             <div className="mt-5 mx-auto max-w-xs rounded-3xl bg-gradient-to-br from-sun-400/25 to-brand-100 p-5">
               <div className="text-xs font-bold text-sun-500 mb-1">🎁 获得新贴纸!</div>

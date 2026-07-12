@@ -54,7 +54,7 @@ export function EnglishTalkPage() {
   const [lastStars, setLastStars] = useState(-1)
   const [showHint, setShowHint] = useState(false)
   const [startedAt, setStartedAt] = useState(0)
-  const [done, setDone] = useState<{ correct: number; total: number; points: number } | null>(null)
+  const [done, setDone] = useState<{ correct: number; total: number; points: number; capped: boolean } | null>(null)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
 
@@ -94,7 +94,7 @@ export function EnglishTalkPage() {
         correct,
         durationSec: Math.round((Date.now() - startedAt) / 1000),
       })
-      setDone({ correct, total, points: res.pointsAwarded })
+      setDone({ correct, total, points: res.pointsAwarded, capped: res.capped })
       if (qualifiesForSticker(correct, total)) {
         const win = await awardSticker(currentChildId)
         if (win) {
@@ -323,6 +323,9 @@ export function EnglishTalkPage() {
             </div>
           </div>
         </div>
+        {done.capped && (
+          <p className="mt-2 text-[11px] text-gray-400">今天的学习积分已经拿满啦,继续练习照样有记录,明天再来赚积分~</p>
+        )}
         {wonSticker && (
           <div className="mt-5 mx-auto max-w-xs rounded-3xl bg-gradient-to-br from-sun-400/25 to-brand-100 p-5">
             <div className="text-xs font-bold text-sun-500 mb-1">🎁 获得新贴纸!</div>

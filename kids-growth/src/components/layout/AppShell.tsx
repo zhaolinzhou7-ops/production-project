@@ -5,6 +5,7 @@ import { ShieldCheck, LogOut } from 'lucide-react'
 import { db } from '../../db/db'
 import { useAppStore } from '../../store/useAppStore'
 import { ChildSwitcher } from './ChildSwitcher'
+import { EyeRestReminder } from '../common/EyeRestReminder'
 
 export function AppShell() {
   const childList = useLiveQuery(() => db.children.orderBy('createdAt').toArray(), []) ?? []
@@ -58,6 +59,7 @@ export function AppShell() {
       <main className="flex-1 px-4 pb-8">
         <Outlet />
       </main>
+      <EyeRestReminder />
     </div>
   )
 }

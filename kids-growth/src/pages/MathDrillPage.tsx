@@ -34,7 +34,7 @@ export function MathDrillPage() {
   const [feedback, setFeedback] = useState<'none' | 'ok' | 'no'>('none')
   const [startedAt, setStartedAt] = useState(0)
   const [elapsed, setElapsed] = useState(0)
-  const [summary, setSummary] = useState<{ correct: number; total: number; points: number; sec: number } | null>(null)
+  const [summary, setSummary] = useState<{ correct: number; total: number; points: number; sec: number; capped: boolean } | null>(null)
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
   const [newAch, setNewAch] = useState<Achievement | null>(null)
   const [combo, setCombo] = useState(0)
@@ -68,7 +68,7 @@ export function MathDrillPage() {
       const settings = await db.settings.get('singleton')
       const before = await getChildPointStats(currentChildId)
       const res = await finishDrill({ childId: currentChildId, kind, total, correct: finalCorrect, durationSec: sec })
-      setSummary({ correct: finalCorrect, total, points: res.pointsAwarded, sec })
+      setSummary({ correct: finalCorrect, total, points: res.pointsAwarded, sec, capped: res.capped })
       if (settings) {
         const lvBefore = computeLevelInfo(before.xp, settings.levelLadder).level
         const lvAfter = computeLevelInfo(res.newXp, settings.levelLadder).level
@@ -210,6 +210,9 @@ export function MathDrillPage() {
               </div>
             </div>
           </div>
+          {summary.capped && (
+            <p className="mt-2 text-[11px] text-gray-400">今天的学习积分已经拿满啦,继续练习照样有记录,明天再来赚积分~</p>
+          )}
           {wonSticker && (
             <div className="mt-5 mx-auto max-w-xs rounded-3xl bg-gradient-to-br from-sun-400/25 to-brand-100 p-5">
               <div className="text-xs font-bold text-sun-500 mb-1">🎁 获得新贴纸!</div>
