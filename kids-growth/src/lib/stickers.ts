@@ -77,6 +77,15 @@ export function qualifiesForSticker(correct: number, total: number): boolean {
   return total > 0 && correct >= 5 && correct / total >= 0.8
 }
 
+/** 清空该孩子的贴纸册(重新收集) */
+export async function resetStickers(childId: string): Promise<void> {
+  const settings = await db.settings.get('singleton')
+  if (!settings) return
+  const stickers = { ...(settings.stickers ?? {}) }
+  delete stickers[childId]
+  await db.settings.update('singleton', { stickers })
+}
+
 /**
  * 掉落一张随机「未拥有」贴纸并保存;集齐时返回 null(界面另行夸奖)。
  */

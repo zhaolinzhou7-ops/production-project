@@ -58,6 +58,45 @@ export const PET_LINES: PetLine[] = [
       { emoji: '🐉', label: '神龙' },
     ],
   },
+  {
+    key: 'bunny',
+    eggName: '小兔蛋',
+    hint: '🐰',
+    stages: [
+      { emoji: '🥚', label: '神秘的蛋' },
+      { emoji: '🐰', label: '小兔叽' },
+      { emoji: '🐇', label: '蹦蹦兔' },
+      { emoji: '🦘', label: '袋鼠跳跳' },
+      { emoji: '🦌', label: '小花鹿' },
+      { emoji: '🦄', label: '独角兽' },
+    ],
+  },
+  {
+    key: 'ocean',
+    eggName: '海洋蛋',
+    hint: '🐠',
+    stages: [
+      { emoji: '🥚', label: '神秘的蛋' },
+      { emoji: '🐟', label: '小鱼儿' },
+      { emoji: '🐠', label: '彩虹鱼' },
+      { emoji: '🐬', label: '小海豚' },
+      { emoji: '🦈', label: '大鲨鱼' },
+      { emoji: '🐋', label: '鲸鱼王' },
+    ],
+  },
+  {
+    key: 'bear',
+    eggName: '毛球蛋',
+    hint: '🐼',
+    stages: [
+      { emoji: '🥚', label: '神秘的蛋' },
+      { emoji: '🐹', label: '小毛团' },
+      { emoji: '🐻', label: '小棕熊' },
+      { emoji: '🐼', label: '胖达' },
+      { emoji: '🐻‍❄️', label: '冰雪熊' },
+      { emoji: '🧸', label: '传说泰迪' },
+    ],
+  },
 ]
 
 const lineByKey = new Map(PET_LINES.map((l) => [l.key, l]))
@@ -117,6 +156,39 @@ export interface FeedResult {
   pet: PetState
   evolved: boolean
   fromStage?: PetStage
+}
+
+/** 已毕业(养到最终形态)的宠物,按毕业顺序返回其进化线 */
+export async function getTrophies(childId: string): Promise<PetLine[]> {
+  const settings = await db.settings.get('singleton')
+  const keys = settings?.petTrophies?.[childId] ?? []
+  return keys.map((k) => lineByKey.get(k)).filter((l): l is PetLine => !!l)
+}
+
+/** 毕业:宠物到最终形态后收进奖杯墙,腾出位置再养一只。非最终形态不允许。 */
+export async function graduatePet(childId: string): Promise<boolean> {
+  const settings = await db.settings.get('singleton')
+  const rec = settings?.pets?.[childId]
+  if (!settings || !rec) return false
+  const state = toState(rec.line, rec.fed)
+  if (!state || state.toNext !== null) return false
+  const petTrophies = {
+    ...(settings.petTrophies ?? {}),
+    [childId]: [...(settings.petTrophies?.[childId] ?? []), rec.line],
+  }
+  const pets = { ...(settings.pets ?? {}) }
+  delete pets[childId]
+  await db.settings.update('singleton', { petTrophies, pets })
+  return true
+}
+
+/** 重置:放弃当前宠物(不进奖杯墙),重新选蛋。 */
+export async function resetPet(childId: string): Promise<void> {
+  const settings = await db.settings.get('singleton')
+  if (!settings?.pets?.[childId]) return
+  const pets = { ...(settings.pets ?? {}) }
+  delete pets[childId]
+  await db.settings.update('singleton', { pets })
 }
 
 /** 喂食(答对题数);跨过阈值则返回进化信息 */

@@ -9,8 +9,9 @@ import { packsForStage } from '../lib/learningContent'
 import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
-import { STICKER_CATALOG, getOwnedStickers } from '../lib/stickers'
-import { PET_LINES, getPet, choosePet } from '../lib/pets'
+import { STICKER_CATALOG, getOwnedStickers, resetStickers } from '../lib/stickers'
+import { PET_LINES, getPet, choosePet, getTrophies, graduatePet, resetPet } from '../lib/pets'
+import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { todayISO } from '../lib/dateUtils'
 import type { LearnDeck, PracticeMode } from '../types'
 
@@ -80,7 +81,13 @@ export function LearnHomePage() {
     [currentChildId],
   )
 
+  const trophies = useLiveQuery(
+    async () => (currentChildId ? getTrophies(currentChildId) : []),
+    [currentChildId],
+  )
+
   const [openDeck, setOpenDeck] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'graduate' | 'resetPet' | 'resetStickers' | null>(null)
 
   if (!child || !currentChildId) return null
 
@@ -119,12 +126,12 @@ export function LearnHomePage() {
             <>
               <div className="mb-2 text-sm font-bold text-gray-700">🥚 选一颗蛋,孵出你的学习宠物!</div>
               <p className="mb-3 text-[11px] text-gray-500">每答对一题就喂它一口,吃饱就会长大、进化</p>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {PET_LINES.map((line) => (
                   <button
                     key={line.key}
                     onClick={() => void choosePet(currentChildId, line.key)}
-                    className="flex-1 rounded-2xl bg-white/80 py-3 text-center shadow-sm active:scale-95 transition"
+                    className="rounded-2xl bg-white/80 py-3 text-center shadow-sm active:scale-95 transition"
                   >
                     <div className="text-3xl">🥚</div>
                     <div className="mt-1 text-xs font-medium text-gray-600">
@@ -135,27 +142,57 @@ export function LearnHomePage() {
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-5xl">{pet.stage.emoji}</span>
-              <div className="flex-1">
-                <div className="text-sm font-bold text-gray-700">{pet.stage.label}</div>
-                {pet.toNext ? (
-                  <>
-                    <div className="mt-1 h-2 rounded-full bg-white/70 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-mint-400 to-mint-500 transition-all"
-                        style={{ width: `${Math.min(100, Math.round((pet.toNext.have / pet.toNext.need) * 100))}%` }}
-                      />
-                    </div>
-                    <div className="mt-1 text-[11px] text-gray-500">
-                      再喂 {pet.toNext.need - pet.toNext.have} 口进化 · 答对一题喂一口
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-[11px] text-gray-500">已经是最终形态啦,好厉害! 🎉</div>
-                )}
+            <>
+              <div className="flex items-center gap-3">
+                <span className="text-5xl">{pet.stage.emoji}</span>
+                <div className="flex-1">
+                  <div className="text-sm font-bold text-gray-700">{pet.stage.label}</div>
+                  {pet.toNext ? (
+                    <>
+                      <div className="mt-1 h-2 rounded-full bg-white/70 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-mint-400 to-mint-500 transition-all"
+                          style={{ width: `${Math.min(100, Math.round((pet.toNext.have / pet.toNext.need) * 100))}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        再喂 {pet.toNext.need - pet.toNext.have} 口进化 · 答对一题喂一口
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-gray-500">已经是最终形态啦,好厉害! 🎉</div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-xs text-gray-400 tabular-nums">已喂 {pet.fed}</span>
+                  <button
+                    onClick={() => setConfirmAction('resetPet')}
+                    className="text-[11px] text-gray-400 underline active:scale-95"
+                  >
+                    换一颗蛋
+                  </button>
+                </div>
               </div>
-              <span className="text-xs text-gray-400 tabular-nums">已喂 {pet.fed}</span>
+              {pet.toNext === null && (
+                <button
+                  onClick={() => setConfirmAction('graduate')}
+                  className="mt-3 w-full rounded-2xl bg-gradient-to-r from-sun-400 to-sun-500 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98] transition"
+                >
+                  🏆 让它毕业,再养一只新宠物
+                </button>
+              )}
+            </>
+          )}
+          {trophies && trophies.length > 0 && (
+            <div className="mt-3 flex items-center gap-2 rounded-2xl bg-white/60 px-3 py-2">
+              <span className="text-[11px] font-bold text-gray-500">🏆 毕业宠物</span>
+              <span className="text-xl tracking-wide">
+                {trophies.map((l, i) => (
+                  <span key={i} title={l.stages[l.stages.length - 1].label}>
+                    {l.stages[l.stages.length - 1].emoji}
+                  </span>
+                ))}
+              </span>
             </div>
           )}
         </div>
@@ -189,13 +226,10 @@ export function LearnHomePage() {
       )}
 
       {/* 贴纸册 */}
-      <button
-        onClick={() => setShowStickers((v) => !v)}
-        className="mb-3 w-full rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
-      >
-        <div className="flex items-center gap-3">
+      <div className="mb-3 w-full rounded-2xl bg-white/70 p-4 text-left shadow-sm">
+        <button onClick={() => setShowStickers((v) => !v)} className="flex w-full items-center gap-3 active:scale-[0.99] transition">
           <div className="text-2xl">🎁</div>
-          <div className="flex-1">
+          <div className="flex-1 text-left">
             <div className="font-bold text-gray-800">我的贴纸册</div>
             <div className="text-xs text-gray-400">
               已集 {owned.size}/{STICKER_CATALOG.length} 张 · 练得好(正确率80%+)就掉落新贴纸
@@ -205,23 +239,35 @@ export function LearnHomePage() {
             size={18}
             className={`text-gray-300 transition-transform ${showStickers ? 'rotate-90' : ''}`}
           />
-        </div>
+        </button>
         {showStickers && (
-          <div className="mt-3 grid grid-cols-8 gap-1.5">
-            {STICKER_CATALOG.map((s) => (
-              <div
-                key={s.key}
-                title={owned.has(s.key) ? s.name : '???'}
-                className={`flex h-9 items-center justify-center rounded-lg text-xl ${
-                  owned.has(s.key) ? 'bg-sun-400/15' : 'bg-gray-100 opacity-40 grayscale'
-                }`}
-              >
-                {owned.has(s.key) ? s.emoji : '❔'}
+          <>
+            <div className="mt-3 grid grid-cols-8 gap-1.5">
+              {STICKER_CATALOG.map((s) => (
+                <div
+                  key={s.key}
+                  title={owned.has(s.key) ? s.name : '???'}
+                  className={`flex h-9 items-center justify-center rounded-lg text-xl ${
+                    owned.has(s.key) ? 'bg-sun-400/15' : 'bg-gray-100 opacity-40 grayscale'
+                  }`}
+                >
+                  {owned.has(s.key) ? s.emoji : '❔'}
+                </div>
+              ))}
+            </div>
+            {owned.size > 0 && (
+              <div className="mt-2 text-right">
+                <button
+                  onClick={() => setConfirmAction('resetStickers')}
+                  className="text-[11px] text-gray-400 underline active:scale-95"
+                >
+                  清空贴纸册,重新收集
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
-      </button>
+      </div>
 
       <button
         onClick={() => navigate('/learn/talk')}
@@ -322,6 +368,35 @@ export function LearnHomePage() {
       <p className="mt-4 text-[11px] text-gray-400">
         单词发音为网络真人音源(需联网播放),取不到时自动改用系统朗读;古诗/识字用系统中文朗读,需设备装有中文语音。跟读的语音识别需联网,且仅部分浏览器(Chrome/Safari)支持;录音只在本机播放、不上传。
       </p>
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={
+          confirmAction === 'graduate'
+            ? '让宠物毕业?'
+            : confirmAction === 'resetPet'
+              ? '换一颗蛋?'
+              : '清空贴纸册?'
+        }
+        description={
+          confirmAction === 'graduate'
+            ? '它会住进奖杯墙,然后你可以重新选一颗蛋,再养一只新宠物。'
+            : confirmAction === 'resetPet'
+              ? '现在的宠物和喂食进度会消失(不进奖杯墙),重新开始养一只。'
+              : '已收集的贴纸会全部清空,从头开始收集。'
+        }
+        confirmLabel={confirmAction === 'graduate' ? '毕业!' : '确定'}
+        danger={confirmAction !== 'graduate'}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          const act = confirmAction
+          setConfirmAction(null)
+          if (!currentChildId || !act) return
+          if (act === 'graduate') void graduatePet(currentChildId)
+          else if (act === 'resetPet') void resetPet(currentChildId)
+          else void resetStickers(currentChildId)
+        }}
+      />
     </div>
   )
 }

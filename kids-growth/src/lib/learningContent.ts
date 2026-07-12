@@ -8,6 +8,11 @@ export interface BuiltinPackMeta {
   itemType: CardItemType
   /** 适用年龄阶段(用于按学段推荐默认卡组) */
   stages: AgeStage[]
+  /**
+   * 内容修订号(缺省 1)。内容包 JSON 改动后 +1,
+   * 已实例化的卡组会在下次进入学习页时自动刷新卡片内容(SRS 进度保留)。
+   */
+  rev?: number
   /** 动态加载内容包(懒加载,不撑大首屏) */
   load: () => Promise<BuiltinPackData>
 }
@@ -60,6 +65,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🐼',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 批次25 起 en 字段改为真实英文,老卡组需刷新
     load: () => import('../data/decks/enlight-animals.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -69,6 +75,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🍎',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 批次25 起 en 字段改为真实英文,老卡组需刷新
     load: () => import('../data/decks/enlight-food.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -78,6 +85,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🌈',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 批次25 起 en 字段改为真实英文,老卡组需刷新
     load: () => import('../data/decks/enlight-colors.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -87,6 +95,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🔢',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 批次25 起 en 字段改为真实英文,老卡组需刷新
     load: () => import('../data/decks/enlight-numbers.json').then((m) => m.default as BuiltinPackData),
   },
   {

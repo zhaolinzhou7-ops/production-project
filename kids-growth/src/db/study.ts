@@ -98,7 +98,12 @@ export async function ensureBuiltinDeck(childId: string, builtinKey: string): Pr
     .equals(childId)
     .filter((d) => d.builtinKey === builtinKey)
     .first()
-  if (existing) return existing.id
+  if (existing) {
+    // 内容包修订后,把已实例化卡组的卡片内容刷新到最新(SRS 进度保留)
+    const rev = meta.rev ?? 1
+    if ((existing.contentRev ?? 0) !== rev) await syncDeckContent(existing, rev)
+    return existing.id
+  }
 
   const pack = await meta.load()
   const deckId = newId()
@@ -114,6 +119,7 @@ export async function ensureBuiltinDeck(childId: string, builtinKey: string): Pr
       source: 'builtin',
       builtinKey,
       itemType: pack.itemType,
+      contentRev: meta.rev ?? 1,
       createdAt: now,
     }
     await db.decks.add(deck)
@@ -135,6 +141,68 @@ export async function ensureBuiltinDeck(childId: string, builtinKey: string): Pr
   })
 
   return deckId
+}
+
+/**
+ * 把老卡组的卡片内容同步为内容包最新版:
+ * 按 order 一一对应更新字段(卡片 id 不变 → SRS 进度/错词引用保留);
+ * 内容包变多则补卡+初始 SRS 状态,变少则删多余卡及其状态。
+ */
+async function syncDeckContent(deck: LearnDeck, rev: number): Promise<void> {
+  if (!deck.builtinKey) return
+  const meta = getPackMeta(deck.builtinKey)
+  if (!meta) return
+  const pack = await meta.load()
+
+  await db.transaction('rw', db.decks, db.cards, db.studyStates, async () => {
+    const oldCards = await db.cards.where('deckId').equals(deck.id).sortBy('order')
+    const fresh = pack.cards.map((c, i) => builtinCardToLearnCard(c, pack.itemType, deck.id, i))
+
+    const common = Math.min(oldCards.length, fresh.length)
+    for (let i = 0; i < common; i++) {
+      const o = oldCards[i]
+      const f = fresh[i]
+      if (
+        o.front !== f.front ||
+        o.back !== f.back ||
+        o.phonetic !== f.phonetic ||
+        o.audioText !== f.audioText ||
+        JSON.stringify(o.extra ?? null) !== JSON.stringify(f.extra ?? null)
+      ) {
+        await db.cards.update(o.id, {
+          front: f.front,
+          back: f.back,
+          phonetic: f.phonetic,
+          audioText: f.audioText,
+          extra: f.extra,
+          order: i,
+        })
+      }
+    }
+
+    if (fresh.length > oldCards.length && deck.childId) {
+      const added = fresh.slice(oldCards.length)
+      await db.cards.bulkAdd(added)
+      const init = initialSrs()
+      await db.studyStates.bulkAdd(
+        added.map((card) => ({
+          id: newId(),
+          childId: deck.childId!,
+          cardId: card.id,
+          deckId: deck.id,
+          ...init,
+        })),
+      )
+    } else if (oldCards.length > fresh.length) {
+      const removed = oldCards.slice(fresh.length)
+      await db.cards.bulkDelete(removed.map((c) => c.id))
+      for (const c of removed) {
+        await db.studyStates.where('cardId').equals(c.id).delete()
+      }
+    }
+
+    await db.decks.update(deck.id, { contentRev: rev })
+  })
 }
 
 export interface DueCard {

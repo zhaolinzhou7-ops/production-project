@@ -183,6 +183,8 @@ export interface Settings {
   stickers?: Record<string, string[]>
   /** 每个孩子的学习宠物(养成),按 childId 索引 */
   pets?: Record<string, { line: string; fed: number }>
+  /** 每个孩子毕业(养到最终形态)的宠物系 key 列表,按 childId 索引 */
+  petTrophies?: Record<string, string[]>
 }
 
 // ============ 通用记录引擎 ============
@@ -314,6 +316,8 @@ export interface LearnDeck {
   source: DeckSource
   builtinKey?: string // 内置内容包 key,如 'words-primary'
   itemType: CardItemType
+  /** 已同步到的内容包版本(内容包修订后自动刷新卡片) */
+  contentRev?: number
   createdAt: number
 }
 
