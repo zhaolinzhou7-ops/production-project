@@ -5,6 +5,7 @@ import { initialSrs, gradeCard, isDue } from '../lib/srs'
 import { getPackMeta } from '../lib/learningContent'
 import type {
   BuiltinCard,
+  BuiltinFactCard,
   BuiltinHanziCard,
   BuiltinPicCard,
   BuiltinPoemCard,
@@ -72,6 +73,15 @@ function builtinCardToLearnCard(
       back: p.en,
       audioText: p.say ?? p.front,
       extra: { emoji: p.emoji, en: p.en },
+    }
+  }
+  if (itemType === 'fact') {
+    const f = c as BuiltinFactCard
+    return {
+      ...base,
+      front: f.q,
+      back: f.a,
+      audioText: f.q,
     }
   }
   const w = c as BuiltinWordCard

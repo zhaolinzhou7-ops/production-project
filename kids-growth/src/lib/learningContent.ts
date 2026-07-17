@@ -44,7 +44,17 @@ export interface BuiltinPicCard {
   say?: string // 朗读文本(缺省用 front)
 }
 
-export type BuiltinCard = BuiltinWordCard | BuiltinPoemCard | BuiltinHanziCard | BuiltinPicCard
+export interface BuiltinFactCard {
+  q: string // 题目/问题
+  a: string // 答案
+}
+
+export type BuiltinCard =
+  | BuiltinWordCard
+  | BuiltinPoemCard
+  | BuiltinHanziCard
+  | BuiltinPicCard
+  | BuiltinFactCard
 
 export interface BuiltinPackData {
   key: string
@@ -152,6 +162,43 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     itemType: 'pic',
     stages: ['toddler', 'primary'],
     load: () => import('../data/decks/phonics-cvc.json').then((m) => m.default as BuiltinPackData),
+  },
+  // ---- 常识问答(科学/安全/成语/地理) ----
+  {
+    key: 'facts-science',
+    name: '科学·自然常识',
+    subject: '科学',
+    icon: '🔬',
+    itemType: 'fact',
+    stages: ['primary', 'junior'],
+    load: () => import('../data/decks/facts-science.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'facts-safety',
+    name: '安全·生活常识',
+    subject: '安全',
+    icon: '🛡️',
+    itemType: 'fact',
+    stages: ['primary'],
+    load: () => import('../data/decks/facts-safety.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'facts-idioms',
+    name: '语文·成语启蒙',
+    subject: '语文',
+    icon: '🏮',
+    itemType: 'fact',
+    stages: ['primary', 'junior'],
+    load: () => import('../data/decks/facts-idioms.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'facts-geo',
+    name: '地理·中国与世界',
+    subject: '地理',
+    icon: '🌍',
+    itemType: 'fact',
+    stages: ['primary', 'junior'],
+    load: () => import('../data/decks/facts-geo.json').then((m) => m.default as BuiltinPackData),
   },
   // ---- 小学及以上 ----
   {

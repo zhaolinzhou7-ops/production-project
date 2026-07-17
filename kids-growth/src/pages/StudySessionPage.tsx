@@ -165,6 +165,14 @@ export function StudySessionPage() {
 
   const currentEn = (current?.card.extra as { en?: string } | undefined)?.en ?? current?.card.back ?? ''
 
+  // 问答四选一:正确答案 + 3 个本卡组其他答案作干扰
+  const quizOptions = useMemo(() => {
+    if (!current || mode !== 'quiz') return []
+    const answer = current.card.back
+    const distractors = shuffle([...new Set(pool.filter((b) => b !== answer))]).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, pool])
+
   // 听音选(义/字) 4 选项:汉字选正面,单词选释义
   const options = useMemo(() => {
     if (!current || mode !== 'listenChoose') return []
@@ -286,6 +294,12 @@ export function StudySessionPage() {
             front: `背诵《${current.card.front}》`,
             back: current.card.back,
             subject: '语文',
+          })
+        } else if (deck.itemType === 'fact') {
+          await autoAddErrorCard(currentChildId, {
+            front: current.card.front,
+            back: current.card.back,
+            subject: deck.subject,
           })
         }
       }
@@ -929,6 +943,46 @@ export function StudySessionPage() {
               看答案
             </button>
           )}
+        </div>
+      )}
+
+      {/* ---- 问答:看题四选一(科学/安全/成语/地理) ---- */}
+      {mode === 'quiz' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          <div className="mt-4 w-full max-w-md rounded-2xl bg-white/80 p-5 text-center shadow-sm">
+            <div className="text-lg font-bold text-gray-800 leading-relaxed">{current.card.front}</div>
+            <button
+              onClick={() => playAudio(current.card.front)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600 active:scale-95"
+            >
+              <Volume2 size={13} /> 读题
+            </button>
+          </div>
+          <div className="mt-4 w-full max-w-md space-y-2.5">
+            {quizOptions.map((opt) => {
+              const show = picked !== null
+              const isRight = opt === current.card.back
+              return (
+                <button
+                  key={opt}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    setPicked(opt)
+                    setTimeout(() => void advance(opt === current.card.back), 1100)
+                  }}
+                  className={`w-full rounded-2xl px-4 py-3 text-left text-[15px] font-medium transition ${
+                    show && isRight
+                      ? 'bg-mint-500 text-white'
+                      : show && opt === picked
+                        ? 'bg-red-400 text-white'
+                        : 'bg-white/80 text-gray-700'
+                  }`}
+                >
+                  {opt}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 

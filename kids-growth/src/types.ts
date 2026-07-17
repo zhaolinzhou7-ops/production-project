@@ -283,7 +283,7 @@ export interface Interest {
 // ============ 学习引擎 ============
 
 /** 卡片内容类型,决定支持哪些练习模式 */
-export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong' | 'pic'
+export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong' | 'pic' | 'fact'
 export type DeckSource = 'builtin' | 'custom' | 'wrong'
 /** 练习模式 */
 export type PracticeMode =
@@ -300,6 +300,7 @@ export type PracticeMode =
   | 'picChooseEn' // 幼儿英语:看图选英语单词
   | 'listenPicEn' // 幼儿英语:听英语选图
   | 'earTrain' // 幼儿英语:磨耳朵(中英自动连播)
+  | 'quiz' // 问答:看题四选一(科学/安全/成语/地理等)
 
 /** SRS 记忆状态机 */
 export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'
