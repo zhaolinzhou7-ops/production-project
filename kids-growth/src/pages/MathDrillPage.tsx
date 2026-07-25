@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { ArrowLeft, Timer } from 'lucide-react'
 import { db } from '../db/db'
+import { CorrectBurst } from '../components/common/CorrectBurst'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { finishDrill, autoAddErrorCard } from '../db/study'
@@ -38,6 +39,7 @@ export function MathDrillPage() {
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
   const [newAch, setNewAch] = useState<Achievement | null>(null)
   const [combo, setCombo] = useState(0)
+  const [burst, setBurst] = useState(0)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -107,6 +109,7 @@ export function MathDrillPage() {
     if (isRight) {
       const nextCombo = combo + 1
       setCombo(nextCombo)
+      setBurst((b) => b + 1)
       if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
       else sfxCorrect()
     } else {
@@ -285,6 +288,7 @@ export function MathDrillPage() {
   const progress = (idx / problems.length) * 100
   return (
     <div className="pt-4 pb-10 min-h-screen flex flex-col">
+      <CorrectBurst trigger={burst} combo={combo} big={stage === 'toddler'} />
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate('/learn')} className="text-gray-400 text-sm">
           退出

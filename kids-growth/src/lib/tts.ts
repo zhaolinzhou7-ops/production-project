@@ -185,6 +185,55 @@ function markFail(id: string): void {
   h[id] = { ...cur, fails: cur.fails + 1, lastFail: Date.now() }
   writeHealth(h)
 }
+// ---- "整个音源坏了" vs "这个音源读不了这一句" ----
+// 有道对**单词**有真人录音,但对某些**句子**返回不了音频。若按"失败一次就拉黑
+// 10 分钟"处理,一个句子失败会连累后面所有单词都退成机械音,于是听起来"一会儿
+// 正常一会儿机械"。所以:已经成功过的音源(proven)不因个别文本失败被拉黑,
+// 只记住"这句话它读不了";只有连续多条不同文本都失败,才判定它真的坏了。
+
+const PROVEN_KEY = 'kids-growth-tts-proven'
+function readProven(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(PROVEN_KEY) ?? '{}') as Record<string, number>
+  } catch {
+    return {}
+  }
+}
+function markProven(id: string): void {
+  try {
+    localStorage.setItem(PROVEN_KEY, JSON.stringify({ ...readProven(), [id]: Date.now() }))
+  } catch {
+    /* 忽略 */
+  }
+}
+/** 该音源在这台设备上确实成功播过(7 天内) */
+function isProven(id: string): boolean {
+  const t = readProven()[id]
+  return !!t && Date.now() - t < 7 * 24 * 60 * 60 * 1000
+}
+
+/** 某音源读不了的具体文本(仅本次会话记忆,带上限) */
+const deadText = new Map<string, Set<string>>()
+function markTextDead(id: string, text: string): void {
+  let set = deadText.get(id)
+  if (!set) {
+    set = new Set()
+    deadText.set(id, set)
+  }
+  if (set.size > 400) set.clear()
+  set.add(text)
+}
+function isTextDead(id: string, text: string): boolean {
+  return deadText.get(id)?.has(text) ?? false
+}
+
+/**
+ * 连续失败计数按**域名**记(可达性是域名的属性,不是单个地址的)。
+ * 达到上限就把该域名下所有音源一起标记为坏,避免一个个慢慢试、迟迟不收敛。
+ */
+const hostStreak = new Map<string, number>()
+const PROVEN_FAIL_LIMIT = 3
+
 function isSkipped(id: string): boolean {
   const h = readHealth()[id]
   if (!h) return false
@@ -344,6 +393,8 @@ function playUrl(url: string, timeoutMs = 3000, times = 1): Promise<void> {
 export async function playRemote(text: string, lang: TtsLang, times = 1): Promise<string> {
   const t = text.trim()
   if (!t) throw new Error('empty')
+  // 明确离线时不做无谓等待,直接交给设备语音,孩子点了立刻出声
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('offline')
   const all = sourcesFor(lang)
   const preferred = getPreferredSource(lang)
   const ordered = [
@@ -357,22 +408,34 @@ export async function playRemote(text: string, lang: TtsLang, times = 1): Promis
   let hostsTried = 0
   for (const s of ordered) {
     if (t.length > s.maxLen) continue
-    if (isSkipped(s.id) && s.id !== preferred) continue
+    // 这句话它读不了 → 直接换下一个,但不影响它读别的
+    if (isTextDead(s.id, t)) continue
+    // 已验证可用的音源不因个别文本失败被跳过
+    if (isSkipped(s.id) && s.id !== preferred && !isProven(s.id)) continue
     const host = hostOf(s)
-    if (deadHosts.has(host)) {
-      markFail(s.id) // 同域名已判死,顺手记上,下次直接跳过
-      continue
-    }
+    if (deadHosts.has(host)) continue // 本次播放这家已失败,换下一家
     if (hostsTried >= 2) break
     hostsTried += 1
     try {
       await playUrl(s.url(t), timeoutFor(t), times)
       markOk(s.id)
+      markProven(s.id)
+      hostStreak.delete(host)
       return s.id
     } catch (e) {
-      markFail(s.id)
-      deadHosts.add(host)
       lastErr = e instanceof Error ? e.message : 'error'
+      // 本次播放内:同一家不再重复尝试(它的第二个地址大概率也一样),留机会给别家
+      deadHosts.add(host)
+      // 先假定"只是这一句读不了",记下这句话,不牵连别的内容
+      markTextDead(s.id, t)
+      const streak = (hostStreak.get(host) ?? 0) + 1
+      hostStreak.set(host, streak)
+      const limit = isProven(s.id) ? PROVEN_FAIL_LIMIT : 2
+      if (streak >= limit) {
+        // 这家连续多次都不行 → 该域名下所有音源一起停用一段时间
+        for (const other of TTS_SOURCES) if (hostOf(other) === host) markFail(other.id)
+        hostStreak.delete(host)
+      }
     }
   }
   throw new Error(lastErr)
@@ -414,6 +477,7 @@ export async function diagnoseSource(s: TtsSource, sample: string): Promise<Diag
   try {
     await playUrl(url, timeoutFor(sample) + 1500, 1)
     markOk(s.id)
+    markProven(s.id)
     return 'ok'
   } catch {
     markFail(s.id)

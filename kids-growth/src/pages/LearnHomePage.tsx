@@ -6,7 +6,14 @@ import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
-import { listVoices, setPreferredVoice, getPreferredVoiceURI, speak } from '../lib/audio'
+import {
+  listVoices,
+  setPreferredVoice,
+  getPreferredVoiceURI,
+  speak,
+  getSpeechTune,
+  setSpeechTune,
+} from '../lib/audio'
 import {
   sourcesFor,
   setPreferredSource,
@@ -146,6 +153,14 @@ export function LearnHomePage() {
   const [testing, setTesting] = useState<TtsLang | null>(null)
   const [showVoiceHelp, setShowVoiceHelp] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [tune, setTune] = useState(() => getSpeechTune())
+
+  /** 调语速/音调:改完立刻按新设置念一句,方便对比 */
+  const applyTune = (next: { rate: number; pitch: number }) => {
+    setTune(next)
+    setSpeechTune(next)
+    speak('小朋友,我们一起学习吧', 'zh-CN', 0.9)
+  }
 
   /** 逐个诊断该语言的所有音源:区分"连不上"和"能连上但音频不可播" */
   const runTest = async (lang: TtsLang, sample: string) => {
@@ -648,6 +663,61 @@ export function LearnHomePage() {
                   <VoiceHelpGuide />
                 </div>
               )}
+            </div>
+
+            {/* 语速/音调微调:设备音色改不了,但放慢、调低往往就自然不少 */}
+            <div className="rounded-2xl bg-gray-50 p-3">
+              <div className="mb-2 text-[11px] font-bold text-gray-600">
+                🎚 语速与音调(设备语音听着别扭时,调这里最有效)
+              </div>
+              <label className="mb-2 block">
+                <span className="text-[11px] text-gray-500">
+                  语速 {tune.rate.toFixed(2)}× {tune.rate < 0.95 ? '(慢,更清楚)' : tune.rate > 1.05 ? '(快)' : '(正常)'}
+                </span>
+                <input
+                  type="range"
+                  min={0.7}
+                  max={1.2}
+                  step={0.05}
+                  value={tune.rate}
+                  onChange={(e) => applyTune({ ...tune, rate: Number(e.target.value) })}
+                  className="mt-1 w-full accent-brand-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-gray-500">
+                  音调 {tune.pitch.toFixed(2)} {tune.pitch < 0.95 ? '(低,更沉稳)' : tune.pitch > 1.05 ? '(高,更童声)' : '(正常)'}
+                </span>
+                <input
+                  type="range"
+                  min={0.7}
+                  max={1.3}
+                  step={0.05}
+                  value={tune.pitch}
+                  onChange={(e) => applyTune({ ...tune, pitch: Number(e.target.value) })}
+                  className="mt-1 w-full accent-brand-500"
+                />
+              </label>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => applyTune({ rate: 0.85, pitch: 0.95 })}
+                  className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-gray-600 shadow-sm active:scale-95"
+                >
+                  试试「慢而稳」
+                </button>
+                <button
+                  onClick={() => applyTune({ rate: 1, pitch: 1.15 })}
+                  className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-gray-600 shadow-sm active:scale-95"
+                >
+                  试试「童声一点」
+                </button>
+                <button
+                  onClick={() => applyTune({ rate: 1, pitch: 1 })}
+                  className="rounded-full bg-white px-3 py-1 text-[11px] text-gray-500 shadow-sm active:scale-95"
+                >
+                  复位
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-gray-100 pt-3 text-[11px] font-bold text-gray-500">

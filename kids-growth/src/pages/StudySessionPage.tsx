@@ -27,6 +27,7 @@ import {
 } from '../lib/pronounce'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { feedPet, type FeedResult } from '../lib/pets'
+import { CorrectBurst } from '../components/common/CorrectBurst'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
 import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
@@ -84,6 +85,8 @@ export function StudySessionPage() {
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
   const [poolPic, setPoolPic] = useState<{ front: string; en: string; emoji: string }[]>([])
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
+  /** 答对特效计数器:每答对 +1 触发一次花瓣鼓励 */
+  const [burst, setBurst] = useState(0)
 
   useEffect(() => {
     if (!currentChildId || !deckId) return
@@ -327,6 +330,7 @@ export function StudySessionPage() {
       if (wasCorrect) {
         const nextCombo = combo + 1
         setCombo(nextCombo)
+        setBurst((b) => b + 1)
         if (nextCombo >= 3 && nextCombo % 3 === 0) sfxCombo(Math.floor(nextCombo / 3))
         else sfxCorrect()
         if (isToddler) {
@@ -510,6 +514,7 @@ export function StudySessionPage() {
             </button>
           </div>
         </div>
+        <CorrectBurst trigger={burst} combo={combo} big={isToddler} />
         <LevelUpModal level={levelUp} tone={tone} onClose={() => setLevelUp(null)} />
         <AchievementUnlockModal achievement={newAch} tone={tone} onClose={() => setNewAch(null)} />
       </>
@@ -534,6 +539,7 @@ export function StudySessionPage() {
 
   return (
     <div className={`pt-4 pb-10 min-h-screen flex flex-col relative ${shaking ? 'animate-shake' : ''}`}>
+      <CorrectBurst trigger={burst} combo={combo} big={isToddler} />
       {/* 顶部进度 */}
       <div className="flex items-center gap-3 mb-2">
         <button onClick={() => navigate('/learn')} className="text-gray-400 text-sm">

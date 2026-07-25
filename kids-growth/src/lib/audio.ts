@@ -106,6 +106,37 @@ export function getPreferredVoiceURI(langPrefix: string): string | null {
   return getVoicePref()[langPrefix] ?? null
 }
 
+// ---- 语速/音调微调:设备音色再差,放慢一点、音调调低一点也会自然不少 ----
+const TUNE_KEY = 'kids-growth-speech-tune'
+export interface SpeechTune {
+  /** 语速倍率 0.7–1.2 */
+  rate: number
+  /** 音调 0.7–1.3(1 为原始) */
+  pitch: number
+}
+const DEFAULT_TUNE: SpeechTune = { rate: 1, pitch: 1 }
+
+export function getSpeechTune(): SpeechTune {
+  try {
+    const t = JSON.parse(localStorage.getItem(TUNE_KEY) ?? 'null') as SpeechTune | null
+    if (!t) return DEFAULT_TUNE
+    return {
+      rate: Math.min(1.2, Math.max(0.7, t.rate ?? 1)),
+      pitch: Math.min(1.3, Math.max(0.7, t.pitch ?? 1)),
+    }
+  } catch {
+    return DEFAULT_TUNE
+  }
+}
+
+export function setSpeechTune(t: SpeechTune): void {
+  try {
+    localStorage.setItem(TUNE_KEY, JSON.stringify(t))
+  } catch {
+    /* 忽略 */
+  }
+}
+
 /**
  * 苹果系统自带的**搞怪音色**(novelty voices):Bad News 是阴森报丧腔、
  * Bahh 是羊叫、Boing 是弹簧音、Zarvox 是机器人…… 它们本来就是故意难听的,
@@ -189,10 +220,11 @@ export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1, isFal
   const speakOnce = (remaining: number) => {
     try {
       speechSynthesis.resume()
+      const tune = getSpeechTune()
       const u = new SpeechSynthesisUtterance(text)
       u.lang = lang
-      u.rate = rate
-      u.pitch = 1 // 保持自然音高(拔高会有"卡通味")
+      u.rate = Math.min(2, Math.max(0.5, rate * tune.rate))
+      u.pitch = tune.pitch
       const voice = pickVoice(lang)
       if (voice) u.voice = voice
       liveUtterances.push(u)

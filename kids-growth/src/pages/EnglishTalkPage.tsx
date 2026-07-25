@@ -27,6 +27,7 @@ import {
   type Cartoon,
 } from '../lib/talkContent'
 import { getMelody, playMelodyLine, stopMelody } from '../lib/melody'
+import { CorrectBurst } from '../components/common/CorrectBurst'
 
 type Tab = 'dialog' | 'retell' | 'rhyme' | 'cartoon'
 
@@ -155,6 +156,8 @@ export function EnglishTalkPage() {
   const [done, setDone] = useState<{ correct: number; total: number; points: number; capped: boolean } | null>(null)
   const [wonSticker, setWonSticker] = useState<StickerDef | null>(null)
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
+  const [burst, setBurst] = useState(0)
+  const [okStreak, setOkStreak] = useState(0)
 
   // ---- 复述状态 ----
   const [retells] = useState(() => shuffle(retellSentencesFor(stage)).slice(0, 8))
@@ -235,7 +238,11 @@ export function EnglishTalkPage() {
     if (!dialog) return
     const newStars = [...turnStars, stars]
     setTurnStars(newStars)
-    if (stars >= 2) sfxCorrect()
+    if (stars >= 2) {
+      sfxCorrect()
+      setBurst((b) => b + 1)
+      setOkStreak((n) => n + 1)
+    } else setOkStreak(0)
     if (turnIdx + 1 >= dialog.turns.length) {
       void settle('talk', newStars, dialog.turns.length)
     } else {
@@ -280,7 +287,11 @@ export function EnglishTalkPage() {
   const nextRetell = (stars: number) => {
     const newStars = [...rStars, stars]
     setRStars(newStars)
-    if (stars >= 2) sfxCorrect()
+    if (stars >= 2) {
+      sfxCorrect()
+      setBurst((b) => b + 1)
+      setOkStreak((n) => n + 1)
+    } else setOkStreak(0)
     if (rIdx + 1 >= retells.length) {
       void settle('retell', newStars, retells.length)
     } else {
@@ -379,7 +390,11 @@ export function EnglishTalkPage() {
     if (!cartoon) return
     const newStars = [...cStars, stars]
     setCStars(newStars)
-    if (stars >= 2) sfxCorrect()
+    if (stars >= 2) {
+      sfxCorrect()
+      setBurst((b) => b + 1)
+      setOkStreak((n) => n + 1)
+    } else setOkStreak(0)
     if (cIdx + 1 >= cartoon.lines.length) {
       void settle('cartoon', newStars, cartoon.lines.length)
     } else {
@@ -503,6 +518,7 @@ export function EnglishTalkPage() {
     const sessStars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct > 0 ? 1 : 0
     return (
       <div className="pt-12 text-center px-6">
+        <CorrectBurst trigger={burst} combo={okStreak} big={stage === 'toddler'} />
         <div className="text-6xl mb-2">{pct >= 80 ? '🌟' : '💪'}</div>
         <h1 className="text-2xl font-bold text-gray-800">说完啦!</h1>
         <div className="mt-2 text-3xl tracking-wider">
@@ -557,6 +573,7 @@ export function EnglishTalkPage() {
 
   return (
     <div className="pt-4 pb-10">
+      <CorrectBurst trigger={burst} combo={okStreak} big={stage === 'toddler'} />
       <div className="flex items-center gap-3 mb-4">
         <button onClick={() => navigate('/learn')} className="p-1 text-gray-500">
           <ArrowLeft size={22} />
