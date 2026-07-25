@@ -3,13 +3,14 @@
   "projectname": "kids-growth-mp",
   "description": "儿童学习小程序",
   "appid": "touristappid",
+  "libVersion": "latest",
   "setting": {
-    "// urlCheck": "开发阶段关掉域名校验,否则有道真人发音(dict.youdao.com)会被拦。正式发布前需在 mp 后台把它加入 downloadFile 合法域名,再改回 true。",
     "urlCheck": false,
     "es6": false,
     "enhance": false,
     "postcss": false,
     "minified": false,
+    "ignoreDevUnusedFiles": false,
     "babelSetting": {
       "ignore": [],
       "disablePlugins": [],

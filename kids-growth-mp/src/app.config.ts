@@ -11,14 +11,23 @@ export default defineAppConfig({
     navigationBarTitleText: '成长学习',
     navigationBarTextStyle: 'white',
   },
-  // 微信同声传译插件:语音识别(打分)+ 文字转语音。
-  // 版本号如失效,请在 mp 后台「设置→第三方设置→插件管理」查最新版本并更新。
-  plugins: {
-    WechatSI: {
-      version: '0.3.5',
-      provider: 'wx069ba97219f66d99',
-    },
-  },
+  // ⚠️ 微信同声传译插件(语音识别打分 + 中文 TTS)默认**不声明**。
+  //
+  // 原因:app.json 里一旦声明插件,而该 AppID 在 mp 后台没有添加过它,
+  // 开发者工具会直接「模拟器启动失败」——比没有插件更糟。
+  // 没有插件时,朗读会自动改用网络真人音源(见 lib/audio.ts),功能不受影响,
+  // 只是「跟读打分」退化为手动确认。
+  //
+  // 想启用插件:先在 mp 后台「设置 → 第三方设置 → 插件管理 → 添加插件」
+  // 搜索「微信同声传译」或用 AppID wx069ba97219f66d99 添加成功后,
+  // 再把下面这段注释打开并重新 npm run build:weapp。
+  //
+  // plugins: {
+  //   WechatSI: {
+  //     version: '0.3.5',
+  //     provider: 'wx069ba97219f66d99',
+  //   },
+  // },
   permission: {
     'scope.record': {
       desc: '用于跟读打分与录音回放(仅本地处理,不上传录音)',

@@ -39,13 +39,19 @@ npm install
 npm run build:weapp        # 成功标志：Compiled successfully，且生成 dist/
 ```
 
-必做的三件事（缺一个就会"没声音/启不来"）：
+> ⚠️ **「微信同声传译」插件默认不声明**。app.json 里声明了插件、而该 AppID 后台
+> 没添加过它时，开发者工具会直接「模拟器启动失败」。没有插件时朗读自动改用网络
+> 真人音源，功能不受影响（只有跟读打分退化为手动确认）。后台添加成功后，把
+> `src/app.config.ts` 里 `plugins` 那段注释打开并重新 `npm run build:weapp` 即可启用。
+
+必做的两件事：
 
 1. **注册小程序拿 AppID**（mp.weixin.qq.com，个人主体免费）→ 导入项目时填。
-2. **后台添加「微信同声传译」插件**（设置 → 第三方设置 → 插件管理 → 添加插件 → 搜"微信同声传译"）。
-   小程序的中英文朗读与跟读打分都靠它，不加会没声音。
-3. **导入项目时目录选 `kids-growth-mp`**（不是 `dist`）——`project.config.json` 已把
+2. **导入项目时目录选 `kids-growth-mp`**（不是 `dist`）——`project.config.json` 已把
    `miniprogramRoot` 指向 `dist/`。
+
+「微信同声传译」插件为**可选增强**：加得上就有更自然的中文 TTS 与自动跟读打分；
+加不上也能正常用（走网络音源）。
 
 ### 拉代码时提示 `project.config.json` 冲突怎么办
 
