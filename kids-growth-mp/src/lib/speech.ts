@@ -13,12 +13,20 @@ function plugin(): any {
   return _plugin
 }
 
+/**
+ * 插件是否真的可用。
+ * 后台没添加「微信同声传译」时 requirePlugin 会抛错 —— 这里把结果缓存下来,
+ * 避免每次朗读都抛一次异常;上层据此回退到网络音源(见 lib/audio.ts)。
+ */
+let _available: boolean | null = null
 export function isSpeechAvailable(): boolean {
+  if (_available !== null) return _available
   try {
-    return !!plugin()
+    _available = !!plugin() && typeof plugin().textToSpeech === 'function'
   } catch {
-    return false
+    _available = false
   }
+  return _available
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
