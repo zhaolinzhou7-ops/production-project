@@ -5,3 +5,7 @@ dist/
 .swc/
 .DS_Store
 *.log
+
+# 微信开发者工具的「个人设置」文件:里面是本机/本账号专属的配置,
+# 不入库,避免每人一份互相覆盖。
+project.private.config.json

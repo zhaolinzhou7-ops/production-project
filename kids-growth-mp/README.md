@@ -47,6 +47,25 @@ npm run build:weapp        # 成功标志：Compiled successfully，且生成 di
 3. **导入项目时目录选 `kids-growth-mp`**（不是 `dist`）——`project.config.json` 已把
    `miniprogramRoot` 指向 `dist/`。
 
+### 拉代码时提示 `project.config.json` 冲突怎么办
+
+导入项目后，微信开发者工具会把**你的 AppID 写进 `project.config.json`**，
+而这个文件是入库的，所以我这边改动它时 `git pull` 会报：
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        kids-growth-mp/project.config.json
+```
+
+这个文件里对你唯一有价值的就是 AppID，直接丢掉本地版本再把 AppID 填回去即可：
+
+```bash
+git checkout -- kids-growth-mp/project.config.json
+git pull
+```
+
+然后在开发者工具：**详情 → 基本信息 → AppID → 修改**，粘回你的 AppID（工具会自动写回文件）。
+
 已为开发方便把 `project.config.json` 的 `urlCheck` 设为 `false`（否则有道真人发音
 `dict.youdao.com` 会被域名校验拦掉）。正式发布前需在 mp 后台把该域名加入
 **downloadFile 合法域名**，再改回 `true`。
