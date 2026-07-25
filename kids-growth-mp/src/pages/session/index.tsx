@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
-import Taro, { useRouter, useLoad } from '@tarojs/taro'
+import Taro, { useRouter } from '@tarojs/taro'
 import {
   getCurrentChildId,
   getSessionCards,
@@ -64,29 +64,41 @@ export default function Session() {
     else void playText(text, 'zh_CN')
   }
 
-  useLoad(() => {
-    const cid = getCurrentChildId()
-    const list = getSessionCards(cid, deckId, 12)
-    const d = getDeck(deckId) ?? null
-    const all = getDeckCards(deckId)
-    setChildId(cid)
-    setDeck(d)
-    setPoolBack(all.map((c) => c.back))
-    setPoolFront(all.map((c) => c.front))
-    const lines: string[] = []
-    for (const c of all) {
-      const ls = (c.extra as { lines?: string[] } | undefined)?.lines
-      if (Array.isArray(ls)) lines.push(...ls)
+  // ⚠️ 整体 try/catch:页面加载阶段抛异常会导致整页渲染不出来(只剩导航栏),
+  // 这里捕获后照常渲染,并把原因弹给用户,至少能返回上一页。
+  useEffect(() => {
+    try {
+      const cid = getCurrentChildId()
+      const list = getSessionCards(cid, deckId, 12)
+      const d = getDeck(deckId) ?? null
+      const all = getDeckCards(deckId)
+      setChildId(cid)
+      setDeck(d)
+      setPoolBack(all.map((c) => c.back))
+      setPoolFront(all.map((c) => c.front))
+      const lines: string[] = []
+      for (const c of all) {
+        const ls = (c.extra as { lines?: string[] } | undefined)?.lines
+        if (Array.isArray(ls)) lines.push(...ls)
+      }
+      setLinePool(lines)
+      setCards(list)
+      setReady(true)
+      if (list[0] && (mode === 'listenChoose' || mode === 'dictation')) {
+        const c0 = list[0].card
+        if ((d?.itemType ?? 'word') === 'word') playWordAudio(c0.audioText ?? c0.front)
+        else void playText(c0.audioText ?? c0.front, 'zh_CN')
+      }
+    } catch (e) {
+      setReady(true)
+      Taro.showModal({
+        title: '这组题打不开',
+        content: e instanceof Error ? e.message : String(e),
+        showCancel: false,
+      })
     }
-    setLinePool(lines)
-    setCards(list)
-    setReady(true)
-    if (list[0] && (mode === 'listenChoose' || mode === 'dictation')) {
-      const c0 = list[0].card
-      if ((d?.itemType ?? 'word') === 'word') playWordAudio(c0.audioText ?? c0.front)
-      else void playText(c0.audioText ?? c0.front, 'zh_CN')
-    }
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const current = cards[idx]
 

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text } from '@tarojs/components'
-import Taro, { useLoad, useDidShow } from '@tarojs/taro'
+import Taro, { useDidShow } from '@tarojs/taro'
 import { packsForStage } from '../../core/learningContent'
 import {
   getCurrentChildId,
@@ -11,6 +11,8 @@ import {
   getStudyStreak,
   getTodayStudyMinutes,
 } from '../../store/study'
+import { readObject, writeObject } from '../../store/db'
+import { probeAudio, playWordAudio, playText } from '../../lib/audio'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -23,31 +25,114 @@ interface DeckRow {
 /** 每日建议学习时长上限(分钟),超过给护眼提醒 */
 const DAILY_LIMIT_MIN = 30
 
+function msgOf(e: unknown): string {
+  if (e instanceof Error) return e.message || String(e)
+  try {
+    return typeof e === 'string' ? e : JSON.stringify(e)
+  } catch {
+    return String(e)
+  }
+}
+
 export default function Index() {
   const [rows, setRows] = useState<DeckRow[]>([])
   const [xp, setXp] = useState(0)
   const [streak, setStreak] = useState(0)
   const [minutes, setMinutes] = useState(0)
+  const [err, setErr] = useState('')
+  const [loading, setLoading] = useState(true)
 
+  /**
+   * 载入首页数据。
+   *
+   * ⚠️ 这里**必须**整体 try/catch,并且**不能**放在 useLoad 里同步跑:
+   * 小程序页面 onLoad 阶段抛异常会让整页渲染不出来(只剩导航栏)。
+   * 放到 useEffect(挂载后)+ 捕获异常后把错误显示在页面上,
+   * 这样即使内容包加载失败,首页也永远能点、并能看到失败原因。
+   */
   const refresh = () => {
-    const childId = getCurrentChildId()
-    for (const p of packsForStage('primary')) {
-      ensureBuiltinDeck(childId, p.key)
+    try {
+      const childId = getCurrentChildId()
+      const failed: string[] = []
+      for (const p of packsForStage('primary')) {
+        try {
+          ensureBuiltinDeck(childId, p.key)
+        } catch (e) {
+          failed.push(`${p.name}: ${msgOf(e)}`)
+        }
+      }
+      const decks = listChildDecks(childId).filter(
+        (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
+      )
+      setRows(decks.map((deck) => ({ deck, due: countDue(childId, deck.id) })))
+      setXp(getPoints().xp)
+      setStreak(getStudyStreak())
+      setMinutes(getTodayStudyMinutes())
+      // app.ts 里记下的「上一次未捕获报错」也一并显示出来
+      const last = readObject<string>('_lastError', '')
+      setErr([failed.join(' / '), last].filter(Boolean).join(' / '))
+    } catch (e) {
+      setErr(msgOf(e))
+    } finally {
+      setLoading(false)
     }
-    const decks = listChildDecks(childId).filter(
-      (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
-    )
-    setRows(decks.map((deck) => ({ deck, due: countDue(childId, deck.id) })))
-    setXp(getPoints().xp)
-    setStreak(getStudyStreak())
-    setMinutes(getTodayStudyMinutes())
   }
 
-  useLoad(refresh)
+  useEffect(refresh, [])
   useDidShow(refresh)
 
   const go = (deckId: string, mode: string) => {
-    Taro.navigateTo({ url: `/pages/session/index?deckId=${deckId}&mode=${mode}` })
+    Taro.navigateTo({
+      url: `/pages/session/index?deckId=${deckId}&mode=${mode}`,
+      fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
+    })
+  }
+
+  const openPage = (url: string) => {
+    Taro.navigateTo({
+      url,
+      fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
+    })
+  }
+
+  /** 声音自检:先试网络真人音源,把结果如实弹出来 */
+  const checkSound = async () => {
+    Taro.showLoading({ title: '测试中…' })
+    const r = await probeAudio('apple')
+    Taro.hideLoading()
+    if (r === 'ok') {
+      playWordAudio('apple')
+      setTimeout(() => void playText('小朋友你好', 'zh_CN'), 1800)
+      Taro.showModal({
+        title: '声音正常 ✅',
+        content: '马上会听到英文 apple 和中文「小朋友你好」。听不到的话请检查手机音量、静音键。',
+        showCancel: false,
+      })
+    } else {
+      Taro.showModal({
+        title: '声音取不到 ❌',
+        content: `${r}\n\n开发者工具里请勾选:详情 → 本地设置 → 不校验合法域名。真机需在小程序后台把 dict.youdao.com 加入 downloadFile 合法域名。`,
+        showCancel: false,
+      })
+    }
+  }
+
+  /** 本地数据坏掉/存满时的自救按钮 */
+  const resetLocal = () => {
+    Taro.showModal({
+      title: '清空本地数据',
+      content: '会清掉本机的学习进度并重新生成内容包。确定吗?',
+      success: (res) => {
+        if (!res.confirm) return
+        try {
+          Taro.clearStorageSync()
+        } catch {
+          /* 忽略 */
+        }
+        setLoading(true)
+        refresh()
+      },
+    })
   }
 
   const sync = async () => {
@@ -88,6 +173,25 @@ export default function Index() {
         </View>
       </View>
 
+      {err ? (
+        <View className='errbox'>
+          <Text className='errbox__t'>⚠️ 内容加载出错(把下面这行念给开发者听):</Text>
+          <Text className='errbox__m'>{err}</Text>
+          <Text className='errbox__btn' onClick={resetLocal}>
+            清空本地数据重试
+          </Text>
+          <Text
+            className='errbox__btn errbox__btn--ghost'
+            onClick={() => {
+              writeObject('_lastError', '')
+              setErr('')
+            }}
+          >
+            知道了
+          </Text>
+        </View>
+      ) : null}
+
       {minutes >= DAILY_LIMIT_MIN ? (
         <View className='rest'>
           <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
@@ -95,15 +199,27 @@ export default function Index() {
       ) : null}
 
       <View className='entries'>
-        <View className='entry entry--math' onClick={() => Taro.navigateTo({ url: '/pages/math/index' })}>
+        <View className='entry entry--math' onClick={() => openPage('/pages/math/index')}>
           <Text className='entry__icon'>🧮</Text>
           <Text className='entry__t'>口算练习</Text>
         </View>
-        <View className='entry entry--eb' onClick={() => Taro.navigateTo({ url: '/pages/errorbook/index' })}>
+        <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
           <Text className='entry__icon'>📕</Text>
           <Text className='entry__t'>错题本</Text>
         </View>
       </View>
+
+      <View className='entries'>
+        <View className='entry entry--sound' onClick={() => void checkSound()}>
+          <Text className='entry__icon'>🔊</Text>
+          <Text className='entry__t'>声音自检</Text>
+        </View>
+      </View>
+
+      {loading ? <Text className='home__tip'>正在准备内容包…</Text> : null}
+      {!loading && !err && rows.length === 0 ? (
+        <Text className='home__tip'>还没有内容包,点上面「声音自检」旁的按钮或下拉重进试试。</Text>
+      ) : null}
 
       {rows.map(({ deck, due }) => {
         const modes: Array<[string, string, string]> =

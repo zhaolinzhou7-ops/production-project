@@ -15,6 +15,49 @@ function youdaoUrl(text: string, accent: Accent = 2): string {
   return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&type=${accent}`
 }
 
+/** 中文真人音源:有道的中文通道(le=zh),比英文通道读中文自然得多 */
+function youdaoZhUrl(text: string): string {
+  return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=zh`
+}
+
+function msgOf(e: unknown): string {
+  if (e instanceof Error) return e.message || String(e)
+  try {
+    return typeof e === 'string' ? e : JSON.stringify(e)
+  } catch {
+    return String(e)
+  }
+}
+
+/**
+ * 声音自检:试着取一次网络真人音源,如实返回结果。
+ * 'ok' = 能取到音频;其他字符串是失败原因(直接显示给用户)。
+ */
+export function probeAudio(text = 'apple'): Promise<string> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (m: string) => {
+      if (!done) {
+        done = true
+        resolve(m)
+      }
+    }
+    try {
+      const a = audioCtx()
+      a.offError()
+      a.stop()
+      a.onError((e: unknown) => finish('播放失败:' + msgOf(e)))
+      a.onCanplay(() => finish('ok'))
+      a.src = youdaoUrl(text, 2)
+      a.play()
+    } catch (e) {
+      finish('异常:' + msgOf(e))
+      return
+    }
+    setTimeout(() => finish('超时:8 秒内没有取到音频(多半是域名校验或网络问题)'), 8000)
+  })
+}
+
 /** 播一个 URL,失败时执行兜底 */
 function playUrl(url: string, onFail?: () => void): void {
   try {
@@ -68,7 +111,7 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
     await playPluginText(t, lang)
     return
   }
-  playUrl(youdaoUrl(t, 2))
+  playUrl(lang === 'zh_CN' ? youdaoZhUrl(t) : youdaoUrl(t, 2))
 }
 
 export function disposeAudio(): void {
