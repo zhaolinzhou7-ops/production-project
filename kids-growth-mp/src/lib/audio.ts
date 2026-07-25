@@ -110,9 +110,18 @@ let current: Taro.InnerAudioContext | null = null
 let token = 0
 
 function dispose(a: Taro.InnerAudioContext): void {
+  // 逐个 try:前一步抛错不能让后面的清理被跳过(否则会漏掉 destroy)
   try {
     a.offError()
+  } catch {
+    /* 忽略 */
+  }
+  try {
     a.stop()
+  } catch {
+    /* 忽略 */
+  }
+  try {
     a.destroy()
   } catch {
     /* 忽略 */
@@ -160,16 +169,24 @@ function playSequence(text: string, list: AudioSource[], prefKey: string, i: num
     writeObject(prefKey, s.id)
   }
 
-  a.onCanplay(succeeded)
-  a.onPlay(succeeded)
-  a.onEnded(() => {
-    moved = true
-  })
-  a.onError(() => {
-    // 有的源会「先能播、再报错」(返回的其实是网页不是音频),照样往下试
-    started = false
-    next()
-  })
+  try {
+    a.onCanplay(succeeded)
+  } catch {
+    /* 老基础库没有 onCanplay */
+  }
+  try {
+    a.onPlay(succeeded)
+    a.onEnded(() => {
+      moved = true
+    })
+    a.onError(() => {
+      // 有的源会「先能播、再报错」(返回的其实是网页不是音频),照样往下试
+      started = false
+      next()
+    })
+  } catch {
+    /* 忽略:事件注册失败时靠超时兜底 */
+  }
 
   try {
     a.src = s.url(text)
@@ -248,26 +265,49 @@ function msgOf(e: unknown): string {
   }
 }
 
-/** 单个音源探活:能不能真的取到音频(静音探测,不出声) */
+/**
+ * 单个音源探活:能不能真的取到音频(静音探测,不出声)。
+ *
+ * ⚠️ 这里每一步都单独 try/catch:不同版本基础库对 InnerAudioContext 的
+ * 属性/方法支持不一样(比如老版本没有 onCanplay),任何一步抛错都不能
+ * 让整个自检崩掉 —— 崩了用户就只剩一个看不懂的堆栈。
+ */
 function probeSource(s: AudioSource, sample: string): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false
+    let a: Taro.InnerAudioContext | null = null
     const finish = (ok: boolean) => {
       if (done) return
       done = true
-      dispose(a)
+      if (a) dispose(a)
       resolve(ok)
     }
-    let a: Taro.InnerAudioContext
     try {
       a = Taro.createInnerAudioContext()
-      a.volume = 0
     } catch {
       resolve(false)
       return
     }
-    a.onCanplay(() => finish(true))
-    a.onError(() => finish(false))
+    try {
+      a.volume = 0
+    } catch {
+      /* 忽略:静音探测失败就让它出声,不影响结果 */
+    }
+    try {
+      a.onCanplay(() => finish(true))
+    } catch {
+      /* 老基础库没有 onCanplay,靠 onPlay/超时判断 */
+    }
+    try {
+      a.onPlay(() => finish(true))
+    } catch {
+      /* 忽略 */
+    }
+    try {
+      a.onError(() => finish(false))
+    } catch {
+      /* 忽略 */
+    }
     try {
       a.src = s.url(sample)
       a.play()
@@ -286,16 +326,29 @@ export interface DiagLine {
 
 /** 声音自检:把中英文各音源挨个试一遍,如实返回哪家能用 */
 export async function diagnoseAudio(onProgress?: (done: number, total: number) => void): Promise<DiagLine[]> {
-  stopAudio()
+  try {
+    stopAudio()
+  } catch {
+    /* 忽略 */
+  }
   const jobs: Array<{ s: AudioSource; sample: string }> = [
     ...EN_SOURCES.map((s) => ({ s, sample: 'apple' })),
     ...ZH_SOURCES.map((s) => ({ s, sample: '白日依山尽' })),
   ]
   const out: DiagLine[] = []
   for (let i = 0; i < jobs.length; i++) {
-    const ok = await probeSource(jobs[i].s, jobs[i].sample)
+    let ok = false
+    try {
+      ok = await probeSource(jobs[i].s, jobs[i].sample)
+    } catch {
+      ok = false
+    }
     out.push({ label: jobs[i].s.label, ok })
-    onProgress?.(i + 1, jobs.length)
+    try {
+      onProgress?.(i + 1, jobs.length)
+    } catch {
+      /* 忽略:进度提示失败不影响自检 */
+    }
   }
   return out
 }

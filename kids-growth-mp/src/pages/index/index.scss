@@ -207,6 +207,54 @@
   }
 }
 
+.diag {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 24px;
+
+  &__t {
+    display: block;
+    font-size: 26px;
+    font-weight: bold;
+    color: #374151;
+    margin-bottom: 14px;
+  }
+
+  &__l {
+    display: block;
+    font-size: 24px;
+    color: #9ca3af;
+    line-height: 1.8;
+
+    &--ok {
+      color: #059669;
+      font-weight: 500;
+    }
+  }
+
+  &__hint {
+    display: block;
+    margin-top: 14px;
+    font-size: 22px;
+    color: #b45309;
+    background: rgba(251, 191, 36, 0.15);
+    border-radius: 16px;
+    padding: 16px;
+    line-height: 1.6;
+  }
+
+  &__close {
+    display: inline-block;
+    margin-top: 18px;
+    font-size: 24px;
+    color: #6b7280;
+    background: rgba(107, 114, 128, 0.1);
+    padding: 10px 24px;
+    border-radius: 999px;
+  }
+}
+
 .home__tip {
   display: block;
   margin: 20px 0;

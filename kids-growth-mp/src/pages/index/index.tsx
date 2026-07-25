@@ -12,7 +12,7 @@ import {
   getTodayStudyMinutes,
 } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
-import { diagnoseAudio, playText } from '../../lib/audio'
+import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -41,6 +41,9 @@ export default function Index() {
   const [minutes, setMinutes] = useState(0)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [diag, setDiag] = useState<DiagLine[]>([])
 
   /**
    * 载入首页数据。
@@ -97,27 +100,22 @@ export default function Index() {
 
   /** 声音自检:把中英文各个音源挨个试一遍,如实报告哪家能用 */
   const checkSound = async () => {
-    Taro.showLoading({ title: '检测中 0%', mask: true })
-    const lines = await diagnoseAudio((done, total) => {
-      Taro.showLoading({ title: `检测中 ${Math.round((done / total) * 100)}%`, mask: true })
-    })
-    Taro.hideLoading()
-    const okCount = lines.filter((l) => l.ok).length
-    const body = lines.map((l) => `${l.ok ? '✅' : '❌'} ${l.label}`).join('\n')
-    Taro.showModal({
-      title: okCount > 0 ? `可用音源 ${okCount}/${lines.length}` : '所有音源都取不到 ❌',
-      content:
-        okCount > 0
-          ? `${body}\n\n打勾的会自动优先使用,不用你操作。`
-          : `${body}\n\n开发者工具:详情 → 本地设置 → 勾选「不校验合法域名」。真机:需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。`,
-      showCancel: false,
-      confirmText: '知道了',
-      success: () => {
-        if (okCount > 0) {
-          void playText('小朋友你好', 'zh_CN')
-        }
-      },
-    })
+    let lines: DiagLine[] = []
+    try {
+      setChecking(true)
+      lines = await diagnoseAudio((done, total) => setProgress(Math.round((done / total) * 100)))
+    } catch (e) {
+      setChecking(false)
+      // 自检本身出错时,把原因显示在页面红框里(用户不用去翻调试器)
+      setErr('声音自检出错:' + msgOf(e))
+      return
+    }
+    setChecking(false)
+    setDiag(lines)
+    // 结果直接画在页面上(比弹窗更好读、也不会被弹窗长度截断)
+    if (lines.some((l) => l.ok)) {
+      void playText('小朋友你好', 'zh_CN')
+    }
   }
 
   /** 本地数据坏掉/存满时的自救按钮 */
@@ -215,9 +213,31 @@ export default function Index() {
       <View className='entries'>
         <View className='entry entry--sound' onClick={() => void checkSound()}>
           <Text className='entry__icon'>🔊</Text>
-          <Text className='entry__t'>声音自检</Text>
+          <Text className='entry__t'>{checking ? `检测中 ${progress}%` : '声音自检'}</Text>
         </View>
       </View>
+
+      {diag.length > 0 ? (
+        <View className='diag'>
+          <Text className='diag__t'>
+            可用音源 {diag.filter((l) => l.ok).length}/{diag.length}
+            {diag.some((l) => l.ok) ? '(打勾的会自动优先使用)' : ''}
+          </Text>
+          {diag.map((l) => (
+            <Text key={l.label} className={l.ok ? 'diag__l diag__l--ok' : 'diag__l'}>
+              {l.ok ? '✅' : '❌'} {l.label}
+            </Text>
+          ))}
+          {diag.every((l) => !l.ok) ? (
+            <Text className='diag__hint'>
+              全部取不到:开发者工具请勾选「详情 → 本地设置 → 不校验合法域名」;真机需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。
+            </Text>
+          ) : null}
+          <Text className='diag__close' onClick={() => setDiag([])}>
+            收起
+          </Text>
+        </View>
+      ) : null}
 
       {loading ? <Text className='home__tip'>正在准备内容包…</Text> : null}
       {!loading && !err && rows.length === 0 ? (
