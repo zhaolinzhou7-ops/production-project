@@ -11,6 +11,8 @@
   },
   "scripts": {
     "build:weapp": "taro build --type weapp",
+    "clean": "node scripts/clean.js",
+    "rebuild": "node scripts/clean.js && taro build --type weapp",
     "dev:weapp": "taro build --type weapp --watch",
     "typecheck": "tsc --noEmit"
   },
