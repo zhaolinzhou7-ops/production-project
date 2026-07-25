@@ -5,7 +5,7 @@ import { ArrowLeft, Mic, Volume2, Play, Square, Disc, Turtle } from 'lucide-reac
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { finishDrill } from '../db/study'
-import { speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import { speak, speakEnglish, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
 import { scorePronunciation, isRecordingSupported, startRecording, playRecording, type Recorder } from '../lib/pronounce'
 import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
@@ -26,7 +26,9 @@ function shuffle<T>(arr: T[]): T[] {
 
 /** 说英文(浏览器 TTS;句子无免费真人音源,如实用合成音) */
 function sayEn(text: string, rate = 0.85): void {
-  speak(text, 'en-US', rate)
+  // 慢速(rate<0.75)时用系统 TTS 才能真的放慢;正常速度优先真人音源
+  if (rate < 0.75) speak(text, 'en-US', rate)
+  else speakEnglish(text, rate)
 }
 
 /** 打分:整句相似度;若识别文本包含期望句(去标点空格),直接满星 */

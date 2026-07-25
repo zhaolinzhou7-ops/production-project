@@ -80,6 +80,82 @@ export function initAudioUnlock(): void {
 const liveUtterances: SpeechSynthesisUtterance[] = []
 let pendingSpeakTimer: ReturnType<typeof setTimeout> | null = null
 
+// ============ 音色挑选:尽量像真人 ============
+// 同一台手机常装着好几种语音,默认那个往往最"机器人"。
+// 这里给每个音色打分,优先挑神经网络/云端音色(Google/Microsoft Natural/Siri 等)。
+
+const VOICE_PREF_KEY = 'kids-growth-voice-pref'
+
+/** 家长手动指定的音色(按语言前缀存 voiceURI) */
+function getVoicePref(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(VOICE_PREF_KEY) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+export function setPreferredVoice(langPrefix: string, voiceURI: string | null): void {
+  const pref = getVoicePref()
+  if (voiceURI) pref[langPrefix] = voiceURI
+  else delete pref[langPrefix]
+  try {
+    localStorage.setItem(VOICE_PREF_KEY, JSON.stringify(pref))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+export function getPreferredVoiceURI(langPrefix: string): string | null {
+  return getVoicePref()[langPrefix] ?? null
+}
+
+/** 音色"像真人"程度打分(越高越自然) */
+function voiceScore(v: SpeechSynthesisVoice): number {
+  const n = `${v.name} ${v.voiceURI}`.toLowerCase()
+  let s = 0
+  // 明确标注的高质量/神经网络音色
+  if (/natural|neural|premium|enhanced|wavenet|journey|studio/.test(n)) s += 60
+  if (/google/.test(n)) s += 40
+  if (/microsoft/.test(n)) s += 25
+  if (/siri/.test(n)) s += 35
+  // 苹果中文常见的自然音色
+  if (/tingting|ting-ting|meijia|mei-jia|sinji|liangliang/.test(n)) s += 20
+  // 明显机械的老引擎
+  if (/espeak|pico|compact|eloquence|fallback/.test(n)) s -= 60
+  // 云端音色通常比本地合成更自然
+  if (!v.localService) s += 15
+  if (v.default) s += 3
+  return s
+}
+
+/** 某语言下可用的音色,按"像真人"排序 */
+export function listVoices(langPrefix: string): SpeechSynthesisVoice[] {
+  if (typeof speechSynthesis === 'undefined') return []
+  try {
+    return speechSynthesis
+      .getVoices()
+      .filter((v) => v.lang?.toLowerCase().replace('_', '-').startsWith(langPrefix.toLowerCase()))
+      .sort((a, b) => voiceScore(b) - voiceScore(a))
+  } catch {
+    return []
+  }
+}
+
+function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
+  const prefix = lang.slice(0, 2).toLowerCase()
+  const candidates = listVoices(prefix)
+  if (candidates.length === 0) return undefined
+  const wanted = getVoicePref()[prefix]
+  if (wanted) {
+    const hit = candidates.find((v) => v.voiceURI === wanted)
+    if (hit) return hit
+  }
+  // 同分时优先完全匹配地区(如 en-US 优于 en-IN)
+  const exact = candidates.filter((v) => v.lang?.toLowerCase().replace('_', '-') === lang.toLowerCase())
+  return (exact.length > 0 ? exact : candidates)[0]
+}
+
 /** 系统语音合成(TTS):中文、句子、离线兜底。times=2 自动复读一遍。 */
 export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1): void {
   if (typeof speechSynthesis === 'undefined') return
@@ -94,10 +170,8 @@ export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1): void
       const u = new SpeechSynthesisUtterance(text)
       u.lang = lang
       u.rate = rate
-      const prefix = lang.slice(0, 2).toLowerCase()
-      const voice = speechSynthesis
-        .getVoices()
-        .find((v) => v.lang?.toLowerCase().startsWith(prefix))
+      u.pitch = 1 // 保持自然音高(拔高会有"卡通味")
+      const voice = pickVoice(lang)
       if (voice) u.voice = voice
       liveUtterances.push(u)
       const release = () => {
@@ -167,6 +241,20 @@ export function playWordAudio(word: string, accent: Accent = 2, times = 1): void
   } catch {
     speak(word, fallbackLang, 0.9, times)
   }
+}
+
+/**
+ * 说一句英文:优先用**网络真人音源**(比设备合成音自然得多),
+ * 拉不到/太长时自动回退系统 TTS。用于对话、复述、儿歌朗读等整句场景。
+ */
+export function speakEnglish(text: string, rate = 0.85, times = 1): void {
+  const t = text.trim()
+  // 太长的句子音源接口不一定支持,直接用 TTS 更稳
+  if (t.length === 0 || t.length > 60) {
+    speak(t, 'en-US', rate, times)
+    return
+  }
+  playWordAudio(t, 2, times)
 }
 
 // ============ 语音识别(口语跟读比对) ============

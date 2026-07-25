@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Calculator, NotebookPen, ChevronRight, Volume2, VolumeX } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { packsForStage } from '../lib/learningContent'
+import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
+import { listVoices, setPreferredVoice, getPreferredVoiceURI, speak } from '../lib/audio'
 import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
@@ -53,6 +54,40 @@ export function LearnHomePage() {
     return out
   }, [currentChildId, decks])
 
+  // 每个卡组的学习进度(已开始学过的卡 / 总卡数)
+  const deckProgress = useLiveQuery(async () => {
+    if (!currentChildId || !decks) return {}
+    const out: Record<string, { learned: number; total: number }> = {}
+    for (const d of decks) {
+      const states = await db.studyStates
+        .where('[childId+deckId]')
+        .equals([currentChildId, d.id])
+        .toArray()
+      out[d.id] = {
+        learned: states.filter((s) => s.status !== 'new').length,
+        total: states.length,
+      }
+    }
+    return out
+  }, [currentChildId, decks])
+
+  // 还没添加的内容包(不限学段,家长可自助添加 → 解决"某科目看不到")
+  const availablePacks = useMemo(() => {
+    const added = new Set((decks ?? []).map((d) => d.builtinKey).filter(Boolean))
+    return BUILTIN_PACKS.filter((p) => !added.has(p.key))
+  }, [decks])
+
+  const [adding, setAdding] = useState<string | null>(null)
+  const addPack = async (key: string) => {
+    if (!currentChildId) return
+    setAdding(key)
+    try {
+      await ensureBuiltinDeck(currentChildId, key)
+    } finally {
+      setAdding(null)
+    }
+  }
+
   // 每日挑战:今日已练卡次(单词/古诗/识字会话 + 口算题数) vs 每日目标
   const challenge = useLiveQuery(async () => {
     if (!currentChildId) return null
@@ -87,6 +122,12 @@ export function LearnHomePage() {
   )
 
   const [openDeck, setOpenDeck] = useState<string | null>(null)
+  const [showPacks, setShowPacks] = useState(false)
+  const [showVoices, setShowVoices] = useState(false)
+  const [voicePick, setVoicePick] = useState<Record<string, string | null>>(() => ({
+    zh: getPreferredVoiceURI('zh'),
+    en: getPreferredVoiceURI('en'),
+  }))
   const [confirmAction, setConfirmAction] = useState<'graduate' | 'resetPet' | 'resetStickers' | null>(null)
 
   if (!child || !currentChildId) return null
@@ -316,54 +357,203 @@ export function LearnHomePage() {
           还没有词库,去家长模式分配吧
         </div>
       ) : (
-        <div className="space-y-3">
-          {decks.map((deck) => {
-            const due = dueCounts?.[deck.id] ?? 0
-            const modes = modesFor(deck.itemType, stage === 'toddler' || stage === 'primary')
-            const open = openDeck === deck.id
-            return (
-              <div key={deck.id} className="rounded-2xl bg-white/70 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setOpenDeck(open ? null : deck.id)}
-                  className="w-full flex items-center gap-3 p-4 text-left active:scale-[0.99] transition"
-                >
-                  <div className="text-2xl">{deck.icon}</div>
-                  <div className="flex-1">
-                    <div className="font-bold text-gray-800">{deck.name}</div>
-                    <div className="text-xs text-gray-400">{deck.subject}</div>
-                  </div>
-                  {due > 0 ? (
-                    <span className="rounded-full bg-brand-500 px-2.5 py-1 text-xs font-bold text-white">
-                      待学 {due}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-mint-400/30 px-2.5 py-1 text-xs font-medium text-mint-600">
-                      已清空
-                    </span>
-                  )}
-                </button>
-                {open && (
-                  <div className="grid grid-cols-2 gap-2 px-4 pb-4">
-                    {modes.map((m) => (
-                      <button
-                        key={m.mode}
-                        onClick={() => navigate(`/learn/session/${deck.id}/${m.mode as PracticeMode}`)}
-                        className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-left active:scale-95 transition"
-                      >
-                        <span className="text-lg">{m.icon}</span>
-                        <span className="text-sm">
-                          <span className="font-medium text-gray-700 block">{m.label}</span>
-                          <span className="text-[11px] text-gray-400">{m.desc}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+        <div className="space-y-4">
+          {Object.entries(
+            decks.reduce<Record<string, LearnDeck[]>>((acc, d) => {
+              ;(acc[d.subject] ??= []).push(d)
+              return acc
+            }, {}),
+          ).map(([subject, list]) => (
+            <div key={subject}>
+              <div className="mb-1.5 flex items-center gap-2 px-1">
+                <span className="text-[11px] font-bold text-gray-400">{subject}</span>
+                <span className="text-[11px] text-gray-300">{list.length} 个卡组</span>
               </div>
-            )
-          })}
+              <div className="space-y-2">
+                {list.map((deck) => {
+                  const due = dueCounts?.[deck.id] ?? 0
+                  const prog = deckProgress?.[deck.id]
+                  const modes = modesFor(deck.itemType, stage === 'toddler' || stage === 'primary')
+                  const open = openDeck === deck.id
+                  return (
+                    <div key={deck.id} className="rounded-2xl bg-white/70 shadow-sm overflow-hidden">
+                      <button
+                        onClick={() => setOpenDeck(open ? null : deck.id)}
+                        className="w-full flex items-center gap-3 p-4 text-left active:scale-[0.99] transition"
+                      >
+                        <div className="text-2xl">{deck.icon}</div>
+                        <div className="flex-1">
+                          <div className="font-bold text-gray-800">{deck.name}</div>
+                          {prog && prog.total > 0 ? (
+                            <>
+                              <div className="mt-1 h-1.5 w-full max-w-[9rem] rounded-full bg-gray-100 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-500"
+                                  style={{ width: `${Math.round((prog.learned / prog.total) * 100)}%` }}
+                                />
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-gray-400 tabular-nums">
+                                学过 {prog.learned}/{prog.total}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-gray-400">{deck.subject}</div>
+                          )}
+                        </div>
+                        {due > 0 ? (
+                          <span className="rounded-full bg-brand-500 px-2.5 py-1 text-xs font-bold text-white">
+                            待学 {due}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-mint-400/30 px-2.5 py-1 text-xs font-medium text-mint-600">
+                            已清空
+                          </span>
+                        )}
+                      </button>
+                      {open && (
+                        <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+                          {modes.map((m) => (
+                            <button
+                              key={m.mode}
+                              onClick={() => navigate(`/learn/session/${deck.id}/${m.mode as PracticeMode}`)}
+                              className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-left active:scale-95 transition"
+                            >
+                              <span className="text-lg">{m.icon}</span>
+                              <span className="text-sm">
+                                <span className="font-medium text-gray-700 block">{m.label}</span>
+                                <span className="text-[11px] text-gray-400">{m.desc}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
+
+      {/* 更多内容包:任何学段的内容都能自己加(识字/科学/成语… 找不到就来这里) */}
+      {availablePacks.length > 0 && (
+        <div className="mt-4 rounded-2xl bg-white/70 p-4 shadow-sm">
+          <button
+            onClick={() => setShowPacks((v) => !v)}
+            className="flex w-full items-center gap-3 text-left active:scale-[0.99] transition"
+          >
+            <div className="text-2xl">➕</div>
+            <div className="flex-1">
+              <div className="font-bold text-gray-800">更多内容包</div>
+              <div className="text-xs text-gray-400">
+                还有 {availablePacks.length} 个可以添加(识字 / 英语 / 科学 / 成语 / 地理…)
+              </div>
+            </div>
+            <ChevronRight
+              size={18}
+              className={`text-gray-300 transition-transform ${showPacks ? 'rotate-90' : ''}`}
+            />
+          </button>
+          {showPacks && (
+            <div className="mt-3 space-y-2">
+              {availablePacks.map((p) => (
+                <div key={p.key} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+                  <span className="text-xl">{p.icon}</span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium text-gray-700">{p.name}</span>
+                    <span className="text-[11px] text-gray-400">{p.subject}</span>
+                  </span>
+                  <button
+                    onClick={() => void addPack(p.key)}
+                    disabled={adding === p.key}
+                    className="rounded-full bg-brand-500 px-3.5 py-1.5 text-xs font-bold text-white active:scale-95 disabled:opacity-50"
+                  >
+                    {adding === p.key ? '添加中…' : '添加'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 语音音色:同一台手机常有多个音色,默认那个往往最机械 */}
+      <div className="mt-3 rounded-2xl bg-white/70 p-4 shadow-sm">
+        <button
+          onClick={() => setShowVoices((v) => !v)}
+          className="flex w-full items-center gap-3 text-left active:scale-[0.99] transition"
+        >
+          <div className="text-2xl">🔊</div>
+          <div className="flex-1">
+            <div className="font-bold text-gray-800">朗读音色</div>
+            <div className="text-xs text-gray-400">觉得声音机械?换一个更像真人的音色试听</div>
+          </div>
+          <ChevronRight
+            size={18}
+            className={`text-gray-300 transition-transform ${showVoices ? 'rotate-90' : ''}`}
+          />
+        </button>
+        {showVoices && (
+          <div className="mt-3 space-y-3">
+            {(
+              [
+                { prefix: 'zh', label: '中文', sample: '小朋友,今天我们一起学习吧' },
+                { prefix: 'en', label: '英语', sample: 'Hello! Nice to meet you.' },
+              ] as const
+            ).map(({ prefix, label, sample }) => {
+              const voices = listVoices(prefix)
+              const cur = voicePick[prefix]
+              if (voices.length === 0) {
+                return (
+                  <div key={prefix} className="text-[11px] text-gray-400">
+                    {label}:这台设备没有可用的{label}语音,需在系统设置里安装语音包。
+                  </div>
+                )
+              }
+              return (
+                <div key={prefix}>
+                  <div className="mb-1.5 text-[11px] font-bold text-gray-400">
+                    {label}(共 {voices.length} 个,排在前面的通常更自然)
+                  </div>
+                  <div className="space-y-1.5">
+                    {voices.slice(0, 6).map((v, i) => {
+                      const active = cur ? cur === v.voiceURI : i === 0
+                      return (
+                        <div key={v.voiceURI} className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setPreferredVoice(prefix, v.voiceURI)
+                              setVoicePick((p) => ({ ...p, [prefix]: v.voiceURI }))
+                              speak(sample, prefix === 'zh' ? 'zh-CN' : 'en-US', 0.9)
+                            }}
+                            className={`flex-1 rounded-xl px-3 py-2 text-left text-xs transition active:scale-95 ${
+                              active ? 'bg-brand-500 text-white' : 'bg-gray-50 text-gray-600'
+                            }`}
+                          >
+                            {v.name || v.voiceURI}
+                            {i === 0 && <span className="ml-1 opacity-70">· 推荐</span>}
+                          </button>
+                          <button
+                            onClick={() => speak(sample, prefix === 'zh' ? 'zh-CN' : 'en-US', 0.9)}
+                            className="rounded-full bg-brand-100 p-2 text-brand-600 active:scale-90"
+                            aria-label="试听"
+                          >
+                            <Volume2 size={14} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-gray-400">
+              点音色即设为默认并试听。英语单词和短句会优先用网络真人录音,这里的音色用于中文朗读和取不到录音时的兜底。
+            </p>
+          </div>
+        )}
+      </div>
 
       <p className="mt-4 text-[11px] text-gray-400">
         单词发音为网络真人音源(需联网播放),取不到时自动改用系统朗读;古诗/识字用系统中文朗读,需设备装有中文语音。跟读的语音识别需联网,且仅部分浏览器(Chrome/Safari)支持;录音只在本机播放、不上传。
