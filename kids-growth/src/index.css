@@ -128,6 +128,70 @@ body {
 .anim-shake { animation: scene-shake 0.9s ease-in-out both; }
 .anim-float { animation: scene-float 2.4s ease-in-out infinite alternate both; }
 
+/* ---- 动画短片的布景装饰:云飘、雨落、星闪、气球浮 ---- */
+@keyframes deco-drift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(140%); }
+}
+@keyframes deco-rain {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 0.9; }
+  100% { transform: translateY(260px); opacity: 0; }
+}
+@keyframes deco-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes deco-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes deco-flutter {
+  0% { transform: translate(0, 0) rotate(-8deg); }
+  33% { transform: translate(-18px, -12px) rotate(8deg); }
+  66% { transform: translate(12px, -20px) rotate(-6deg); }
+  100% { transform: translate(0, 0) rotate(-8deg); }
+}
+@keyframes deco-spin-slow {
+  0% { transform: rotate(0); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes deco-fade {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.6; }
+}
+.deco-drift { animation: deco-drift 22s linear infinite; }
+.deco-drift-slow { animation: deco-drift 34s linear infinite; }
+.deco-rain { animation: deco-rain 1.5s linear infinite; }
+.deco-rain-2 { animation: deco-rain 1.9s linear infinite 0.4s; }
+.deco-rain-3 { animation: deco-rain 1.7s linear infinite 0.8s; }
+.deco-twinkle { animation: deco-twinkle 2.2s ease-in-out infinite; }
+.deco-twinkle-2 { animation: deco-twinkle 2.8s ease-in-out infinite 0.6s; }
+.deco-float { animation: deco-float 3.4s ease-in-out infinite; }
+.deco-float-2 { animation: deco-float 4.2s ease-in-out infinite 0.8s; }
+.deco-flutter { animation: deco-flutter 6s ease-in-out infinite; }
+.deco-spin-slow { animation: deco-spin-slow 30s linear infinite; }
+.deco-fade { animation: deco-fade 3s ease-in-out infinite; }
+.deco-fade-2 { animation: deco-fade 3s ease-in-out infinite 1s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .deco-drift,
+  .deco-drift-slow,
+  .deco-rain,
+  .deco-rain-2,
+  .deco-rain-3,
+  .deco-twinkle,
+  .deco-twinkle-2,
+  .deco-float,
+  .deco-float-2,
+  .deco-flutter,
+  .deco-spin-slow,
+  .deco-fade,
+  .deco-fade-2 {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-float-up,
   .animate-shake,

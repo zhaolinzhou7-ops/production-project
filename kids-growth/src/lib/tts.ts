@@ -38,7 +38,30 @@ const baidu = (lang: 'zh' | 'en', per: number, id: string, label: string): TtsSo
 })
 
 export const TTS_SOURCES: TtsSource[] = [
-  // ---- 中文 ----
+  // ---- 中文(有道通道已在国内 iOS 实测可达,优先) ----
+  {
+    // 实测有道 type=2 在国内 iOS 上可用(英语已验证);中文文本走同一参数,
+    // 有道会用中文发音读出来 —— 这是目前最有希望的中文真人音源,故排在最前。
+    id: 'youdao-zh-t2',
+    label: '有道·中文(同英语通道)',
+    lang: 'zh',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`,
+  },
+  {
+    id: 'youdao-zh-t1',
+    label: '有道·中文(通道2)',
+    lang: 'zh',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=1`,
+  },
+  {
+    id: 'youdao-zh',
+    label: '有道·中文(le=zh)',
+    lang: 'zh',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`,
+  },
   baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
   baidu('zh', 0, 'baidu-zh-female', '百度·女声'),
   {
@@ -63,13 +86,6 @@ export const TTS_SOURCES: TtsSource[] = [
     lang: 'zh',
     maxLen: 200,
     url: (t) => `https://fanyi.baidu.com/gettts?lan=zh&text=${enc(t)}&spd=3&source=web`,
-  },
-  {
-    id: 'youdao-zh',
-    label: '有道·中文',
-    lang: 'zh',
-    maxLen: 120,
-    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`,
   },
   // ---- 英语 ----
   {

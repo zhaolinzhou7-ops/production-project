@@ -175,10 +175,16 @@ export function LearnHomePage() {
         )
       }
     }
-    const zhVoices = listVoices('zh').slice(0, 5).map((v) => v.name)
-    const enVoices = listVoices('en').slice(0, 5).map((v) => v.name)
-    lines.push(`设备中文音色: ${zhVoices.join(' / ') || '(无)'}`)
-    lines.push(`设备英语音色: ${enVoices.join(' / ') || '(无)'}`)
+    // 可用音色(已剔除搞怪音色)与被剔除的分别列出,便于判断设备语音状况
+    const fmt = (l: string) => listVoices(l).map((v) => v.name).join(' / ') || '(无)'
+    const dropped = (l: string) =>
+      listVoices(l, true)
+        .filter((v) => !listVoices(l).some((k) => k.voiceURI === v.voiceURI))
+        .map((v) => v.name)
+        .join(' / ') || '(无)'
+    lines.push(`设备中文音色(可用): ${fmt('zh')}`)
+    lines.push(`设备英语音色(可用): ${fmt('en')}`)
+    lines.push(`已屏蔽的搞怪音色: ${dropped('en')} ${dropped('zh')}`)
     lines.push(`浏览器: ${navigator.userAgent}`)
     const text = lines.join('\n')
     try {
@@ -665,10 +671,10 @@ export function LearnHomePage() {
               return (
                 <div key={prefix}>
                   <div className="mb-1.5 text-[11px] font-bold text-gray-400">
-                    {label}(共 {voices.length} 个,排在前面的通常更自然)
+                    {label}(共 {voices.length} 个,排在前面的通常更自然;已自动隐藏系统的搞怪音色)
                   </div>
                   <div className="space-y-1.5">
-                    {voices.slice(0, 6).map((v, i) => {
+                    {voices.map((v, i) => {
                       const active = cur ? cur === v.voiceURI : i === 0
                       return (
                         <div key={v.voiceURI} className="flex items-center gap-2">

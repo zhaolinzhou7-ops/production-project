@@ -106,6 +106,18 @@ export function getPreferredVoiceURI(langPrefix: string): string | null {
   return getVoicePref()[langPrefix] ?? null
 }
 
+/**
+ * 苹果系统自带的**搞怪音色**(novelty voices):Bad News 是阴森报丧腔、
+ * Bahh 是羊叫、Boing 是弹簧音、Zarvox 是机器人…… 它们本来就是故意难听的,
+ * 却混在 getVoices() 里,一不小心就会被选来给孩子读英语。必须排除干净。
+ */
+const NOVELTY_VOICE =
+  /\b(albert|bad news|good news|bahh|bells|boing|bubbles|cellos|deranged|hysterical|jester|junior|kathy|organ|pipe organ|princess|ralph|superstar|trinoids|whisper|wobble|zarvox|bruce|fred|agnes|vicki|victoria|grandma|grandpa|rocko|shelley|sandy|flo|eddy|reed)\b/i
+
+/** 各平台公认较自然的音色名(苹果 Samantha/Karen…,中文 婷婷/美佳…) */
+const GOOD_VOICE =
+  /\b(samantha|karen|daniel|moira|tessa|rishi|veena|fiona|nicky|aaron|ava|allison|susan|alex|siri|tingting|ting-ting|meijia|mei-jia|sinji|yu-shu|li-mu|liangliang|xiaoxiao|yunyang)\b/i
+
 /** 音色"像真人"程度打分(越高越自然) */
 function voiceScore(v: SpeechSynthesisVoice): number {
   const n = `${v.name} ${v.voiceURI}`.toLowerCase()
@@ -115,23 +127,33 @@ function voiceScore(v: SpeechSynthesisVoice): number {
   if (/google/.test(n)) s += 40
   if (/microsoft/.test(n)) s += 25
   if (/siri/.test(n)) s += 35
-  // 苹果中文常见的自然音色
-  if (/tingting|ting-ting|meijia|mei-jia|sinji|liangliang/.test(n)) s += 20
+  if (GOOD_VOICE.test(n)) s += 30
   // 明显机械的老引擎
   if (/espeak|pico|compact|eloquence|fallback/.test(n)) s -= 60
+  // 搞怪音色:绝不使用
+  if (NOVELTY_VOICE.test(n)) s -= 1000
   // 云端音色通常比本地合成更自然
   if (!v.localService) s += 15
   if (v.default) s += 3
   return s
 }
 
-/** 某语言下可用的音色,按"像真人"排序 */
-export function listVoices(langPrefix: string): SpeechSynthesisVoice[] {
+/** 是否为搞怪音色(界面里也不该列出来) */
+export function isNoveltyVoice(v: SpeechSynthesisVoice): boolean {
+  return NOVELTY_VOICE.test(`${v.name} ${v.voiceURI}`)
+}
+
+/**
+ * 某语言下**可用于朗读**的音色,按"像真人"排序;搞怪音色一律剔除。
+ * includeNovelty=true 时才带上(仅用于诊断展示)。
+ */
+export function listVoices(langPrefix: string, includeNovelty = false): SpeechSynthesisVoice[] {
   if (typeof speechSynthesis === 'undefined') return []
   try {
     return speechSynthesis
       .getVoices()
       .filter((v) => v.lang?.toLowerCase().replace('_', '-').startsWith(langPrefix.toLowerCase()))
+      .filter((v) => includeNovelty || !isNoveltyVoice(v))
       .sort((a, b) => voiceScore(b) - voiceScore(a))
   } catch {
     return []

@@ -39,6 +39,87 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+/**
+ * 动画短片的"布景":每部片一套配色 + 一层会飘的装饰,让画面不只是一个 emoji。
+ * deco 里的元素用 CSS 动画缓慢移动,营造景深。
+ */
+const CARTOON_THEME: Record<
+  string,
+  { bg: string; deco: { e: string; cls: string; style: React.CSSProperties }[] }
+> = {
+  morning: {
+    bg: 'from-amber-100 via-orange-50 to-sky-100',
+    deco: [
+      { e: '☀️', cls: 'deco-spin-slow', style: { top: '8%', right: '8%', fontSize: '2.2rem' } },
+      { e: '☁️', cls: 'deco-drift', style: { top: '16%', left: '-12%', fontSize: '1.8rem' } },
+      { e: '☁️', cls: 'deco-drift-slow', style: { top: '32%', left: '-24%', fontSize: '1.3rem' } },
+      { e: '🌿', cls: '', style: { bottom: '4%', left: '6%', fontSize: '1.6rem', opacity: 0.7 } },
+    ],
+  },
+  park: {
+    bg: 'from-sky-200 via-mint-400/25 to-lime-100',
+    deco: [
+      { e: '☁️', cls: 'deco-drift', style: { top: '10%', left: '-10%', fontSize: '2rem' } },
+      { e: '🌳', cls: '', style: { bottom: '2%', left: '3%', fontSize: '2.4rem', opacity: 0.85 } },
+      { e: '🌳', cls: '', style: { bottom: '2%', right: '5%', fontSize: '1.8rem', opacity: 0.7 } },
+      { e: '🦋', cls: 'deco-flutter', style: { top: '28%', right: '14%', fontSize: '1.4rem' } },
+    ],
+  },
+  cat: {
+    bg: 'from-rose-100 via-amber-50 to-orange-100',
+    deco: [
+      { e: '🐾', cls: 'deco-fade', style: { bottom: '10%', left: '10%', fontSize: '1.2rem' } },
+      { e: '🐾', cls: 'deco-fade-2', style: { bottom: '20%', left: '26%', fontSize: '1rem' } },
+      { e: '🧶', cls: 'deco-float', style: { top: '14%', right: '10%', fontSize: '1.6rem' } },
+    ],
+  },
+  rain: {
+    bg: 'from-slate-300 via-sky-100 to-slate-200',
+    deco: [
+      { e: '💧', cls: 'deco-rain', style: { top: '-10%', left: '18%', fontSize: '1.1rem' } },
+      { e: '💧', cls: 'deco-rain-2', style: { top: '-10%', left: '46%', fontSize: '0.9rem' } },
+      { e: '💧', cls: 'deco-rain-3', style: { top: '-10%', left: '72%', fontSize: '1rem' } },
+      { e: '☁️', cls: 'deco-drift-slow', style: { top: '6%', left: '-8%', fontSize: '2.2rem' } },
+    ],
+  },
+  farm: {
+    bg: 'from-lime-100 via-amber-50 to-yellow-100',
+    deco: [
+      { e: '🌾', cls: '', style: { bottom: '3%', left: '5%', fontSize: '1.6rem', opacity: 0.8 } },
+      { e: '🌾', cls: '', style: { bottom: '3%', right: '8%', fontSize: '1.4rem', opacity: 0.7 } },
+      { e: '☀️', cls: 'deco-spin-slow', style: { top: '8%', right: '10%', fontSize: '2rem' } },
+    ],
+  },
+  birthday: {
+    bg: 'from-pink-100 via-purple-50 to-sky-100',
+    deco: [
+      { e: '🎈', cls: 'deco-float', style: { top: '12%', left: '8%', fontSize: '2rem' } },
+      { e: '🎈', cls: 'deco-float-2', style: { top: '20%', right: '10%', fontSize: '1.6rem' } },
+      { e: '✨', cls: 'deco-twinkle', style: { top: '40%', left: '16%', fontSize: '1.2rem' } },
+      { e: '✨', cls: 'deco-twinkle-2', style: { top: '30%', right: '24%', fontSize: '1rem' } },
+    ],
+  },
+  moon: {
+    bg: 'from-indigo-900 via-indigo-700 to-purple-800',
+    deco: [
+      { e: '⭐', cls: 'deco-twinkle', style: { top: '14%', left: '12%', fontSize: '1rem' } },
+      { e: '⭐', cls: 'deco-twinkle-2', style: { top: '24%', right: '16%', fontSize: '1.2rem' } },
+      { e: '✨', cls: 'deco-twinkle', style: { top: '48%', left: '26%', fontSize: '0.9rem' } },
+      { e: '🪐', cls: 'deco-float-2', style: { top: '10%', right: '8%', fontSize: '1.8rem' } },
+    ],
+  },
+  shop: {
+    bg: 'from-teal-100 via-cyan-50 to-sky-100',
+    deco: [
+      { e: '🏷️', cls: 'deco-float', style: { top: '14%', left: '10%', fontSize: '1.4rem' } },
+      { e: '🧺', cls: '', style: { bottom: '5%', right: '8%', fontSize: '1.8rem', opacity: 0.8 } },
+      { e: '✨', cls: 'deco-twinkle-2', style: { top: '32%', right: '20%', fontSize: '1rem' } },
+    ],
+  },
+}
+
+const DEFAULT_THEME = { bg: 'from-sky-100 to-mint-400/20', deco: [] }
+
 /** 说英文(浏览器 TTS;句子无免费真人音源,如实用合成音) */
 function sayEn(text: string, rate = 0.85): void {
   // 慢速(rate<0.75)时用系统 TTS 才能真的放慢;正常速度优先真人音源
@@ -733,29 +814,61 @@ export function EnglishTalkPage() {
             </button>
           </div>
 
-          {/* 会动的画面 */}
-          <div className="relative flex h-52 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b from-sky-100 to-mint-400/20">
-            <span
-              key={`${cartoon.key}-${cIdx}`}
-              className={`text-8xl leading-none anim-${cartoon.lines[cIdx].anim ?? 'pop'}`}
-            >
-              {cartoon.lines[cIdx].scene}
-            </span>
-            {/* 进度点 */}
-            <div className="absolute bottom-2 flex gap-1">
-              {cartoon.lines.map((_, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 w-1.5 rounded-full ${i === cIdx ? 'bg-brand-500' : 'bg-white/70'}`}
+          {/* 会动的画面:主题布景 + 装饰层 + 主体场景 */}
+          {(() => {
+            const theme = CARTOON_THEME[cartoon.key] ?? DEFAULT_THEME
+            const dark = cartoon.key === 'moon'
+            return (
+              <div
+                className={`relative flex h-64 items-center justify-center overflow-hidden rounded-[1.75rem] bg-gradient-to-b ${theme.bg} shadow-inner`}
+              >
+                {/* 远景装饰 */}
+                {theme.deco.map((d, i) => (
+                  <span key={i} className={`pointer-events-none absolute ${d.cls}`} style={d.style}>
+                    {d.e}
+                  </span>
+                ))}
+                {/* 地面 */}
+                <div
+                  className={`pointer-events-none absolute inset-x-0 bottom-0 h-10 ${
+                    dark ? 'bg-white/10' : 'bg-white/35'
+                  } rounded-t-[50%]`}
                 />
-              ))}
-            </div>
-          </div>
+                {/* 主体场景:入场动效 + 之后轻轻呼吸 */}
+                <span
+                  key={`${cartoon.key}-${cIdx}`}
+                  className={`relative z-10 text-[5.5rem] leading-none drop-shadow-lg anim-${
+                    cartoon.lines[cIdx].anim ?? 'pop'
+                  }`}
+                >
+                  {cartoon.lines[cIdx].scene}
+                </span>
+                {/* 进度条 */}
+                <div className="absolute bottom-2.5 flex gap-1">
+                  {cartoon.lines.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i === cIdx
+                          ? 'w-5 bg-brand-500'
+                          : i < cIdx
+                            ? `w-1.5 ${dark ? 'bg-white/60' : 'bg-brand-300'}`
+                            : `w-1.5 ${dark ? 'bg-white/25' : 'bg-white/70'}`
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
-          {/* 字幕 */}
-          <div className="mt-3 rounded-2xl bg-white/80 p-4 text-center shadow-sm">
-            <div className="text-lg font-bold text-gray-800">{cartoon.lines[cIdx].en}</div>
-            <div className="mt-1 text-xs text-gray-400">{cartoon.lines[cIdx].zh}</div>
+          {/* 字幕:卡通对话框 */}
+          <div className="relative mt-4 rounded-3xl border-2 border-white bg-white/90 p-4 text-center shadow-md">
+            <span className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 border-l-2 border-t-2 border-white bg-white/90" />
+            <div className="text-[1.35rem] font-extrabold leading-snug text-gray-800">
+              {cartoon.lines[cIdx].en}
+            </div>
+            <div className="mt-1.5 text-sm text-gray-500">{cartoon.lines[cIdx].zh}</div>
           </div>
 
           {/* 控制条 */}
