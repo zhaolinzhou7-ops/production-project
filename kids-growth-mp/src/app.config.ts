@@ -28,9 +28,9 @@ export default defineAppConfig({
   //     provider: 'wx069ba97219f66d99',
   //   },
   // },
-  permission: {
-    'scope.record': {
-      desc: '用于跟读打分与录音回放(仅本地处理,不上传录音)',
-    },
-  },
+  // ⚠️ 不要在这里写 permission['scope.record']:
+  // app.json 的 permission 字段只接受定位相关的 scope,写录音会被判
+  //「无效的 app.json permission["scope.record"]」。
+  // 录音权限是首次调用录音时由微信自动弹窗申请的,说明文案在 mp 后台
+  //「设置 → 服务内容声明 → 用户隐私保护指引」里填写。
 })
