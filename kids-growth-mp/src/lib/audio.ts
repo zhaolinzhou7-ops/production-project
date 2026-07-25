@@ -1,24 +1,243 @@
 import Taro from '@tarojs/taro'
+import { readObject, writeObject } from '../store/db'
 import { textToSpeech, isSpeechAvailable, type SpeechLang } from './speech'
 
 /** 口音:1=英式 2=美式(有道 dictvoice 约定) */
 export type Accent = 1 | 2
 
-let ctx: Taro.InnerAudioContext | null = null
-function audioCtx(): Taro.InnerAudioContext {
-  if (!ctx) ctx = Taro.createInnerAudioContext()
-  return ctx
+/**
+ * 多音源朗读管线(与网页版同思路)。
+ *
+ * 为什么要好几个音源:这些公开接口没有稳定性承诺,某一家随时可能
+ * 「连得上但返回的不是音频」(中文有道就是这样)。所以按顺序一个个试,
+ * 第一个真能出声的就用它,并把它记下来,下次优先用 —— 用户不用管。
+ *
+ * 小程序限制:InnerAudioContext 播放网络音频,**真机**需要在小程序后台
+ * 把这些域名加入「downloadFile 合法域名」;开发者工具里关掉域名校验即可。
+ */
+export interface AudioSource {
+  id: string
+  label: string
+  /** 超过这个字数就跳过该音源 */
+  maxLen: number
+  url: (t: string) => string
 }
 
-/** 网络真人音源(有道词典发音):小程序里用 InnerAudioContext 直接播 URL */
-function youdaoUrl(text: string, accent: Accent = 2): string {
-  return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&type=${accent}`
+const enc = encodeURIComponent
+
+/** 百度语音公开接口:per=4 是童声「度丫丫」,对小朋友最友好 */
+const baidu = (lan: 'zh' | 'en', per: number, id: string, label: string): AudioSource => ({
+  id,
+  label,
+  maxLen: 300,
+  url: (t) =>
+    `https://tts.baidu.com/text2audio?lan=${lan}&text=${enc(t)}&spd=4&pit=5&vol=9&per=${per}&cuid=kidsgrowth&ctp=1&idx=1&aue=6`,
+})
+
+export const ZH_SOURCES: AudioSource[] = [
+  baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
+  baidu('zh', 0, 'baidu-zh-female', '百度·女声'),
+  {
+    id: 'baidu-zh-plain',
+    label: '百度·简版(参数最少)',
+    maxLen: 300,
+    url: (t) => `https://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=5&text=${enc(t)}`,
+  },
+  {
+    id: 'youdao-zh-t2',
+    label: '有道·中文(通道1)',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`,
+  },
+  {
+    id: 'youdao-zh-le',
+    label: '有道·中文(le=zh)',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`,
+  },
+  {
+    id: 'sogou-zh',
+    label: '搜狗·中文',
+    maxLen: 200,
+    url: (t) =>
+      `https://fanyi.sogou.com/reventondc/synthesis?text=${enc(t)}&speed=1&lang=zh-CHS&from=translateweb&speaker=1`,
+  },
+  {
+    id: 'baidu-fanyi-zh',
+    label: '百度翻译·中文',
+    maxLen: 200,
+    url: (t) => `https://fanyi.baidu.com/gettts?lan=zh&text=${enc(t)}&spd=3&source=web`,
+  },
+]
+
+export const EN_SOURCES: AudioSource[] = [
+  {
+    id: 'youdao-en-us',
+    label: '有道·美音(真人词库)',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`,
+  },
+  {
+    id: 'youdao-en-uk',
+    label: '有道·英音(真人词库)',
+    maxLen: 120,
+    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=1`,
+  },
+  baidu('en', 4, 'baidu-en-child', '百度·英语童声'),
+  {
+    id: 'baidu-en-plain',
+    label: '百度·英语简版',
+    maxLen: 300,
+    url: (t) => `https://tts.baidu.com/text2audio?lan=en&ie=UTF-8&spd=5&text=${enc(t)}`,
+  },
+]
+
+/** 记住上次真正出过声的音源,下次优先用它(省掉重复试错的等待) */
+const PREF_KEY_ZH = '_prefZh'
+const PREF_KEY_EN = '_prefEn'
+
+function ordered(list: AudioSource[], prefKey: string): AudioSource[] {
+  const pref = readObject<string>(prefKey, '')
+  if (!pref) return list
+  const hit = list.find((s) => s.id === pref)
+  return hit ? [hit, ...list.filter((s) => s !== hit)] : list
 }
 
-/** 中文真人音源:有道的中文通道(le=zh),比英文通道读中文自然得多 */
-function youdaoZhUrl(text: string): string {
-  return `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(text)}&le=zh`
+// ---------------------------------------------------------------- 播放
+
+let current: Taro.InnerAudioContext | null = null
+/** 每次新的朗读都会 +1,老的播放链看到号变了就自己停手,避免几段声音抢着播 */
+let token = 0
+
+function dispose(a: Taro.InnerAudioContext): void {
+  try {
+    a.offError()
+    a.stop()
+    a.destroy()
+  } catch {
+    /* 忽略 */
+  }
 }
+
+export function stopAudio(): void {
+  token += 1
+  if (current) {
+    dispose(current)
+    current = null
+  }
+}
+
+/** 逐个音源尝试播放,第一个真能出声的就留下 */
+function playSequence(text: string, list: AudioSource[], prefKey: string, i: number, my: number): void {
+  if (my !== token) return
+  if (i >= list.length) return
+  const s = list[i]
+  if (text.length > s.maxLen) {
+    playSequence(text, list, prefKey, i + 1, my)
+    return
+  }
+
+  const a = Taro.createInnerAudioContext()
+  try {
+    // 手机静音键打开时也要能听见(小朋友的机器常年静音)
+    a.obeyMuteSwitch = false
+  } catch {
+    /* 老版本基础库没有这个属性 */
+  }
+  current = a
+
+  let moved = false
+  let started = false
+  const next = () => {
+    if (moved) return
+    moved = true
+    dispose(a)
+    playSequence(text, list, prefKey, i + 1, my)
+  }
+  const succeeded = () => {
+    if (started) return
+    started = true
+    writeObject(prefKey, s.id)
+  }
+
+  a.onCanplay(succeeded)
+  a.onPlay(succeeded)
+  a.onEnded(() => {
+    moved = true
+  })
+  a.onError(() => {
+    // 有的源会「先能播、再报错」(返回的其实是网页不是音频),照样往下试
+    started = false
+    next()
+  })
+
+  try {
+    a.src = s.url(text)
+    a.play()
+  } catch {
+    next()
+    return
+  }
+
+  // 迟迟没有动静 = 这家不通,换下一家
+  setTimeout(() => {
+    if (my !== token) return
+    if (!started) next()
+  }, 4500)
+}
+
+/** 播放单词的真人发音(英语) */
+export function playWordAudio(word: string, accent: Accent = 2): void {
+  const t = word.trim()
+  if (!t) return
+  token += 1
+  const list = ordered(EN_SOURCES, PREF_KEY_EN)
+  // 指定英音时把英音提到最前
+  const arranged =
+    accent === 1 ? [...list].sort((a, b) => (a.id === 'youdao-en-uk' ? -1 : b.id === 'youdao-en-uk' ? 1 : 0)) : list
+  playSequence(t, arranged, PREF_KEY_EN, 0, token)
+}
+
+/** 用「微信同声传译」插件合成音朗读(后台添加了插件才有) */
+async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> {
+  try {
+    const file = await textToSpeech(text, lang)
+    token += 1
+    const my = token
+    const a = Taro.createInnerAudioContext()
+    try {
+      a.obeyMuteSwitch = false
+    } catch {
+      /* 忽略 */
+    }
+    if (my !== token) return true
+    current = a
+    a.src = file
+    a.play()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 朗读一段文字。插件优先(中文最自然),没有插件就走多音源真人管线。
+ */
+export async function playText(text: string, lang: SpeechLang): Promise<void> {
+  const t = text.trim()
+  if (!t) return
+  if (isSpeechAvailable()) {
+    if (await playPluginText(t, lang)) return
+  }
+  token += 1
+  if (lang === 'zh_CN') {
+    playSequence(t, ordered(ZH_SOURCES, PREF_KEY_ZH), PREF_KEY_ZH, 0, token)
+  } else {
+    playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN), PREF_KEY_EN, 0, token)
+  }
+}
+
+// ---------------------------------------------------------------- 自检
 
 function msgOf(e: unknown): string {
   if (e instanceof Error) return e.message || String(e)
@@ -29,96 +248,91 @@ function msgOf(e: unknown): string {
   }
 }
 
+/** 单个音源探活:能不能真的取到音频(静音探测,不出声) */
+function probeSource(s: AudioSource, sample: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (ok: boolean) => {
+      if (done) return
+      done = true
+      dispose(a)
+      resolve(ok)
+    }
+    let a: Taro.InnerAudioContext
+    try {
+      a = Taro.createInnerAudioContext()
+      a.volume = 0
+    } catch {
+      resolve(false)
+      return
+    }
+    a.onCanplay(() => finish(true))
+    a.onError(() => finish(false))
+    try {
+      a.src = s.url(sample)
+      a.play()
+    } catch {
+      finish(false)
+      return
+    }
+    setTimeout(() => finish(false), 4000)
+  })
+}
+
+export interface DiagLine {
+  label: string
+  ok: boolean
+}
+
+/** 声音自检:把中英文各音源挨个试一遍,如实返回哪家能用 */
+export async function diagnoseAudio(onProgress?: (done: number, total: number) => void): Promise<DiagLine[]> {
+  stopAudio()
+  const jobs: Array<{ s: AudioSource; sample: string }> = [
+    ...EN_SOURCES.map((s) => ({ s, sample: 'apple' })),
+    ...ZH_SOURCES.map((s) => ({ s, sample: '白日依山尽' })),
+  ]
+  const out: DiagLine[] = []
+  for (let i = 0; i < jobs.length; i++) {
+    const ok = await probeSource(jobs[i].s, jobs[i].sample)
+    out.push({ label: jobs[i].s.label, ok })
+    onProgress?.(i + 1, jobs.length)
+  }
+  return out
+}
+
 /**
- * 声音自检:试着取一次网络真人音源,如实返回结果。
- * 'ok' = 能取到音频;其他字符串是失败原因(直接显示给用户)。
+ * 快速自检:只回答「能不能取到英文音频」,失败时给出原因。
+ * 'ok' = 正常,其他字符串是可以直接显示给用户的失败说明。
  */
 export function probeAudio(text = 'apple'): Promise<string> {
   return new Promise((resolve) => {
     let done = false
+    let a: Taro.InnerAudioContext
     const finish = (m: string) => {
-      if (!done) {
-        done = true
-        resolve(m)
+      if (done) return
+      done = true
+      try {
+        dispose(a)
+      } catch {
+        /* 忽略 */
       }
+      resolve(m)
     }
     try {
-      const a = audioCtx()
-      a.offError()
-      a.stop()
-      a.onError((e: unknown) => finish('播放失败:' + msgOf(e)))
+      a = Taro.createInnerAudioContext()
+      a.volume = 0
       a.onCanplay(() => finish('ok'))
-      a.src = youdaoUrl(text, 2)
+      a.onError((e: unknown) => finish('播放失败:' + msgOf(e)))
+      a.src = EN_SOURCES[0].url(text)
       a.play()
     } catch (e) {
       finish('异常:' + msgOf(e))
       return
     }
-    setTimeout(() => finish('超时:8 秒内没有取到音频(多半是域名校验或网络问题)'), 8000)
+    setTimeout(() => finish('超时:4 秒内没有取到音频(多半是域名校验或网络问题)'), 4000)
   })
-}
-
-/** 播一个 URL,失败时执行兜底 */
-function playUrl(url: string, onFail?: () => void): void {
-  try {
-    const a = audioCtx()
-    a.offError()
-    a.stop()
-    a.src = url
-    a.onError(() => onFail?.())
-    a.play()
-  } catch {
-    onFail?.()
-  }
-}
-
-/**
- * 播放单词的真人发音(有道 dictvoice)。
- * 需在 mp 后台把 dict.youdao.com 加入「downloadFile 合法域名」;
- * 开发阶段 project.config.json 已关掉域名校验。取不到时回退插件合成音。
- */
-export function playWordAudio(word: string, accent: Accent = 2): void {
-  playUrl(youdaoUrl(word, accent), () => {
-    if (isSpeechAvailable()) void playPluginText(word, 'en_US')
-  })
-}
-
-/** 用「微信同声传译」插件合成音朗读 */
-async function playPluginText(text: string, lang: SpeechLang): Promise<void> {
-  try {
-    const file = await textToSpeech(text, lang)
-    const a = audioCtx()
-    a.offError()
-    a.stop()
-    a.src = file
-    a.play()
-  } catch {
-    /* 忽略:合成失败 */
-  }
-}
-
-/**
- * 朗读一段文字(中文古诗/识字,或英语兜底)。
- *
- * 插件优先——「微信同声传译」的中文最自然。但该插件并非每个账号都能添加
- * (后台可能搜不到,或受主体/类目限制),所以**插件不可用时自动回退到网络
- * 真人音源**,保证没有插件时中文不会整个哑掉。
- */
-export async function playText(text: string, lang: SpeechLang): Promise<void> {
-  const t = text.trim()
-  if (!t) return
-  if (isSpeechAvailable()) {
-    await playPluginText(t, lang)
-    return
-  }
-  playUrl(lang === 'zh_CN' ? youdaoZhUrl(t) : youdaoUrl(t, 2))
 }
 
 export function disposeAudio(): void {
-  try {
-    ctx?.destroy()
-  } catch {
-    /* 忽略 */
-  }
-  ctx = null
+  stopAudio()
 }

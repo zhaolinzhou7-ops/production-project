@@ -12,7 +12,7 @@ import {
   getTodayStudyMinutes,
 } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
-import { probeAudio, playWordAudio, playText } from '../../lib/audio'
+import { diagnoseAudio, playText } from '../../lib/audio'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -95,26 +95,29 @@ export default function Index() {
     })
   }
 
-  /** 声音自检:先试网络真人音源,把结果如实弹出来 */
+  /** 声音自检:把中英文各个音源挨个试一遍,如实报告哪家能用 */
   const checkSound = async () => {
-    Taro.showLoading({ title: '测试中…' })
-    const r = await probeAudio('apple')
+    Taro.showLoading({ title: '检测中 0%', mask: true })
+    const lines = await diagnoseAudio((done, total) => {
+      Taro.showLoading({ title: `检测中 ${Math.round((done / total) * 100)}%`, mask: true })
+    })
     Taro.hideLoading()
-    if (r === 'ok') {
-      playWordAudio('apple')
-      setTimeout(() => void playText('小朋友你好', 'zh_CN'), 1800)
-      Taro.showModal({
-        title: '声音正常 ✅',
-        content: '马上会听到英文 apple 和中文「小朋友你好」。听不到的话请检查手机音量、静音键。',
-        showCancel: false,
-      })
-    } else {
-      Taro.showModal({
-        title: '声音取不到 ❌',
-        content: `${r}\n\n开发者工具里请勾选:详情 → 本地设置 → 不校验合法域名。真机需在小程序后台把 dict.youdao.com 加入 downloadFile 合法域名。`,
-        showCancel: false,
-      })
-    }
+    const okCount = lines.filter((l) => l.ok).length
+    const body = lines.map((l) => `${l.ok ? '✅' : '❌'} ${l.label}`).join('\n')
+    Taro.showModal({
+      title: okCount > 0 ? `可用音源 ${okCount}/${lines.length}` : '所有音源都取不到 ❌',
+      content:
+        okCount > 0
+          ? `${body}\n\n打勾的会自动优先使用,不用你操作。`
+          : `${body}\n\n开发者工具:详情 → 本地设置 → 勾选「不校验合法域名」。真机:需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。`,
+      showCancel: false,
+      confirmText: '知道了',
+      success: () => {
+        if (okCount > 0) {
+          void playText('小朋友你好', 'zh_CN')
+        }
+      },
+    })
   }
 
   /** 本地数据坏掉/存满时的自救按钮 */
