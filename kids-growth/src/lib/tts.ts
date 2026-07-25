@@ -42,6 +42,22 @@ export const TTS_SOURCES: TtsSource[] = [
   baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
   baidu('zh', 0, 'baidu-zh-female', '百度·女声'),
   {
+    // 最简参数版:多余参数可能被服务端拒绝,留一个"最朴素"的形式提高命中率
+    id: 'baidu-zh-plain',
+    label: '百度·简版(参数最少)',
+    lang: 'zh',
+    maxLen: 300,
+    url: (t) => `https://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=5&text=${enc(t)}`,
+  },
+  {
+    id: 'sogou-zh',
+    label: '搜狗·中文',
+    lang: 'zh',
+    maxLen: 200,
+    url: (t) =>
+      `https://fanyi.sogou.com/reventondc/synthesis?text=${enc(t)}&speed=1&lang=zh-CHS&from=translateweb&speaker=1`,
+  },
+  {
     id: 'baidu-fanyi-zh',
     label: '百度翻译·中文',
     lang: 'zh',
@@ -78,6 +94,21 @@ export const TTS_SOURCES: TtsSource[] = [
     url: (t) => `https://translate.google.com/translate_tts?ie=UTF-8&q=${enc(t)}&tl=en&client=tw-ob`,
   },
   baidu('en', 4, 'baidu-en-child', '百度·英语童声'),
+  {
+    id: 'baidu-en-plain',
+    label: '百度·英语简版',
+    lang: 'en',
+    maxLen: 300,
+    url: (t) => `https://tts.baidu.com/text2audio?lan=en&ie=UTF-8&spd=5&text=${enc(t)}`,
+  },
+  {
+    id: 'sogou-en',
+    label: '搜狗·英语',
+    lang: 'en',
+    maxLen: 200,
+    url: (t) =>
+      `https://fanyi.sogou.com/reventondc/synthesis?text=${enc(t)}&speed=1&lang=en-USA&from=translateweb&speaker=1`,
+  },
 ]
 
 /** 音源所属域名(同域名的多个音源共享网络可达性) */
@@ -340,5 +371,36 @@ export async function testSource(s: TtsSource, sample: string): Promise<boolean>
   } catch {
     markFail(s.id)
     return false
+  }
+}
+
+/**
+ * 失败原因:
+ * - 'ok'          能连上且能播
+ * - 'unreachable' 请求根本发不出去(断网/被墙/被拦) → 换音源也没用,只能靠设备语音
+ * - 'not-audio'   能连上,但返回的不是可播音频(参数不对/需鉴权/返回错误页) → 我可以改地址
+ */
+export type DiagReason = 'ok' | 'unreachable' | 'not-audio'
+
+/**
+ * 诊断单个音源:先用 no-cors 请求判断"能不能连上",再判断"返回的是不是能播的音频"。
+ * 这两者的区别决定了问题是网络层还是接口参数,家长把结果发我即可精准修。
+ */
+export async function diagnoseSource(s: TtsSource, sample: string): Promise<DiagReason> {
+  const url = s.url(sample)
+  try {
+    // opaque 请求:读不到内容,但能区分"请求成功发出并有响应" vs "网络层失败"
+    await fetch(url, { mode: 'no-cors', cache: 'no-store' })
+  } catch {
+    markFail(s.id)
+    return 'unreachable'
+  }
+  try {
+    await playUrl(url, timeoutFor(sample) + 1500, 1)
+    markOk(s.id)
+    return 'ok'
+  } catch {
+    markFail(s.id)
+    return 'not-audio'
   }
 }

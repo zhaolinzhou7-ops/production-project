@@ -11,10 +11,12 @@ import {
   sourcesFor,
   setPreferredSource,
   getPreferredSource,
-  testSource,
+  diagnoseSource,
   healthOf,
   type TtsLang,
+  type DiagReason,
 } from '../lib/tts'
+import { VoiceHelpGuide } from '../components/common/VoiceHelpGuide'
 import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
@@ -140,20 +142,51 @@ export function LearnHomePage() {
     zh: getPreferredSource('zh'),
     en: getPreferredSource('en'),
   }))
-  const [testResult, setTestResult] = useState<Record<string, 'ok' | 'bad'>>({})
+  const [testResult, setTestResult] = useState<Record<string, DiagReason>>({})
   const [testing, setTesting] = useState<TtsLang | null>(null)
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  /** 逐个试听该语言的所有音源,标出哪些在当前网络下可用 */
+  /** 逐个诊断该语言的所有音源:区分"连不上"和"能连上但音频不可播" */
   const runTest = async (lang: TtsLang, sample: string) => {
     setTesting(lang)
     try {
       for (const s of sourcesFor(lang)) {
-        const ok = await testSource(s, sample)
-        setTestResult((r) => ({ ...r, [s.id]: ok ? 'ok' : 'bad' }))
-        await new Promise((r) => setTimeout(r, ok ? 1600 : 200))
+        const reason = await diagnoseSource(s, sample)
+        setTestResult((r) => ({ ...r, [s.id]: reason }))
+        await new Promise((r) => setTimeout(r, reason === 'ok' ? 1600 : 200))
       }
     } finally {
       setTesting(null)
+    }
+  }
+
+  /** 把诊断结果整理成一段文字,方便家长复制发我精准定位 */
+  const copyDiagnosis = async () => {
+    const lines: string[] = ['【朗读音源诊断】']
+    for (const lang of ['zh', 'en'] as const) {
+      lines.push(lang === 'zh' ? '中文:' : '英语:')
+      for (const s of sourcesFor(lang)) {
+        const r = testResult[s.id]
+        lines.push(
+          `  ${s.label}: ${
+            r === 'ok' ? '可用' : r === 'unreachable' ? '连不上(网络被拦)' : r === 'not-audio' ? '能连上但返回的不是音频' : '未测试'
+          }`,
+        )
+      }
+    }
+    const zhVoices = listVoices('zh').slice(0, 5).map((v) => v.name)
+    const enVoices = listVoices('en').slice(0, 5).map((v) => v.name)
+    lines.push(`设备中文音色: ${zhVoices.join(' / ') || '(无)'}`)
+    lines.push(`设备英语音色: ${enVoices.join(' / ') || '(无)'}`)
+    lines.push(`浏览器: ${navigator.userAgent}`)
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      window.prompt('复制下面这段发给我:', text)
     }
   }
   const [confirmAction, setConfirmAction] = useState<'graduate' | 'resetPet' | 'resetStickers' | null>(null)
@@ -545,7 +578,7 @@ export function LearnHomePage() {
                   </div>
                   <div className="space-y-1.5">
                     {list.map((s) => {
-                      const st = testResult[s.id] ?? healthOf(s.id)
+                      const st = testResult[s.id] ?? (healthOf(s.id) === 'bad' ? 'unreachable' : undefined)
                       const active = pref === s.id
                       return (
                         <button
@@ -553,8 +586,8 @@ export function LearnHomePage() {
                           onClick={() => {
                             setPreferredSource(lang, active ? null : s.id)
                             setSrcPick((p) => ({ ...p, [lang]: active ? null : s.id }))
-                            void testSource(s, sample).then((ok) =>
-                              setTestResult((r) => ({ ...r, [s.id]: ok ? 'ok' : 'bad' })),
+                            void diagnoseSource(s, sample).then((r) =>
+                              setTestResult((prev) => ({ ...prev, [s.id]: r })),
                             )
                           }}
                           className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition active:scale-95 ${
@@ -562,20 +595,54 @@ export function LearnHomePage() {
                           }`}
                         >
                           <span className="w-4 text-center">
-                            {st === 'ok' ? '✅' : st === 'bad' ? '⚠️' : '•'}
+                            {st === 'ok' ? '✅' : st === 'unreachable' ? '🚫' : st === 'not-audio' ? '⚠️' : '•'}
                           </span>
                           <span className="flex-1">{s.label}</span>
+                          {st === 'unreachable' && <span className="text-[10px] opacity-60">连不上</span>}
+                          {st === 'not-audio' && <span className="text-[10px] opacity-60">非音频</span>}
                           {active && <span className="text-[10px] opacity-80">优先</span>}
                         </button>
                       )
                     })}
                   </div>
                   <p className="mt-1 text-[10px] text-gray-400">
-                    ✅=能用 ⚠️=你的网络拿不到 · 点一下即试听并设为优先;都拿不到时自动用下面的设备音色。
+                    ✅能用 · 🚫网络连不上(换音源也没用) · ⚠️能连上但返回的不是音频(这种我能修) ·
+                    点一下即试听并设为优先
                   </p>
                 </div>
               )
             })}
+
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+              <button
+                onClick={() => void copyDiagnosis()}
+                className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-bold text-gray-600 active:scale-95"
+              >
+                {copied ? '✅ 已复制' : '📋 复制诊断信息发给开发者'}
+              </button>
+            </div>
+
+            {/* 不依赖网络的正路:装一个高质量语音音色 */}
+            <div className="rounded-2xl bg-sun-400/10 p-3">
+              <button
+                onClick={() => setShowVoiceHelp((v) => !v)}
+                className="flex w-full items-center gap-2 text-left active:scale-[0.99]"
+              >
+                <span className="text-lg">💡</span>
+                <span className="flex-1 text-xs font-bold text-gray-700">
+                  声音还是难听?点这里:教你把手机语音换成"接近真人"的
+                </span>
+                <ChevronRight
+                  size={16}
+                  className={`text-gray-400 transition-transform ${showVoiceHelp ? 'rotate-90' : ''}`}
+                />
+              </button>
+              {showVoiceHelp && (
+                <div className="mt-2">
+                  <VoiceHelpGuide />
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-gray-100 pt-3 text-[11px] font-bold text-gray-500">
               设备自带音色(兜底用)
