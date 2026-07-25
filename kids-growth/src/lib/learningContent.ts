@@ -90,13 +90,22 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-colors',
-    name: '颜色形状',
+    name: '认识颜色',
     subject: '启蒙',
     icon: '🌈',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 3, // 批次33 扩充词汇量
+    rev: 4, // 批次35 形状拆成独立卡组
     load: () => import('../data/decks/enlight-colors.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'enlight-shapes',
+    name: '认识形状',
+    subject: '启蒙',
+    icon: '🔷',
+    itemType: 'pic',
+    stages: ['toddler'],
+    load: () => import('../data/decks/enlight-shapes.json').then((m) => m.default as BuiltinPackData),
   },
   {
     key: 'enlight-numbers',

@@ -204,6 +204,43 @@ export function cancelRemote(): void {
 }
 
 /**
+ * 等音频的耐心:句子比单词大得多,首次下载也慢得多。
+ * 之前统一 2.2 秒 → 长句常常超时退回机械音,但音频随后到达并被缓存,
+ * 于是"第一遍难听、第二遍像真人"。按字数放宽即可消除这种落差。
+ */
+function timeoutFor(text: string): number {
+  return Math.min(6500, 2200 + text.length * 55)
+}
+
+/**
+ * 预热:提前把音频下载进缓存(只 load 不播),这样孩子点下去就是真人音,
+ * 不会因为首次下载慢而退回合成音。
+ */
+export function preloadRemote(text: string, lang: TtsLang): void {
+  const t = text.trim()
+  if (!t) return
+  const preferred = getPreferredSource(lang)
+  const cand = [
+    ...sourcesFor(lang).filter((s) => s.id === preferred),
+    ...sourcesFor(lang).filter((s) => s.id !== preferred),
+  ].find((s) => t.length <= s.maxLen && !isSkipped(s.id))
+  if (!cand) return
+  try {
+    const warm = new Audio()
+    warm.preload = 'auto'
+    warm.muted = true
+    warm.src = cand.url(t)
+    warm.load()
+    // 让它自己下载完就好,不播放;30 秒后释放
+    setTimeout(() => {
+      warm.src = ''
+    }, 30_000)
+  } catch {
+    /* 忽略:预热失败不影响正常播放 */
+  }
+}
+
+/**
  * 播一个 URL。resolve = 确实响了;reject = 拿不到音频(网络/格式/被拦)。
  * 首个 'playing' 事件即算成功;若 timeoutMs 内既没响也没报错,判为失败换下一个。
  */
@@ -282,7 +319,7 @@ export async function playRemote(text: string, lang: TtsLang, times = 1): Promis
     if (hostsTried >= 2) break
     hostsTried += 1
     try {
-      await playUrl(s.url(t), 2200, times)
+      await playUrl(s.url(t), timeoutFor(t), times)
       markOk(s.id)
       return s.id
     } catch (e) {

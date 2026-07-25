@@ -483,6 +483,177 @@ export function dialogsFor(stage: AgeStage): Dialog[] {
   return DIALOGS
 }
 
+
+// ============ 英语动画短片(自制:emoji 场景 + CSS 动画 + 真人音朗读) ============
+// 说明:市面上的英文动画片没有可合法内置的免费片源,所以这里用**自制动画短片**
+// 代替 —— 每句一个会动的大场景 + 英中双语字幕 + 真人音源朗读 + 跟读打分,
+// 孩子可以"看着动画跟着说"。内容全部原创,可放心使用。
+
+export type SceneAnim = 'pop' | 'bounce' | 'slide' | 'spin' | 'shake' | 'float'
+
+export interface CartoonLine {
+  /** 场景大图(emoji,可多个组合) */
+  scene: string
+  en: string
+  zh: string
+  anim?: SceneAnim
+}
+
+export interface Cartoon {
+  key: string
+  title: string
+  titleZh: string
+  icon: string
+  level: DialogLevel
+  lines: CartoonLine[]
+}
+
+export const CARTOONS: Cartoon[] = [
+  {
+    key: 'morning',
+    title: 'Good Morning',
+    titleZh: '早上好',
+    icon: '🌅',
+    level: 'easy',
+    lines: [
+      { scene: '🌅', en: 'The sun is up.', zh: '太阳出来了。', anim: 'float' },
+      { scene: '⏰', en: 'My clock says seven.', zh: '我的钟表七点了。', anim: 'shake' },
+      { scene: '🛏️', en: 'I wake up and stretch.', zh: '我起床伸个懒腰。', anim: 'pop' },
+      { scene: '🪥', en: 'I brush my teeth.', zh: '我刷牙。', anim: 'bounce' },
+      { scene: '🥛🍞', en: 'I eat bread and drink milk.', zh: '我吃面包喝牛奶。', anim: 'pop' },
+      { scene: '🎒', en: 'I put on my backpack.', zh: '我背上书包。', anim: 'slide' },
+      { scene: '👋', en: 'Goodbye, Mom!', zh: '再见,妈妈!', anim: 'bounce' },
+      { scene: '🏫', en: 'I go to school. Good morning!', zh: '我去上学。早上好!', anim: 'slide' },
+    ],
+  },
+  {
+    key: 'park',
+    title: 'At the Park',
+    titleZh: '在公园',
+    icon: '🌳',
+    level: 'easy',
+    lines: [
+      { scene: '🌳🌞', en: 'Today we go to the park.', zh: '今天我们去公园。', anim: 'float' },
+      { scene: '🐦', en: 'I see a little bird.', zh: '我看见一只小鸟。', anim: 'float' },
+      { scene: '🌸', en: 'The flowers are pink.', zh: '花是粉色的。', anim: 'pop' },
+      { scene: '⚽', en: 'I play with my ball.', zh: '我玩我的球。', anim: 'bounce' },
+      { scene: '🛝', en: 'I go down the slide. Wheee!', zh: '我滑滑梯。哇哦!', anim: 'slide' },
+      { scene: '🐶', en: 'A dog runs to me.', zh: '一只小狗跑向我。', anim: 'bounce' },
+      { scene: '🍦', en: 'We eat ice cream.', zh: '我们吃冰淇淋。', anim: 'pop' },
+      { scene: '🏠', en: 'Now we go home. What a nice day!', zh: '现在我们回家。真是美好的一天!', anim: 'slide' },
+    ],
+  },
+  {
+    key: 'cat',
+    title: 'Where Is My Cat',
+    titleZh: '我的小猫在哪里',
+    icon: '🐱',
+    level: 'easy',
+    lines: [
+      { scene: '🐱', en: 'I have a little cat.', zh: '我有一只小猫。', anim: 'pop' },
+      { scene: '❓', en: 'Where is my cat?', zh: '我的小猫在哪里?', anim: 'shake' },
+      { scene: '🛋️', en: 'Is it under the sofa? No.', zh: '在沙发下面吗?不在。', anim: 'shake' },
+      { scene: '📦', en: 'Is it in the box? No.', zh: '在箱子里吗?不在。', anim: 'shake' },
+      { scene: '🌳', en: 'Is it up the tree? No.', zh: '在树上吗?不在。', anim: 'shake' },
+      { scene: '🛏️', en: 'Look! It is on my bed.', zh: '看!它在我床上。', anim: 'pop' },
+      { scene: '😴', en: 'My cat is sleeping.', zh: '我的小猫在睡觉。', anim: 'float' },
+      { scene: '🥰', en: 'Good night, little cat.', zh: '晚安,小猫。', anim: 'bounce' },
+    ],
+  },
+  {
+    key: 'rain',
+    title: 'A Rainy Day',
+    titleZh: '下雨天',
+    icon: '🌧️',
+    level: 'easy',
+    lines: [
+      { scene: '☁️', en: 'The sky is gray.', zh: '天空是灰色的。', anim: 'float' },
+      { scene: '🌧️', en: 'Rain, rain, it is raining!', zh: '雨,雨,下雨啦!', anim: 'shake' },
+      { scene: '☂️', en: 'I open my umbrella.', zh: '我打开雨伞。', anim: 'pop' },
+      { scene: '🥾', en: 'I put on my boots.', zh: '我穿上雨靴。', anim: 'bounce' },
+      { scene: '💦', en: 'I jump in the water. Splash!', zh: '我在水里跳。啪嗒!', anim: 'bounce' },
+      { scene: '🐸', en: 'A frog says hello.', zh: '一只青蛙问好。', anim: 'bounce' },
+      { scene: '🌈', en: 'The rain stops. A rainbow!', zh: '雨停了。彩虹!', anim: 'pop' },
+      { scene: '😄', en: 'I love rainy days.', zh: '我喜欢下雨天。', anim: 'float' },
+    ],
+  },
+  {
+    key: 'farm',
+    title: 'On the Farm',
+    titleZh: '在农场',
+    icon: '🚜',
+    level: 'easy',
+    lines: [
+      { scene: '🚜', en: 'We go to the farm.', zh: '我们去农场。', anim: 'slide' },
+      { scene: '🐮', en: 'The cow says moo.', zh: '奶牛哞哞叫。', anim: 'bounce' },
+      { scene: '🐷', en: 'The pig says oink.', zh: '小猪呼呼叫。', anim: 'bounce' },
+      { scene: '🐔', en: 'The hen has three eggs.', zh: '母鸡有三个蛋。', anim: 'pop' },
+      { scene: '🐑', en: 'The sheep is white and soft.', zh: '绵羊又白又软。', anim: 'float' },
+      { scene: '🌽', en: 'We pick corn and carrots.', zh: '我们摘玉米和胡萝卜。', anim: 'pop' },
+      { scene: '🐴', en: 'I ride the brown horse.', zh: '我骑棕色的马。', anim: 'bounce' },
+      { scene: '👋', en: 'Bye bye, farm animals!', zh: '再见,农场的动物们!', anim: 'bounce' },
+    ],
+  },
+  {
+    key: 'birthday',
+    title: 'My Birthday',
+    titleZh: '我的生日',
+    icon: '🎂',
+    level: 'easy',
+    lines: [
+      { scene: '🎂', en: 'Today is my birthday!', zh: '今天是我的生日!', anim: 'pop' },
+      { scene: '🎈🎈', en: 'We have red and blue balloons.', zh: '我们有红气球和蓝气球。', anim: 'float' },
+      { scene: '👦👧', en: 'My friends come to my home.', zh: '我的朋友们来我家。', anim: 'slide' },
+      { scene: '🎁', en: 'They give me a big gift.', zh: '他们给我一个大礼物。', anim: 'pop' },
+      { scene: '🕯️', en: 'I have six candles.', zh: '我有六根蜡烛。', anim: 'shake' },
+      { scene: '🌟', en: 'I close my eyes and make a wish.', zh: '我闭上眼睛许个愿。', anim: 'float' },
+      { scene: '🍰', en: 'We eat the cake. Yummy!', zh: '我们吃蛋糕。真好吃!', anim: 'bounce' },
+      { scene: '🥳', en: 'Thank you, everyone!', zh: '谢谢大家!', anim: 'bounce' },
+    ],
+  },
+  {
+    key: 'moon',
+    title: 'To the Moon',
+    titleZh: '去月球',
+    icon: '🚀',
+    level: 'harder',
+    lines: [
+      { scene: '🌙', en: 'At night I look at the moon.', zh: '晚上我看月亮。', anim: 'float' },
+      { scene: '💭', en: 'I want to fly to the moon.', zh: '我想飞到月球上。', anim: 'float' },
+      { scene: '🚀', en: 'I build a big rocket.', zh: '我造了一个大火箭。', anim: 'pop' },
+      { scene: '🔢', en: 'Three, two, one. Go!', zh: '三,二,一。出发!', anim: 'shake' },
+      { scene: '✨', en: 'I fly past the shining stars.', zh: '我飞过闪亮的星星。', anim: 'slide' },
+      { scene: '🌕', en: 'I land on the moon. It is very quiet.', zh: '我在月球着陆。这里很安静。', anim: 'pop' },
+      { scene: '👨‍🚀', en: 'I jump high because the moon is light.', zh: '因为月球很轻,我跳得很高。', anim: 'bounce' },
+      { scene: '🌍', en: 'I look at the Earth. It is blue and beautiful.', zh: '我看着地球。它又蓝又美。', anim: 'float' },
+      { scene: '🏠', en: 'Then I fly home and go to bed.', zh: '然后我飞回家去睡觉。', anim: 'slide' },
+    ],
+  },
+  {
+    key: 'shop',
+    title: 'At the Shop',
+    titleZh: '去买东西',
+    icon: '🛒',
+    level: 'harder',
+    lines: [
+      { scene: '🛒', en: 'Mom and I go to the shop.', zh: '妈妈和我去商店。', anim: 'slide' },
+      { scene: '📝', en: 'We have a shopping list.', zh: '我们有一张购物清单。', anim: 'pop' },
+      { scene: '🍎', en: 'First we buy four apples.', zh: '我们先买四个苹果。', anim: 'pop' },
+      { scene: '🥛', en: 'Then we buy a bottle of milk.', zh: '然后买一瓶牛奶。', anim: 'pop' },
+      { scene: '🍞', en: 'The bread smells so good.', zh: '面包闻起来真香。', anim: 'float' },
+      { scene: '💰', en: 'Mom pays twenty yuan.', zh: '妈妈付了二十块钱。', anim: 'shake' },
+      { scene: '🛍️', en: 'I help carry the bag.', zh: '我帮忙拿袋子。', anim: 'bounce' },
+      { scene: '🏠', en: 'We walk home together.', zh: '我们一起走回家。', anim: 'slide' },
+    ],
+  },
+]
+
+/** 按学段筛选:幼儿只看短片易档 */
+export function cartoonsFor(stage: AgeStage): Cartoon[] {
+  if (stage === 'toddler') return CARTOONS.filter((c) => c.level === 'easy')
+  return CARTOONS
+}
+
 // ============ 英文儿歌(公有领域传统童谣) ============
 
 export interface Rhyme {

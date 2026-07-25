@@ -5,15 +5,30 @@ import { ArrowLeft, Mic, Volume2, Play, Square, Disc, Turtle } from 'lucide-reac
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { finishDrill } from '../db/study'
-import { speak, speakEnglish, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import {
+  speak,
+  speakEnglish,
+  prefetchSpeech,
+  recognizeOnce,
+  isSpeechRecognitionSupported,
+  normalizeForCompare,
+} from '../lib/audio'
 import { scorePronunciation, isRecordingSupported, startRecording, playRecording, type Recorder } from '../lib/pronounce'
 import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { feedPet, type FeedResult } from '../lib/pets'
-import { dialogsFor, retellSentencesFor, RHYMES, type Dialog, type Rhyme } from '../lib/talkContent'
+import {
+  dialogsFor,
+  retellSentencesFor,
+  RHYMES,
+  cartoonsFor,
+  type Dialog,
+  type Rhyme,
+  type Cartoon,
+} from '../lib/talkContent'
 import { getMelody, playMelodyLine, stopMelody } from '../lib/melody'
 
-type Tab = 'dialog' | 'retell' | 'rhyme'
+type Tab = 'dialog' | 'retell' | 'rhyme' | 'cartoon'
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -69,6 +84,15 @@ export function EnglishTalkPage() {
   const [recBlob, setRecBlob] = useState<Blob | null>(null)
   const [recording, setRecording] = useState(false)
   const recorderRef = useRef<Recorder | null>(null)
+
+  // ---- 动画短片状态 ----
+  const [cartoon, setCartoon] = useState<Cartoon | null>(null)
+  const [cIdx, setCIdx] = useState(0)
+  const [cPlaying, setCPlaying] = useState(false)
+  const [cStars, setCStars] = useState<number[]>([])
+  const [cSpeakMode, setCSpeakMode] = useState(false)
+  const cartoonTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const myCartoons = cartoonsFor(stage)
 
   // ---- 儿歌状态 ----
   const [rhyme, setRhyme] = useState<Rhyme | null>(null)
@@ -220,6 +244,92 @@ export function EnglishTalkPage() {
     }
   }
 
+  // ---- 动画短片逻辑:逐句播放场景 + 真人音朗读 + 预热下一句 ----
+  /** 播第 i 句;自动模式下播完自动进下一句 */
+  const playCartoonLine = useCallback(
+    (c: Cartoon, i: number, auto: boolean) => {
+      if (cartoonTimer.current) clearTimeout(cartoonTimer.current)
+      setCIdx(i)
+      sayEn(c.lines[i].en)
+      // 提前把下一句下载好,避免下一句因为首次下载慢而退回机械音
+      if (i + 1 < c.lines.length) prefetchSpeech(c.lines[i + 1].en, 'en')
+      if (!auto) return
+      const holdMs = Math.max(2600, c.lines[i].en.length * 105)
+      cartoonTimer.current = setTimeout(() => {
+        if (i + 1 < c.lines.length) playCartoonLine(c, i + 1, true)
+        else setCPlaying(false)
+      }, holdMs)
+    },
+    [],
+  )
+
+  const startCartoon = (c: Cartoon, speakMode: boolean) => {
+    if (cartoonTimer.current) clearTimeout(cartoonTimer.current)
+    stopMelody()
+    setCartoon(c)
+    setCSpeakMode(speakMode)
+    setCStars([])
+    setDone(null)
+    setWonSticker(null)
+    setPetResult(null)
+    setStartedAt(Date.now())
+    resetPerTurn()
+    if (speakMode) {
+      // 跟读模式:播一句,等孩子跟读
+      setCPlaying(false)
+      setCIdx(0)
+      setTimeout(() => {
+        sayEn(c.lines[0].en)
+        if (c.lines.length > 1) prefetchSpeech(c.lines[1].en, 'en')
+      }, 400)
+    } else {
+      setCPlaying(true)
+      setTimeout(() => playCartoonLine(c, 0, true), 400)
+    }
+  }
+
+  const pauseCartoon = () => {
+    if (cartoonTimer.current) clearTimeout(cartoonTimer.current)
+    setCPlaying(false)
+  }
+
+  /** 跟读模式:记一句的星级,推进到下一句;最后一句结算 */
+  const nextCartoonLine = (stars: number) => {
+    if (!cartoon) return
+    const newStars = [...cStars, stars]
+    setCStars(newStars)
+    if (stars >= 2) sfxCorrect()
+    if (cIdx + 1 >= cartoon.lines.length) {
+      void settle('cartoon', newStars, cartoon.lines.length)
+    } else {
+      const ni = cIdx + 1
+      setCIdx(ni)
+      resetPerTurn()
+      setTimeout(() => {
+        sayEn(cartoon.lines[ni].en)
+        if (ni + 1 < cartoon.lines.length) prefetchSpeech(cartoon.lines[ni + 1].en, 'en')
+      }, 500)
+    }
+  }
+
+  const listenCartoon = async () => {
+    if (!cartoon) return
+    const want = cartoon.lines[cIdx].en
+    setListening(true)
+    setMsg('聆听中…跟着刚才那句说')
+    try {
+      const r = await recognizeOnce(want, 'en-US')
+      const score = scoreReply(r.transcript, want)
+      setListening(false)
+      setLastStars(score.stars)
+      setMsg(score.message + (r.transcript ? `(听到:${r.transcript})` : ''))
+      if (score.stars >= 2) setTimeout(() => nextCartoonLine(score.stars), 1400)
+    } catch {
+      setListening(false)
+      setMsg('没听清,再试一次;也可以点「我说对了」继续')
+    }
+  }
+
   // ---- 儿歌逻辑:逐句朗读 + 高亮 ----
   const playRhyme = useCallback(
     (r: Rhyme, from = 0) => {
@@ -278,6 +388,7 @@ export function EnglishTalkPage() {
 
   useEffect(() => () => {
     if (rhymeTimer.current) clearTimeout(rhymeTimer.current)
+    if (cartoonTimer.current) clearTimeout(cartoonTimer.current)
     stopMelody()
   }, [])
 
@@ -291,6 +402,9 @@ export function EnglishTalkPage() {
         setDialog(null)
         setRhyme(null)
         setRetellStarted(false)
+        setCartoon(null)
+        setCPlaying(false)
+        if (cartoonTimer.current) clearTimeout(cartoonTimer.current)
         resetPerTurn()
         stopRhymePlayback()
       }}
@@ -372,6 +486,7 @@ export function EnglishTalkPage() {
       <div className="mb-4 flex gap-2">
         <TabBtn t="dialog" label="🗣 对话" />
         <TabBtn t="retell" label="👂 听力复述" />
+        <TabBtn t="cartoon" label="🎬 动画" />
         <TabBtn t="rhyme" label="🎵 儿歌" />
       </div>
 
@@ -556,6 +671,197 @@ export function EnglishTalkPage() {
           </div>
         </div>
       ) : null}
+
+      {/* ---- 动画短片 ---- */}
+      {tab === 'cartoon' && !cartoon && (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 mb-2">
+            自制英语动画短片({myCartoons.length} 部):会动的画面 + 英中字幕 + 真人音朗读,还能「跟着说」打分
+          </p>
+          {myCartoons.map((c) => (
+            <div
+              key={c.key}
+              className="w-full rounded-2xl bg-white/70 p-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{c.icon}</span>
+                <span className="flex-1">
+                  <span className="block font-bold text-gray-800">{c.title}</span>
+                  <span className="text-xs text-gray-400">
+                    {c.titleZh} · {c.lines.length} 句 · {c.level === 'easy' ? '入门' : '进阶'}
+                  </span>
+                </span>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => startCartoon(c, false)}
+                  className="flex-1 rounded-xl bg-brand-500 py-2.5 text-sm font-bold text-white active:scale-95 transition"
+                >
+                  ▶ 看动画
+                </button>
+                <button
+                  onClick={() => startCartoon(c, true)}
+                  className="flex-1 rounded-xl bg-mint-500 py-2.5 text-sm font-bold text-white active:scale-95 transition"
+                >
+                  🎤 跟着说
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'cartoon' && cartoon && (
+        <div className="px-1">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <div className="font-bold text-gray-800">
+                {cartoon.icon} {cartoon.title}
+              </div>
+              <div className="text-xs text-gray-400">
+                第 {cIdx + 1}/{cartoon.lines.length} 句 · {cSpeakMode ? '跟读模式' : '看动画'}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                pauseCartoon()
+                setCartoon(null)
+              }}
+              className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-500 active:scale-95"
+            >
+              返回列表
+            </button>
+          </div>
+
+          {/* 会动的画面 */}
+          <div className="relative flex h-52 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-b from-sky-100 to-mint-400/20">
+            <span
+              key={`${cartoon.key}-${cIdx}`}
+              className={`text-8xl leading-none anim-${cartoon.lines[cIdx].anim ?? 'pop'}`}
+            >
+              {cartoon.lines[cIdx].scene}
+            </span>
+            {/* 进度点 */}
+            <div className="absolute bottom-2 flex gap-1">
+              {cartoon.lines.map((_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-full ${i === cIdx ? 'bg-brand-500' : 'bg-white/70'}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* 字幕 */}
+          <div className="mt-3 rounded-2xl bg-white/80 p-4 text-center shadow-sm">
+            <div className="text-lg font-bold text-gray-800">{cartoon.lines[cIdx].en}</div>
+            <div className="mt-1 text-xs text-gray-400">{cartoon.lines[cIdx].zh}</div>
+          </div>
+
+          {/* 控制条 */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={() => sayEn(cartoon.lines[cIdx].en)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
+            >
+              <Volume2 size={15} /> 再听
+            </button>
+            <button
+              onClick={() => sayEn(cartoon.lines[cIdx].en, 0.6)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-mint-400/25 px-4 py-2 text-sm font-medium text-mint-600 active:scale-95"
+            >
+              <Turtle size={15} /> 慢速
+            </button>
+            {!cSpeakMode &&
+              (cPlaying ? (
+                <button
+                  onClick={pauseCartoon}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-4 py-2 text-sm font-medium text-orange-600 active:scale-95"
+                >
+                  <Square size={15} /> 暂停
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setCPlaying(true)
+                    playCartoonLine(cartoon, cIdx, true)
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-sm font-bold text-white active:scale-95"
+                >
+                  <Play size={15} /> 继续播
+                </button>
+              ))}
+          </div>
+
+          {/* 跟读模式:麦克风打分 */}
+          {cSpeakMode && (
+            <div className="mt-4 flex flex-col items-center">
+              {recognitionOk && (
+                <button
+                  onClick={() => void listenCartoon()}
+                  disabled={listening}
+                  className={`inline-flex items-center gap-2 rounded-2xl px-8 py-3.5 font-bold text-white active:scale-95 ${
+                    listening ? 'bg-orange-400' : 'bg-mint-500'
+                  }`}
+                >
+                  <Mic size={18} /> {listening ? '在听…' : '跟着说这句'}
+                </button>
+              )}
+              {lastStars >= 0 && (
+                <div className="mt-3 text-3xl tracking-wider">
+                  {'⭐'.repeat(lastStars)}
+                  <span className="opacity-30">{'⭐'.repeat(3 - lastStars)}</span>
+                </div>
+              )}
+              {msg && <div className="mt-2 text-center text-sm text-gray-500">{msg}</div>}
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={() => nextCartoonLine(0)}
+                  className="rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-500 active:scale-95"
+                >
+                  跳过
+                </button>
+                <button
+                  onClick={() => nextCartoonLine(3)}
+                  className="rounded-xl bg-mint-100 px-4 py-2 text-sm text-mint-600 active:scale-95"
+                >
+                  我说对了
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!cSpeakMode && (
+            <div className="mt-4 flex justify-center gap-3">
+              <button
+                onClick={() => cIdx > 0 && playCartoonLine(cartoon, cIdx - 1, cPlaying)}
+                disabled={cIdx === 0}
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-500 active:scale-95 disabled:opacity-40"
+              >
+                ← 上一句
+              </button>
+              <button
+                onClick={() =>
+                  cIdx + 1 < cartoon.lines.length && playCartoonLine(cartoon, cIdx + 1, cPlaying)
+                }
+                disabled={cIdx + 1 >= cartoon.lines.length}
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm text-gray-500 active:scale-95 disabled:opacity-40"
+              >
+                下一句 →
+              </button>
+              <button
+                onClick={() => startCartoon(cartoon, true)}
+                className="rounded-xl bg-mint-500 px-4 py-2 text-sm font-bold text-white active:scale-95"
+              >
+                🎤 换成跟着说
+              </button>
+            </div>
+          )}
+          <p className="mt-3 text-center text-[11px] text-gray-400">
+            画面为自制动画(emoji 场景+动效),内容原创;英文朗读优先用真人音源。
+          </p>
+        </div>
+      )}
 
       {/* ---- 儿歌 ---- */}
       {tab === 'rhyme' && !rhyme && (

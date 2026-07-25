@@ -88,11 +88,57 @@ body {
   animation: combo-pulse 0.35s ease-out;
 }
 
+/* ---- 动画短片:每句台词一种入场动效,让画面"动起来" ---- */
+@keyframes scene-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  65% { opacity: 1; transform: scale(1.18); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes scene-bounce {
+  0% { opacity: 0; transform: translateY(-40%); }
+  40% { opacity: 1; transform: translateY(8%); }
+  60% { transform: translateY(-6%); }
+  80% { transform: translateY(3%); }
+  100% { transform: translateY(0); }
+}
+@keyframes scene-slide {
+  0% { opacity: 0; transform: translateX(-60%); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes scene-spin {
+  0% { opacity: 0; transform: rotate(-180deg) scale(0.5); }
+  100% { opacity: 1; transform: rotate(0) scale(1); }
+}
+@keyframes scene-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8%) rotate(-6deg); }
+  40% { transform: translateX(8%) rotate(6deg); }
+  60% { transform: translateX(-5%) rotate(-3deg); }
+  80% { transform: translateX(5%) rotate(3deg); }
+}
+@keyframes scene-float {
+  0% { opacity: 0; transform: translateY(12%); }
+  30% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(-8%); }
+}
+.anim-pop { animation: scene-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.anim-bounce { animation: scene-bounce 0.8s ease-out both; }
+.anim-slide { animation: scene-slide 0.7s ease-out both; }
+.anim-spin { animation: scene-spin 0.8s ease-out both; }
+.anim-shake { animation: scene-shake 0.9s ease-in-out both; }
+.anim-float { animation: scene-float 2.4s ease-in-out infinite alternate both; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-float-up,
   .animate-shake,
   .animate-sticker-pop,
-  .animate-combo-pulse {
+  .animate-combo-pulse,
+  .anim-pop,
+  .anim-bounce,
+  .anim-slide,
+  .anim-spin,
+  .anim-shake,
+  .anim-float {
     animation: none;
   }
 }

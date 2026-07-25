@@ -1,4 +1,4 @@
-import { playRemote, cancelRemote, ensureAudioEl } from './tts'
+import { playRemote, cancelRemote, ensureAudioEl, preloadRemote } from './tts'
 
 /** 发音口音:1=英式 2=美式(有道 dictvoice 约定) */
 export type Accent = 1 | 2
@@ -228,6 +228,11 @@ export function speakChinese(text: string, rate = 0.9, times = 1): void {
   void playRemote(text, 'zh', times).catch(() => {
     speak(text, 'zh-CN', rate, times, true)
   })
+}
+
+/** 提前把要读的内容下载好(下一张卡 / 下一句台词),点下去就是真人音 */
+export function prefetchSpeech(text: string, lang: 'zh' | 'en'): void {
+  preloadRemote(text, lang)
 }
 
 /** 按语言自动选路:zh→中文管线,其它→英文管线 */

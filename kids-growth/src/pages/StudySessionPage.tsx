@@ -8,7 +8,15 @@ import { useCurrentChild } from '../hooks/useCurrentChild'
 import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, autoAddErrorCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
-import { playWordAudio, speakChinese, speakEnglish, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import {
+  playWordAudio,
+  speakChinese,
+  speakEnglish,
+  prefetchSpeech,
+  recognizeOnce,
+  isSpeechRecognitionSupported,
+  normalizeForCompare,
+} from '../lib/audio'
 import { sfxCorrect, sfxWrong, sfxCombo, sfxFanfare, sfxSticker } from '../lib/sfx'
 import {
   scorePronunciation,
@@ -214,6 +222,18 @@ export function StudySessionPage() {
       return () => clearTimeout(t)
     }
   }, [current, phase, mode, playAudio, isToddler])
+
+  // 预热下一张卡的音频:提前下载好,翻到它时直接是真人音,不会因首次下载慢而退回合成音
+  useEffect(() => {
+    if (!cards) return
+    const next = cards[idx + 1]
+    if (!next) return
+    const en = (next.card.extra as { en?: string } | undefined)?.en
+    if (itemType === 'word') prefetchSpeech(next.card.front, 'en')
+    else if (en && (mode === 'picChooseEn' || mode === 'listenPicEn' || mode === 'earTrain')) {
+      prefetchSpeech(en, 'en')
+    } else prefetchSpeech(next.card.audioText ?? next.card.front, 'zh')
+  }, [cards, idx, itemType, mode])
 
   const finish = useCallback(
     async (finalCorrect: number, total: number) => {
