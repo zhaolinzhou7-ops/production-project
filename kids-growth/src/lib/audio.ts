@@ -1,3 +1,5 @@
+import { playRemote, cancelRemote, ensureAudioEl } from './tts'
+
 /** 发音口音:1=英式 2=美式(有道 dictvoice 约定) */
 export type Accent = 1 | 2
 
@@ -10,14 +12,8 @@ export type Accent = 1 | 2
 const SILENT_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 
-let wordEl: HTMLAudioElement | null = null
-function ensureWordEl(): HTMLAudioElement {
-  if (!wordEl) {
-    wordEl = new Audio()
-    wordEl.preload = 'auto'
-  }
-  return wordEl
-}
+/** 与 tts.ts 共用同一个已解锁的 <audio> 元素 */
+const ensureWordEl = ensureAudioEl
 
 let voicesWarmed = false
 function warmVoices(): void {
@@ -156,9 +152,13 @@ function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   return (exact.length > 0 ? exact : candidates)[0]
 }
 
-/** 系统语音合成(TTS):中文、句子、离线兜底。times=2 自动复读一遍。 */
-export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1): void {
+/**
+ * 系统语音合成(TTS):离线兜底。times=2 自动复读一遍。
+ * isFallback=true 表示这是网络音源失败后的兜底,不再去掐断远端播放。
+ */
+export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1, isFallback = false): void {
   if (typeof speechSynthesis === 'undefined') return
+  if (!isFallback) cancelRemote() // 手动点朗读时,先停掉正在放的网络音频
   warmVoices()
   if (pendingSpeakTimer) {
     clearTimeout(pendingSpeakTimer)
@@ -204,57 +204,36 @@ export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1): void
 }
 
 /**
- * 播放单词的**真人发音**(有道 dictvoice)。
- * 复用单例 <audio> 元素(经首次手势解锁后,翻卡自动播放也不会被移动端拦截);
- * 拉取失败(离线/被拦截)时自动回退到系统 TTS。times=2 自动复读一遍。
+ * 说英文:先试**网络真人/神经网络音源**(有道真人词库 → Google → 百度),
+ * 全都拿不到才用设备合成音。times=2 自动复读一遍。
  */
-export function playWordAudio(word: string, accent: Accent = 2, times = 1): void {
-  const fallbackLang = accent === 1 ? 'en-GB' : 'en-US'
-  const url = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=${accent}`
-  try {
-    const el = ensureWordEl()
-    let settled = false
-    let played = 0
-    const fallback = () => {
-      if (settled) return
-      settled = true
-      speak(word, fallbackLang, 0.9, times)
-    }
-    el.onplaying = () => {
-      settled = true
-    }
-    el.onended = () => {
-      played += 1
-      if (played < times) {
-        el.currentTime = 0
-        void el.play().catch(() => {})
-      }
-    }
-    el.onerror = fallback
-    el.pause()
-    el.src = url
-    el.play()
-      .then(() => {
-        settled = true
-      })
-      .catch(fallback)
-  } catch {
-    speak(word, fallbackLang, 0.9, times)
-  }
+export function playWordAudio(word: string, _accent: Accent = 2, times = 1): void {
+  void playRemote(word, 'en', times).catch(() => {
+    speak(word, 'en-US', 0.9, times, true)
+  })
+}
+
+/** 说一句英文(对话/复述/儿歌朗读),同样走真人音源优先 */
+export function speakEnglish(text: string, rate = 0.85, times = 1): void {
+  void playRemote(text, 'en', times).catch(() => {
+    speak(text, 'en-US', rate, times, true)
+  })
 }
 
 /**
- * 说一句英文:优先用**网络真人音源**(比设备合成音自然得多),
- * 拉不到/太长时自动回退系统 TTS。用于对话、复述、儿歌朗读等整句场景。
+ * 说中文:先试网络神经网络音源(百度童声等),失败才用设备合成音。
+ * 识字/古诗/看图/语音夸奖都走这里 —— 中文是最容易听出"机器人味"的地方。
  */
-export function speakEnglish(text: string, rate = 0.85, times = 1): void {
-  const t = text.trim()
-  // 太长的句子音源接口不一定支持,直接用 TTS 更稳
-  if (t.length === 0 || t.length > 60) {
-    speak(t, 'en-US', rate, times)
-    return
-  }
-  playWordAudio(t, 2, times)
+export function speakChinese(text: string, rate = 0.9, times = 1): void {
+  void playRemote(text, 'zh', times).catch(() => {
+    speak(text, 'zh-CN', rate, times, true)
+  })
+}
+
+/** 按语言自动选路:zh→中文管线,其它→英文管线 */
+export function say(text: string, lang: string, rate = 0.9, times = 1): void {
+  if (lang.toLowerCase().startsWith('zh')) speakChinese(text, rate, times)
+  else speakEnglish(text, rate, times)
 }
 
 // ============ 语音识别(口语跟读比对) ============

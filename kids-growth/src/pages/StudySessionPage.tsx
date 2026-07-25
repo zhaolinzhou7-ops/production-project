@@ -8,7 +8,7 @@ import { useCurrentChild } from '../hooks/useCurrentChild'
 import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, autoAddErrorCard, type DueCard } from '../db/study'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
-import { playWordAudio, speak, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
+import { playWordAudio, speakChinese, speakEnglish, recognizeOnce, isSpeechRecognitionSupported, normalizeForCompare } from '../lib/audio'
 import { sfxCorrect, sfxWrong, sfxCombo, sfxFanfare, sfxSticker } from '../lib/sfx'
 import {
   scorePronunciation,
@@ -130,11 +130,11 @@ export function StudySessionPage() {
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
 
-  /** 按学科播放:英语用真人音源,语文/启蒙用中文 TTS。times=2 自动复读一遍。 */
+  /** 按学科播放:都优先走网络真人音源,拿不到才用设备合成音。times=2 自动复读一遍。 */
   const playAudio = useCallback(
     (text: string, times = 1) => {
       if (itemType === 'word') void playWordAudio(text, 2, times)
-      else speak(text, 'zh-CN', itemType === 'poem' ? 0.85 : 0.8, times)
+      else speakChinese(text, itemType === 'poem' ? 0.85 : 0.8, times)
     },
     [itemType],
   )
@@ -311,8 +311,8 @@ export function StudySessionPage() {
         else sfxCorrect()
         if (isToddler) {
           const enMode = mode === 'picChooseEn' || mode === 'listenPicEn'
-          if (enMode) speak(VOICE_PRAISE_EN[Math.floor(Math.random() * VOICE_PRAISE_EN.length)], 'en-US', 1)
-          else speak(VOICE_PRAISE[Math.floor(Math.random() * VOICE_PRAISE.length)], 'zh-CN', 1.05)
+          if (enMode) speakEnglish(VOICE_PRAISE_EN[Math.floor(Math.random() * VOICE_PRAISE_EN.length)], 1)
+          else speakChinese(VOICE_PRAISE[Math.floor(Math.random() * VOICE_PRAISE.length)], 1.05)
         }
         const praise =
           nextCombo >= 3
@@ -348,7 +348,7 @@ export function StudySessionPage() {
     if (mode !== 'earTrain' || !current || phase === 'done' || !cards) return
     const en = (current.card.extra as { en?: string })?.en ?? current.card.back
     void playWordAudio(en, 2, 2)
-    const t1 = setTimeout(() => speak(current.card.audioText ?? current.card.front, 'zh-CN', 0.9), 3100)
+    const t1 = setTimeout(() => speakChinese(current.card.audioText ?? current.card.front, 0.9), 3100)
     const t2 = setTimeout(() => {
       if (idx + 1 >= cards.length) void finish(cards.length, cards.length)
       else setIdx((i) => i + 1)

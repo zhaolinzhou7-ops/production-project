@@ -7,6 +7,14 @@ import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
 import { listVoices, setPreferredVoice, getPreferredVoiceURI, speak } from '../lib/audio'
+import {
+  sourcesFor,
+  setPreferredSource,
+  getPreferredSource,
+  testSource,
+  healthOf,
+  type TtsLang,
+} from '../lib/tts'
 import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
@@ -128,6 +136,26 @@ export function LearnHomePage() {
     zh: getPreferredVoiceURI('zh'),
     en: getPreferredVoiceURI('en'),
   }))
+  const [srcPick, setSrcPick] = useState<Record<string, string | null>>(() => ({
+    zh: getPreferredSource('zh'),
+    en: getPreferredSource('en'),
+  }))
+  const [testResult, setTestResult] = useState<Record<string, 'ok' | 'bad'>>({})
+  const [testing, setTesting] = useState<TtsLang | null>(null)
+
+  /** 逐个试听该语言的所有音源,标出哪些在当前网络下可用 */
+  const runTest = async (lang: TtsLang, sample: string) => {
+    setTesting(lang)
+    try {
+      for (const s of sourcesFor(lang)) {
+        const ok = await testSource(s, sample)
+        setTestResult((r) => ({ ...r, [s.id]: ok ? 'ok' : 'bad' }))
+        await new Promise((r) => setTimeout(r, ok ? 1600 : 200))
+      }
+    } finally {
+      setTesting(null)
+    }
+  }
   const [confirmAction, setConfirmAction] = useState<'graduate' | 'resetPet' | 'resetStickers' | null>(null)
 
   if (!child || !currentChildId) return null
@@ -478,7 +506,7 @@ export function LearnHomePage() {
         </div>
       )}
 
-      {/* 语音音色:同一台手机常有多个音色,默认那个往往最机械 */}
+      {/* 语音音色:先选网络真人音源,再兜底设备音色 */}
       <div className="mt-3 rounded-2xl bg-white/70 p-4 shadow-sm">
         <button
           onClick={() => setShowVoices((v) => !v)}
@@ -486,8 +514,8 @@ export function LearnHomePage() {
         >
           <div className="text-2xl">🔊</div>
           <div className="flex-1">
-            <div className="font-bold text-gray-800">朗读音色</div>
-            <div className="text-xs text-gray-400">觉得声音机械?换一个更像真人的音色试听</div>
+            <div className="font-bold text-gray-800">朗读声音</div>
+            <div className="text-xs text-gray-400">觉得声音机械?这里测一测、换一个真人音源</div>
           </div>
           <ChevronRight
             size={18}
@@ -495,7 +523,63 @@ export function LearnHomePage() {
           />
         </button>
         {showVoices && (
-          <div className="mt-3 space-y-3">
+          <div className="mt-3 space-y-4">
+            {/* 网络真人音源自检 */}
+            {(['zh', 'en'] as const).map((lang) => {
+              const sample = lang === 'zh' ? '小朋友,我们一起学习吧' : 'Hello! Nice to meet you.'
+              const list = sourcesFor(lang)
+              const pref = srcPick[lang]
+              return (
+                <div key={lang}>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-500">
+                      {lang === 'zh' ? '中文真人音源' : '英语真人音源'}
+                    </span>
+                    <button
+                      onClick={() => void runTest(lang, sample)}
+                      disabled={testing !== null}
+                      className="rounded-full bg-brand-100 px-3 py-1 text-[11px] font-bold text-brand-600 active:scale-95 disabled:opacity-50"
+                    >
+                      {testing === lang ? '测试中…' : '🔍 逐个试听'}
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {list.map((s) => {
+                      const st = testResult[s.id] ?? healthOf(s.id)
+                      const active = pref === s.id
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            setPreferredSource(lang, active ? null : s.id)
+                            setSrcPick((p) => ({ ...p, [lang]: active ? null : s.id }))
+                            void testSource(s, sample).then((ok) =>
+                              setTestResult((r) => ({ ...r, [s.id]: ok ? 'ok' : 'bad' })),
+                            )
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition active:scale-95 ${
+                            active ? 'bg-brand-500 text-white' : 'bg-gray-50 text-gray-600'
+                          }`}
+                        >
+                          <span className="w-4 text-center">
+                            {st === 'ok' ? '✅' : st === 'bad' ? '⚠️' : '•'}
+                          </span>
+                          <span className="flex-1">{s.label}</span>
+                          {active && <span className="text-[10px] opacity-80">优先</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    ✅=能用 ⚠️=你的网络拿不到 · 点一下即试听并设为优先;都拿不到时自动用下面的设备音色。
+                  </p>
+                </div>
+              )
+            })}
+
+            <div className="border-t border-gray-100 pt-3 text-[11px] font-bold text-gray-500">
+              设备自带音色(兜底用)
+            </div>
             {(
               [
                 { prefix: 'zh', label: '中文', sample: '小朋友,今天我们一起学习吧' },

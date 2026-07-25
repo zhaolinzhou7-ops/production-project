@@ -26,6 +26,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,json}'],
+        // 朗读音频(有道/百度/Google)缓存起来:重复播放秒响,离线也能读之前听过的
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/(dict\.youdao\.com|tts\.baidu\.com|fanyi\.baidu\.com|translate\.google\.com)\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tts-audio',
+              expiration: { maxEntries: 1200, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],
