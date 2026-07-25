@@ -211,7 +211,8 @@ async function syncDeckContent(deck: LearnDeck, rev: number): Promise<void> {
       }
     }
 
-    await db.decks.update(deck.id, { contentRev: rev })
+    // 名称/图标也跟随内容包更新(卡组改名后老设备同步)
+    await db.decks.update(deck.id, { contentRev: rev, name: pack.name, icon: meta.icon })
   })
 }
 

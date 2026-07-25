@@ -10,7 +10,7 @@ import { scorePronunciation, isRecordingSupported, startRecording, playRecording
 import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { feedPet, type FeedResult } from '../lib/pets'
-import { DIALOGS, retellSentencesFor, RHYMES, type Dialog, type Rhyme } from '../lib/talkContent'
+import { dialogsFor, retellSentencesFor, RHYMES, type Dialog, type Rhyme } from '../lib/talkContent'
 import { getMelody, playMelodyLine, stopMelody } from '../lib/melody'
 
 type Tab = 'dialog' | 'retell' | 'rhyme'
@@ -60,6 +60,7 @@ export function EnglishTalkPage() {
 
   // ---- 复述状态 ----
   const [retells] = useState(() => shuffle(retellSentencesFor(stage)).slice(0, 8))
+  const myDialogs = dialogsFor(stage)
   const [retellStarted, setRetellStarted] = useState(false)
   const [rIdx, setRIdx] = useState(0)
   const [rStars, setRStars] = useState<number[]>([])
@@ -381,18 +382,31 @@ export function EnglishTalkPage() {
       {/* ---- 对话 ---- */}
       {tab === 'dialog' && !dialog && (
         <div className="space-y-2">
-          <p className="text-xs text-gray-400 mb-2">选一个场景,跟着机器人一句一句说(固定剧本,可反复练)</p>
-          {DIALOGS.map((d) => (
-            <button
-              key={d.key}
-              onClick={() => startDialog(d)}
-              className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
-            >
-              <span className="text-2xl">{d.icon}</span>
-              <span className="flex-1 font-bold text-gray-800">{d.title}</span>
-              <span className="text-xs text-gray-400">{d.turns.length} 句</span>
-            </button>
-          ))}
+          <p className="text-xs text-gray-400 mb-2">
+            共 {myDialogs.length} 个场景,选一个跟着机器人一句一句说(固定剧本,可反复练)
+          </p>
+          {(['easy', 'harder'] as const).map((lv) => {
+            const group = myDialogs.filter((d) => d.level === lv)
+            if (group.length === 0) return null
+            return (
+              <div key={lv} className="space-y-2">
+                <div className="pt-2 text-[11px] font-bold text-gray-400">
+                  {lv === 'easy' ? '🌱 入门 · 短对话' : '🚀 进阶 · 长对话'}
+                </div>
+                {group.map((d) => (
+                  <button
+                    key={d.key}
+                    onClick={() => startDialog(d)}
+                    className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-left shadow-sm active:scale-[0.99] transition"
+                  >
+                    <span className="text-2xl">{d.icon}</span>
+                    <span className="flex-1 font-bold text-gray-800">{d.title}</span>
+                    <span className="text-xs text-gray-400">{d.turns.length} 句</span>
+                  </button>
+                ))}
+              </div>
+            )
+          })}
         </div>
       )}
 

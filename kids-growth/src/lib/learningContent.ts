@@ -248,12 +248,31 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'hanzi-primary',
-    name: '小学·常用识字',
+    name: '小学·常用识字(一)',
     subject: '语文',
     icon: '🈷️',
     itemType: 'hanzi',
     stages: ['primary'],
+    rev: 2, // 改名为(一),与(二)(三)成序列
     load: () => import('../data/decks/hanzi-primary.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'hanzi-primary-2',
+    name: '小学·常用识字(二)',
+    subject: '语文',
+    icon: '🈶',
+    itemType: 'hanzi',
+    stages: ['primary', 'junior'],
+    load: () => import('../data/decks/hanzi-primary-2.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    key: 'hanzi-primary-3',
+    name: '小学·常用识字(三)',
+    subject: '语文',
+    icon: '🈚',
+    itemType: 'hanzi',
+    stages: ['primary', 'junior'],
+    load: () => import('../data/decks/hanzi-primary-3.json').then((m) => m.default as BuiltinPackData),
   },
 ]
 
