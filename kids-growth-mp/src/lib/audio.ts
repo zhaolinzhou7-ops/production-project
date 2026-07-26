@@ -112,18 +112,15 @@ function ordered(list: AudioSource[], prefKey: string): AudioSource[] {
   return hit ? [hit, ...use.filter((s) => s !== hit)] : use
 }
 
-/** 中文长句的兜底:按标点切段,段太长再切成词/单字 —— 有道词典对词和单字是有音的 */
+/**
+ * 中文长句的兜底:只按标点切句,**不再往下切成词/单字**。
+ *
+ * 曾经切到 2 字一段,实测效果不能接受:有道词典里查不到的段落会被跳过,
+ * 整首诗读出来是「一个字一个字往外蹦」。宁可这句没声音,也不要这种朗读。
+ * 中文整句要有正常朗读,只能靠真正的语音合成(见 README 的云函数方案)。
+ */
 export function zhChunks(text: string): string[] {
-  const segs = text.split(/[，,。.！!？?、;；:：\s\n]+/).filter(Boolean)
-  const out: string[] = []
-  for (const seg of segs) {
-    if (seg.length <= 4) {
-      out.push(seg)
-      continue
-    }
-    for (let i = 0; i < seg.length; i += 2) out.push(seg.slice(i, i + 2))
-  }
-  return out
+  return text.split(/[，,。.！!？?、;；:：\s\n]+/).filter(Boolean)
 }
 
 // ---------------------------------------------------------------- 播放
