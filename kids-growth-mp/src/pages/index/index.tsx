@@ -24,6 +24,7 @@ import { getLine, stageOf } from '../../core/pets'
 import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 interface DeckRow {
@@ -43,7 +44,7 @@ function msgOf(e: unknown): string {
   }
 }
 
-export default function Index() {
+function Index() {
   const [rows, setRows] = useState<DeckRow[]>([])
   const [xp, setXp] = useState(0)
   const [streak, setStreak] = useState(0)
@@ -384,3 +385,6 @@ export default function Index() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Index)

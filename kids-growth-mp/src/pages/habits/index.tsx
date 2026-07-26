@@ -17,9 +17,10 @@ import {
 } from '../../store/habits'
 import { getStage } from '../../store/study'
 import CorrectBurst from '../../components/CorrectBurst'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
-export default function Habits() {
+function Habits() {
   const [habits, setHabits] = useState<Habit[]>([])
   const [done, setDone] = useState<string[]>([])
   const [fullStreak, setFullStreak] = useState(0)
@@ -187,3 +188,6 @@ export default function Habits() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Habits)

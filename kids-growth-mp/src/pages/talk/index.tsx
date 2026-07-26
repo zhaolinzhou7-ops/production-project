@@ -18,6 +18,7 @@ import { startRecognize, stopRecognize } from '../../lib/speech'
 import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 type Tab = 'dialog' | 'retell' | 'cartoon' | 'rhyme'
@@ -32,7 +33,7 @@ const TABS: Array<[Tab, string, string]> = [
 /** 每完成一句跟读给的成长值 */
 const POINTS_PER_LINE = 1
 
-export default function Talk() {
+function Talk() {
   const [tab, setTab] = useState<Tab>('dialog')
   const stage = getStage()
 
@@ -485,3 +486,6 @@ export default function Talk() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Talk)

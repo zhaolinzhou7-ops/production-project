@@ -529,3 +529,13 @@
 
 .row--wrap { flex-wrap: wrap; gap: 12px; }
 .chip--ab { background: rgba(139, 92, 246, 0.16); }
+
+.poem__lineplay {
+  align-self: center;
+  margin-left: 10px;
+  font-size: 20px;
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.12);
+  padding: 8px 14px;
+  border-radius: 999px;
+}

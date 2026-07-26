@@ -98,6 +98,26 @@ const PREF_KEY_EN = '_prefEn'
 /** 自检里确认「连不上/不返回音频」的音源,之后直接跳过,不再让用户干等 */
 const DEAD_KEY = '_deadSources'
 
+/**
+ * 「不通」要按**文本长短**分开记。
+ *
+ * 这是一个真实踩过的坑:有道是词典发音,单字/词有音、整句没有。
+ * 之前不分长短地把它标成「不通」,结果读一次古诗(失败)之后,
+ * 连识字的单字也不再走这个音源 —— 中文就整个哑了。
+ * 现在长句失败只拉黑「长句档」,短词照常用。
+ */
+export type LenBucket = 'short' | 'long'
+
+export function bucketOf(text: string, lang: 'zh' | 'en'): LenBucket {
+  if (lang === 'zh') return text.length <= 6 ? 'short' : 'long'
+  // 英语:带空格的当成句子
+  return /\s/.test(text.trim()) ? 'long' : 'short'
+}
+
+function deadKey(id: string, bucket: LenBucket): string {
+  return `${id}|${bucket}`
+}
+
 function deadSet(): Record<string, boolean> {
   return readObject<Record<string, boolean>>(DEAD_KEY, {})
 }
@@ -111,29 +131,39 @@ function deadSet(): Record<string, boolean> {
 const failStreak = new Map<string, number>()
 const FAIL_LIMIT = 2
 
-function noteFail(id: string): void {
-  const n = (failStreak.get(id) ?? 0) + 1
-  failStreak.set(id, n)
+function noteFail(id: string, bucket: LenBucket): void {
+  const k = deadKey(id, bucket)
+  const n = (failStreak.get(k) ?? 0) + 1
+  failStreak.set(k, n)
   if (n < FAIL_LIMIT) return
   const dead = deadSet()
-  if (dead[id]) return
-  dead[id] = true
+  if (dead[k]) return
+  dead[k] = true
   writeObject(DEAD_KEY, dead)
 }
 
-function noteOk(id: string): void {
-  failStreak.delete(id)
+function noteOk(id: string, bucket: LenBucket): void {
+  const k = deadKey(id, bucket)
+  failStreak.delete(k)
   const dead = deadSet()
-  if (!dead[id]) return
-  delete dead[id]
+  if (!dead[k]) return
+  delete dead[k]
   writeObject(DEAD_KEY, dead)
 }
 
-function ordered(list: AudioSource[], prefKey: string): AudioSource[] {
+export function markDead(id: string, bucket: LenBucket, isDead: boolean): void {
   const dead = deadSet()
-  const alive = list.filter((s) => !dead[s.id])
+  const k = deadKey(id, bucket)
+  if (isDead) dead[k] = true
+  else delete dead[k]
+  writeObject(DEAD_KEY, dead)
+}
+
+function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): AudioSource[] {
+  const dead = deadSet()
+  const alive = list.filter((s) => !dead[deadKey(s.id, bucket)])
   const use = alive.length > 0 ? alive : list
-  const pref = readObject<string>(prefKey, '')
+  const pref = readObject<string>(`${prefKey}|${bucket}`, '')
   if (!pref) return use
   const hit = use.find((s) => s.id === pref)
   return hit ? [hit, ...use.filter((s) => s !== hit)] : use
@@ -193,6 +223,7 @@ function playSequence(
   prefKey: string,
   i: number,
   my: number,
+  bucket: LenBucket,
   onExhausted?: () => void,
 ): void {
   if (my !== token) return
@@ -202,7 +233,7 @@ function playSequence(
   }
   const s = list[i]
   if (text.length > s.maxLen) {
-    playSequence(text, list, prefKey, i + 1, my, onExhausted)
+    playSequence(text, list, prefKey, i + 1, my, bucket, onExhausted)
     return
   }
 
@@ -220,15 +251,15 @@ function playSequence(
   const next = () => {
     if (moved) return
     moved = true
-    noteFail(s.id)
+    noteFail(s.id, bucket)
     dispose(a)
-    playSequence(text, list, prefKey, i + 1, my, onExhausted)
+    playSequence(text, list, prefKey, i + 1, my, bucket, onExhausted)
   }
   const succeeded = () => {
     if (started) return
     started = true
-    noteOk(s.id)
-    writeObject(prefKey, s.id)
+    noteOk(s.id, bucket)
+    writeObject(`${prefKey}|${bucket}`, s.id)
   }
 
   try {
@@ -289,7 +320,7 @@ export function playEnglishSlow(text: string, rate = 0.75): void {
   current = a
   try {
     a.onError(() => dispose(a))
-    a.src = ordered(EN_SOURCES, PREF_KEY_EN)[0].url(t)
+    a.src = ordered(EN_SOURCES, PREF_KEY_EN, bucketOf(t, 'en'))[0].url(t)
     a.play()
   } catch {
     dispose(a)
@@ -301,11 +332,12 @@ export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
   if (!t) return
   token += 1
-  const list = ordered(EN_SOURCES, PREF_KEY_EN)
+  const bucket = bucketOf(t, 'en')
+  const list = ordered(EN_SOURCES, PREF_KEY_EN, bucket)
   // 指定英音时把英音提到最前
   const arranged =
     accent === 1 ? [...list].sort((a, b) => (a.id === 'youdao-en-uk' ? -1 : b.id === 'youdao-en-uk' ? 1 : 0)) : list
-  playSequence(t, arranged, PREF_KEY_EN, 0, token)
+  playSequence(t, arranged, PREF_KEY_EN, 0, token, bucket)
 }
 
 /** 用「微信同声传译」插件合成音朗读(后台添加了插件才有) */
@@ -341,7 +373,8 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
   }
   token += 1
   if (lang === 'zh_CN') {
-    let list = ordered(ZH_SOURCES, PREF_KEY_ZH)
+    const bucket = bucketOf(t, 'zh')
+    let list = ordered(ZH_SOURCES, PREF_KEY_ZH, bucket)
     // 短词(识字的单字、词语)优先走有道词典 —— 词典查得到的词才有真人音,
     // 而有道是目前唯一确认可达的音源。长句子则按常规顺序试。
     if (t.length <= 4) {
@@ -349,13 +382,14 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
       if (yd) list = [yd, ...list.filter((s) => s !== yd)]
     }
     const my = token
-    playSequence(t, list, PREF_KEY_ZH, 0, my, () => {
+    playSequence(t, list, PREF_KEY_ZH, 0, my, bucket, () => {
       // 整句读不出来(有道是词典,查不到整句)→ 拆成词逐段读,总比没有声音好
       const chunks = zhChunks(t)
       if (chunks.length > 1) void playChunks(chunks, my)
     })
   } else {
-    playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN), PREF_KEY_EN, 0, token)
+    const b = bucketOf(t, 'en')
+    playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN, b), PREF_KEY_EN, 0, token, b)
   }
 }
 
@@ -496,23 +530,32 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
   // 有道是**词典**发音:查得到的词才有音频。所以中文要按「单字/词/整句」
   // 分档测,才能知道哪些内容(识字=单字、古诗=整句)真的能出声。
   const youdaoZh = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
-  const jobs: Array<{ label: string; url: string; id?: string }> = [
-    ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple'), id: s.id })),
+  const jobs: Array<{ label: string; url: string; id?: string; bucket?: LenBucket }> = [
+    ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple'), id: s.id, bucket: 'short' as LenBucket })),
     {
       label: '有道·英语整句',
       url: `https://dict.youdao.com/dictvoice?audio=${enc('This is a red apple.')}&type=2`,
+      id: 'youdao-en-us',
+      bucket: 'long' as LenBucket,
     },
-    { label: '有道·中文 单字「好」', url: youdaoZh('好') },
+    { label: '有道·中文 单字「好」', url: youdaoZh('好'), id: 'youdao-zh-le', bucket: 'short' as LenBucket },
     { label: '有道·中文 词「你好」', url: youdaoZh('你好') },
     { label: '有道·中文 四字「春眠不觉」', url: youdaoZh('春眠不觉') },
-    { label: '有道·中文 整句「白日依山尽」', url: youdaoZh('白日依山尽') },
+    {
+      label: '有道·中文 整句「白日依山尽」',
+      url: youdaoZh('白日依山尽'),
+      id: 'youdao-zh-le',
+      bucket: 'long' as LenBucket,
+    },
     ...ZH_SOURCES.filter((s) => s.id !== 'youdao-zh-le').map((s) => ({
       label: s.label,
       url: s.url('白日依山尽'),
       id: s.id,
+      bucket: 'long' as LenBucket,
     })),
   ]
   const out: DiagLine[] = []
+  // 自检会重建整张「不通」表:每次自检都是一次重新认识,不带旧包袱
   const dead: Record<string, boolean> = {}
   for (let i = 0; i < jobs.length; i++) {
     let ok = false
@@ -521,18 +564,24 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
     } catch {
       ok = false
     }
-    out.push({ label: jobs[i].label, ok })
-    if (jobs[i].id && !ok) dead[jobs[i].id as string] = true
+    const job = jobs[i]
+    out.push({ label: job.label, ok })
+    // 只记「这个音源在这个长度档上不通」—— 长句不通不代表单字也不通
+    if (job.id && job.bucket && !ok) dead[`${job.id}|${job.bucket}`] = true
     try {
       onProgress?.(i + 1, jobs.length)
     } catch {
       /* 忽略:进度提示失败不影响自检 */
     }
   }
-  // 把不通的记下来:之后朗读时直接跳过,不用每次都干等 4.5 秒超时。
-  // (有道中文那几档是拿不同长度的文本测同一个通道,不代表通道本身死了,故不入册)
   writeObject(DEAD_KEY, dead)
   return out
+}
+
+/** 忘掉所有「不通」的记忆(换了网络环境时用) */
+export function resetAudioMemory(): void {
+  writeObject(DEAD_KEY, {})
+  failStreak.clear()
 }
 
 /**

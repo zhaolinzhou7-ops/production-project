@@ -23,6 +23,7 @@ import CorrectBurst from '../../components/CorrectBurst'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 type Phase = 'prompt' | 'reveal' | 'done'
@@ -36,7 +37,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-export default function Session() {
+function Session() {
   const router = useRouter()
   const deckId = router.params.deckId || ''
   const mode = (router.params.mode || 'recognize') as PracticeMode
@@ -231,6 +232,18 @@ export default function Session() {
     if (!current) return
     if (isPic) playPic(current.card)
     else playPrompt(current.card.audioText ?? current.card.front)
+  }
+
+  /**
+   * 逐字读一句(古诗用)。
+   * 中文整句没有可用音源,只有单字有 —— 所以这是个**明确标注**的功能,
+   * 而不是伪装成连贯朗读。孩子知道它是逐字的,就不会觉得「读得很怪」。
+   */
+  const readLineByChar = (line: string) => {
+    const chars = line.split('').filter((c) => /[\u4e00-\u9fa5]/.test(c))
+    chars.forEach((ch, i) => {
+      setTimeout(() => void playText(ch, 'zh_CN'), i * 1100)
+    })
   }
 
   /** 慢速范读:英语听不清时最有效的一招,比反复原速重放强 */
@@ -573,6 +586,10 @@ export default function Session() {
                     {ch}
                   </Text>
                 ))}
+                {/* 明确标成「逐字」,孩子知道会是一个字一个字读,不会觉得是坏了 */}
+                <Text className='poem__lineplay' onClick={() => readLineByChar(l)}>
+                  逐字
+                </Text>
               </View>
             ))}
           </View>
@@ -776,3 +793,6 @@ export default function Session() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Session)

@@ -9,11 +9,12 @@ import {
   getErrorDeckId,
 } from '../../store/study'
 import type { LearnCard } from '../../types'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 const SUBJECTS = ['语文', '数学', '英语', '物理', '化学', '其他']
 
-export default function ErrorBook() {
+function ErrorBook() {
   const [cards, setCards] = useState<LearnCard[]>([])
   const [deckId, setDeckId] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -99,3 +100,6 @@ export default function ErrorBook() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(ErrorBook)

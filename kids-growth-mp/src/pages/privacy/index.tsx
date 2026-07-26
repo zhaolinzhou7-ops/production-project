@@ -1,4 +1,5 @@
 import { View, Text } from '@tarojs/components'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 /**
@@ -7,7 +8,7 @@ import './index.scss'
  * 面向未成年人的产品必须把「收集了什么、去了哪里」讲清楚,而且要用家长
  * 读得懂的话讲。这里如实描述当前实现 —— 代码怎么写的,这页就怎么写。
  */
-export default function Privacy() {
+function Privacy() {
   return (
     <View className='pv'>
       <Text className='pv__h'>这个小程序怎么处理孩子的数据</Text>
@@ -52,3 +53,6 @@ export default function Privacy() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Privacy)

@@ -11,6 +11,7 @@ import {
   removeBuiltinDeck,
 } from '../../store/study'
 import type { AgeStage } from '../../types'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 const STAGES: Array<[AgeStage, string]> = [
@@ -27,7 +28,7 @@ interface Row {
   added: boolean
 }
 
-export default function Packs() {
+function Packs() {
   const [stage, setStageState] = useState<AgeStage>('primary')
   const [rows, setRows] = useState<Row[]>([])
   const [busy, setBusy] = useState('')
@@ -124,3 +125,6 @@ export default function Packs() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Packs)

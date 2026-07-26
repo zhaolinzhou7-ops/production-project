@@ -6,12 +6,13 @@ import { getCurrentChildId, finishDrill, addStudyTime } from '../../store/study'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import CorrectBurst from '../../components/CorrectBurst'
 import type { StickerDef } from '../../core/stickers'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 type Screen = 'config' | 'run' | 'done'
 const COUNTS = [10, 20, 30]
 
-export default function MathPage() {
+function MathPage() {
   const [screen, setScreen] = useState<Screen>('config')
   const [kind, setKind] = useState<MathKind>('add')
   const [count, setCount] = useState(20)
@@ -166,3 +167,6 @@ export default function MathPage() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(MathPage)

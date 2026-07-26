@@ -6,6 +6,7 @@ import { getStats, weakCards, earnedAchievements, type LearningStats } from '../
 import { ACHIEVEMENTS } from '../../core/achievements'
 import { readObject, writeObject } from '../../store/db'
 import { buildWeekly, type WeeklyReport } from '../../store/weekly'
+import { resetAudioMemory } from '../../lib/audio'
 import {
   ensureRewards,
   listRewards,
@@ -17,6 +18,7 @@ import {
   type Redemption,
   type Reward,
 } from '../../store/rewards'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 /**
@@ -30,7 +32,7 @@ const DEFAULT_PIN = '1234'
 const GOAL_KEY = 'dailyMinuteLimit'
 const DEFAULT_LIMIT = 30
 
-export default function Parent() {
+function Parent() {
   const [unlocked, setUnlocked] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [stats, setStats] = useState<LearningStats | null>(null)
@@ -367,6 +369,15 @@ export default function Parent() {
         <View className='lrow' onClick={exportData}>
           <Text className='lrow__t'>导出数据(复制到剪贴板)</Text>
         </View>
+        <View
+          className='lrow'
+          onClick={() => {
+            resetAudioMemory()
+            Taro.showToast({ title: '已重置,重新试发音', icon: 'success' })
+          }}
+        >
+          <Text className='lrow__t'>重置声音记忆(换了网络后发音变哑时用)</Text>
+        </View>
         <View className='lrow' onClick={changePin}>
           <Text className='lrow__t'>修改家长密码</Text>
         </View>
@@ -380,3 +391,6 @@ export default function Parent() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Parent)

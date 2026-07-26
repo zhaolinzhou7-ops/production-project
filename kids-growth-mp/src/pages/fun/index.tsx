@@ -13,9 +13,10 @@ import {
   getChallenge,
   type PetState,
 } from '../../store/fun'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
-export default function Fun() {
+function Fun() {
   const [owned, setOwned] = useState<string[]>([])
   const [pet, setPet] = useState<PetState>({ line: '', fed: 0, graduated: [] })
   const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
@@ -150,3 +151,6 @@ export default function Fun() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Fun)

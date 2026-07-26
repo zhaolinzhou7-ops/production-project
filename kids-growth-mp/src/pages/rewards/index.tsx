@@ -11,9 +11,10 @@ import {
   type Redemption,
 } from '../../store/rewards'
 import CorrectBurst from '../../components/CorrectBurst'
+import { withGuard } from '../../components/Guard'
 import './index.scss'
 
-export default function Rewards() {
+function Rewards() {
   const [rewards, setRewards] = useState<Reward[]>([])
   const [can, setCan] = useState(0)
   const [history, setHistory] = useState<Redemption[]>([])
@@ -101,3 +102,6 @@ export default function Rewards() {
     </View>
   )
 }
+
+// 包一层错误边界:页面万一崩了,屏幕上给出原因而不是一片空白
+export default withGuard(Rewards)
