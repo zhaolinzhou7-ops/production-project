@@ -370,3 +370,15 @@
   }
   &__fill { height: 100%; background: #fff; }
 }
+
+.entry--talk { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
+.entry--reward { background: linear-gradient(135deg, #fb7185, #f43f5e); }
+
+.pendbar {
+  background: rgba(244, 63, 94, 0.14);
+  border-radius: 22px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+
+  &__t { font-size: 24px; color: #be123c; line-height: 1.5; }
+}

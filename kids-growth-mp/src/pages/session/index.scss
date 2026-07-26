@@ -476,3 +476,56 @@
   &__e { font-size: 56px; }
   &__n { font-size: 22px; color: #6d28d9; font-weight: bold; margin-top: 4px; }
 }
+
+/* ---- 古诗逐字点读 ---- */
+.poem__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.poem__ch {
+  width: 76px;
+  height: 76px;
+  line-height: 76px;
+  text-align: center;
+  font-size: 42px;
+  color: #374151;
+  background: #f8f8fa;
+  border-radius: 16px;
+}
+.poem__tip {
+  display: block;
+  text-align: center;
+  font-size: 21px;
+  color: #9ca3af;
+  margin: 14px 0 20px;
+  line-height: 1.5;
+}
+
+/* ---- 看拼音选字 ---- */
+.card__front--py {
+  font-size: 64px;
+  color: #3b82f6;
+  letter-spacing: 4px;
+}
+
+/* ---- 磨耳朵 ---- */
+.ear__en {
+  display: block;
+  text-align: center;
+  font-size: 40px;
+  color: #374151;
+  font-weight: bold;
+}
+.ear__zh {
+  display: block;
+  text-align: center;
+  font-size: 30px;
+  color: #6b7280;
+  margin-top: 6px;
+}
+
+.row--wrap { flex-wrap: wrap; gap: 12px; }
+.chip--ab { background: rgba(139, 92, 246, 0.16); }

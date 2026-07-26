@@ -12,12 +12,14 @@ import {
   getStudyStreak,
   getTodayStudyMinutes,
   getStage,
+  syncDeckContent,
 } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
 import { ensureHabits, todayProgress } from '../../store/habits'
+import { spendable, pendingCount } from '../../store/rewards'
 import { getLine, stageOf } from '../../core/pets'
 import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
@@ -57,6 +59,8 @@ export default function Index() {
   const [level, setLevel] = useState<LevelInfo>(levelOf(0))
   const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
   const [habit, setHabit] = useState({ done: 0, total: 0 })
+  const [canSpend, setCanSpend] = useState(0)
+  const [pending, setPending] = useState(0)
 
   /**
    * 载入首页数据。
@@ -75,6 +79,8 @@ export default function Index() {
       for (const p of defaultPacksForStage(getStage())) {
         try {
           ensureBuiltinDeck(childId, p.key)
+          // 内容包更新过就就地补齐(卡片 id 不变,复习进度保留)
+          syncDeckContent(childId, p.key)
         } catch (e) {
           failed.push(`${p.name}: ${msgOf(e)}`)
         }
@@ -93,6 +99,8 @@ export default function Index() {
       ensureHabits()
       setHabit(todayProgress())
       setStickerCount(ownedStickers().length)
+      setCanSpend(spendable())
+      setPending(pendingCount())
       const pet = getPet()
       const pl = pet.line ? getLine(pet.line) : undefined
       setPetEmoji(pl ? pl.stages[stageOf(pet.fed)].emoji : '🥚')
@@ -217,6 +225,12 @@ export default function Index() {
         </View>
       ) : null}
 
+      {pending > 0 ? (
+        <View className='pendbar'>
+          <Text className='pendbar__t'>🎁 有 {pending} 个奖励换好了,记得找爸爸妈妈兑现</Text>
+        </View>
+      ) : null}
+
       {/* 生活习惯放最前:这是每天最先要做的事,不该埋在学习内容下面 */}
       <View className='habitcard' onClick={() => openPage('/pages/habits/index')}>
         <Text className='habitcard__e'>{habit.total > 0 && habit.done >= habit.total ? '🎉' : '🪥'}</Text>
@@ -278,6 +292,17 @@ export default function Index() {
         <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
           <Text className='entry__icon'>{petEmoji}</Text>
           <Text className='entry__t'>宠物·贴纸 {stickerCount}</Text>
+        </View>
+      </View>
+
+      <View className='entries'>
+        <View className='entry entry--talk' onClick={() => openPage('/pages/talk/index')}>
+          <Text className='entry__icon'>💬</Text>
+          <Text className='entry__t'>英语口语</Text>
+        </View>
+        <View className='entry entry--reward' onClick={() => openPage('/pages/rewards/index')}>
+          <Text className='entry__icon'>🎁</Text>
+          <Text className='entry__t'>换奖励 {canSpend}</Text>
         </View>
       </View>
 

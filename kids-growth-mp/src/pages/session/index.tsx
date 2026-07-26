@@ -15,7 +15,7 @@ import {
 import { noteSessionEnd, claimNewAchievements } from '../../store/progress'
 import { getAchievement } from '../../core/achievements'
 import { levelOf } from '../../core/levels'
-import { playWordAudio, playText } from '../../lib/audio'
+import { playWordAudio, playText, playEnglishSlow, stopAudio } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
@@ -70,6 +70,9 @@ export default function Session() {
   const [leveledTo, setLeveledTo] = useState('')
   /** 本组最高连对,用于成就统计 */
   const [bestCombo, setBestCombo] = useState(0)
+  /** 磨耳朵:自动连播到第几张 */
+  const [earIdx, setEarIdx] = useState(0)
+  const [earOn, setEarOn] = useState(false)
   const [ready, setReady] = useState(false)
 
   const itemType = deck?.itemType ?? 'word'
@@ -139,6 +142,35 @@ export default function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /**
+   * 磨耳朵的自动连播:英文 → 停 → 中文 → 停 → 下一张,循环。
+   * 用定时器串起来而不是等 onEnded —— 音源偶尔不出声时,靠 onEnded 会卡死不动。
+   */
+  useEffect(() => {
+    if (!earOn || mode !== 'earTrain' || cards.length === 0) return
+    let alive = true
+    const card = cards[earIdx % cards.length]?.card
+    if (!card) return
+    const en = (card.extra as { en?: string } | undefined)?.en
+    if (en) playWordAudio(en)
+    const t1 = setTimeout(() => {
+      if (alive) void playText(card.front, 'zh_CN')
+    }, 2400)
+    const t2 = setTimeout(() => {
+      if (alive) setEarIdx((i) => (i + 1) % cards.length)
+    }, 5200)
+    return () => {
+      alive = false
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [earOn, earIdx, cards, mode])
+
+  /** 离开页面就把声音停掉,免得返回首页还在响 */
+  useEffect(() => {
+    return () => stopAudio()
+  }, [])
+
   const current = cards[idx]
 
   const options = useMemo(() => {
@@ -179,6 +211,14 @@ export default function Session() {
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
 
+  /** 看拼音选字:选项是汉字,题面是拼音 */
+  const pinyinOptions = useMemo(() => {
+    if (!current || mode !== 'pinyin') return []
+    const answer = current.card.front
+    const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, allCards])
+
   /** 常识问答「选一选」:选项是其它题的答案 */
   const quizOptions = useMemo(() => {
     if (!current || mode !== 'quiz') return []
@@ -191,6 +231,22 @@ export default function Session() {
     if (!current) return
     if (isPic) playPic(current.card)
     else playPrompt(current.card.audioText ?? current.card.front)
+  }
+
+  /** 慢速范读:英语听不清时最有效的一招,比反复原速重放强 */
+  const playSlow = () => {
+    if (!current) return
+    if (isWord) playEnglishSlow(current.card.audioText ?? current.card.front)
+    else void playText(current.card.audioText ?? current.card.front, 'zh_CN')
+  }
+
+  /** A/B 对比:先放范读,再放孩子自己的录音,差别一听就出来 */
+  const compareAB = () => {
+    if (!current) return
+    playCurrent()
+    setTimeout(() => {
+      if (recPath) playFile(recPath)
+    }, 2400)
   }
 
   const finish = (finalCorrect: number, total: number) => {
@@ -477,10 +533,12 @@ export default function Session() {
           <Text className='card__front'>{current.card.front}</Text>
           {current.card.phonetic ? <Text className='card__ph'>/{current.card.phonetic}/</Text> : null}
           <Text className='card__back'>{current.card.back}</Text>
-          <View className='row'>
+          <View className='row row--wrap'>
             <View className='chip' onClick={playCurrent}><Text className='chip__t'>🔊 范读</Text></View>
+            <View className='chip' onClick={playSlow}><Text className='chip__t'>🐢 慢速</Text></View>
             <View className='chip' onClick={toggleRecord}><Text className='chip__t'>{recording ? '⏹ 停止' : '🔴 录我读的'}</Text></View>
             {recPath ? <View className='chip' onClick={() => playFile(recPath)}><Text className='chip__t'>▶️ 回放</Text></View> : null}
+            {recPath ? <View className='chip chip--ab' onClick={compareAB}><Text className='chip__t'>🆚 对比</Text></View> : null}
           </View>
           <View className={listening ? 'mic mic--on' : 'mic'} onClick={toggleSpeak}><Text className='mic__t'>{listening ? '🎙 读完了' : '🎤 跟读打分'}</Text></View>
           {stars >= 0 ? <Text className='stars'>{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</Text> : null}
@@ -497,13 +555,82 @@ export default function Session() {
         <View className='card'>
           <Text className='poem__title'>{current.card.front}</Text>
           <Text className='poem__meta'>{poemMeta?.dynasty}·{poemMeta?.author}</Text>
+          {/*
+            逐字点读:每个字都是可点的小方块,点谁读谁。
+            为什么不做整句自动连读 —— 目前没有可用的中文整句音源,
+            按词拆开自动连播实测是「一个字一个字往外蹦」,反而更糟。
+            让孩子自己点,既有声音又不难听,还顺便认了字。
+          */}
           <View className='poem__body'>
-            {poemLines.map((l, i) => <Text key={i} className='poem__line'>{l}</Text>)}
+            {poemLines.map((l, i) => (
+              <View key={i} className='poem__row'>
+                {l.split('').map((ch, j) => (
+                  <Text
+                    key={`${i}-${j}`}
+                    className='poem__ch'
+                    onClick={() => void playText(ch, 'zh_CN')}
+                  >
+                    {ch}
+                  </Text>
+                ))}
+              </View>
+            ))}
           </View>
-          <View className='chip' onClick={() => void playText(poemLines.join('，'), 'zh_CN')}><Text className='chip__t'>🔊 朗读一遍</Text></View>
+          <Text className='poem__tip'>点每个字都能听到读音(中文整句暂时没有可用音源)</Text>
           <View className='row'>
             <View className='btn btn--gray' onClick={() => advance(false)}><Text className='btn__t'>还不熟</Text></View>
             <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>会背了</Text></View>
+          </View>
+        </View>
+      )}
+
+      {/* 看拼音选字 */}
+      {mode === 'pinyin' && (
+        <View className='card'>
+          <Text className='card__front card__front--py'>{current.card.phonetic ?? current.card.back}</Text>
+          <Text className='card__tip'>这个读音是哪个字?</Text>
+          <View className='opts opts--grid'>
+            {pinyinOptions.map((opt) => {
+              const answer = current.card.front
+              const show = picked !== null
+              const cls = show ? (opt === answer ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
+              return (
+                <View
+                  key={opt}
+                  className={`${cls} opt--hz`}
+                  onClick={() => {
+                    if (picked) return
+                    setPicked(opt)
+                    if (opt === answer) void playText(answer, 'zh_CN')
+                    setTimeout(() => advance(opt === answer), 900)
+                  }}
+                >
+                  <Text className='opt__t'>{opt}</Text>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 磨耳朵:英中自动连播,孩子不用操作 */}
+      {mode === 'earTrain' && (
+        <View className='card'>
+          <Text className='pic__emoji'>
+            {(cards[earIdx]?.card.extra as { emoji?: string } | undefined)?.emoji ?? '🎵'}
+          </Text>
+          <Text className='ear__en'>
+            {(cards[earIdx]?.card.extra as { en?: string } | undefined)?.en ?? ''}
+          </Text>
+          <Text className='ear__zh'>{cards[earIdx]?.card.front ?? ''}</Text>
+          <Text className='card__tip'>
+            {earOn ? '正在自动连播,躺着听就行' : '点下面开始,英语和中文轮流播'}
+          </Text>
+          <View className='btn btn--primary' onClick={() => setEarOn(!earOn)}>
+            <Text className='btn__t'>{earOn ? '⏸ 暂停' : '▶️ 开始连播'}</Text>
+          </View>
+          <View className='btn btn--gray' onClick={() => finish(cards.length, cards.length)}>
+            <Text className='btn__t'>听完了</Text>
           </View>
         </View>
       )}

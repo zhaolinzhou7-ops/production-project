@@ -23,6 +23,7 @@ export type PracticeMode =
   | 'picChooseEn'
   | 'listenPicEn'
   | 'earTrain'
+  | 'pinyin'
   // 常识问答(fact)
   | 'quiz'
 
@@ -41,6 +42,8 @@ export interface LearnDeck {
   builtinKey?: string
   itemType: CardItemType
   createdAt: number
+  /** 装上时内容包的版本;低于当前版本会自动补齐 */
+  contentRev?: number
 }
 
 export interface LearnCard {

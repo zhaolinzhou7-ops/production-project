@@ -141,3 +141,52 @@
   border-bottom: 1px solid #f1f1f4;
   &__t { font-size: 28px; color: #374151; }
 }
+
+/* 本周小结 */
+.wk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  &__c {
+    width: calc(25% - 9px);
+    box-sizing: border-box;
+    background: #f8f8fa;
+    border-radius: 18px;
+    padding: 16px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  &__n { font-size: 34px; font-weight: bold; color: #f9497a; }
+  &__l { font-size: 19px; color: #9ca3af; }
+
+  &__cmt {
+    display: block;
+    font-size: 24px;
+    color: #4b5563;
+    line-height: 1.8;
+  }
+  &__adv {
+    display: block;
+    font-size: 23px;
+    color: #b45309;
+    background: rgba(251, 191, 36, 0.14);
+    border-radius: 16px;
+    padding: 14px 16px;
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+}
+
+.grant {
+  font-size: 22px;
+  color: #fff;
+  background: #10b981;
+  padding: 8px 18px;
+  border-radius: 999px;
+  margin-left: 10px;
+
+  &--ghost { color: #6b7280; background: rgba(107, 114, 128, 0.12); }
+}

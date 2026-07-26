@@ -139,6 +139,7 @@ export function ensureBuiltinDeck(childId: string, builtinKey: string): string {
     builtinKey,
     itemType: pack.itemType,
     createdAt: now,
+    contentRev: meta.rev ?? 1,
   }
   decks.push(deck)
   writeTable(KEYS.decks, decks)
@@ -154,6 +155,54 @@ export function ensureBuiltinDeck(childId: string, builtinKey: string): string {
   writeTable(KEYS.cards, cards)
   writeTable(KEYS.states, states)
   return deckId
+}
+
+/**
+ * 把已装的卡组同步到内容包的最新版本。
+ *
+ * 为什么需要:内容包会更新(补词、改错、加内容)。如果只在「第一次装」时写入,
+ * 老用户设备上永远是旧内容。这里按 order 就地更新每张卡的正反面,
+ * **卡片 id 不变** —— 所以 SRS 的复习进度完整保留;多出来的补上,少了的删掉。
+ */
+export function syncDeckContent(childId: string, builtinKey: string): void {
+  const meta = getPackMeta(builtinKey)
+  if (!meta) return
+  const rev = meta.rev ?? 1
+  const decks = readTable<LearnDeck>(KEYS.decks)
+  const di = decks.findIndex((d) => d.childId === childId && d.builtinKey === builtinKey)
+  if (di < 0) return
+  if ((decks[di].contentRev ?? 1) >= rev) return
+
+  const pack = meta.load()
+  const cards = readTable<LearnCard>(KEYS.cards)
+  const states = readTable<StudyState>(KEYS.states)
+  const deckId = decks[di].id
+  const mine = cards.filter((c) => c.deckId === deckId).sort((a, b) => a.order - b.order)
+
+  pack.cards.forEach((raw, i) => {
+    const fresh = builtinCardToLearnCard(raw, pack.itemType, deckId, i)
+    const old = mine[i]
+    if (old) {
+      // 就地覆盖内容,保留 id → 复习进度不受影响
+      const ci = cards.findIndex((c) => c.id === old.id)
+      if (ci >= 0) cards[ci] = { ...fresh, id: old.id }
+    } else {
+      cards.push(fresh)
+      states.push({ id: newId(), childId, cardId: fresh.id, deckId, ...initialSrs() })
+    }
+  })
+
+  // 内容变少了:多出来的卡连同进度一起删掉
+  if (mine.length > pack.cards.length) {
+    const drop = new Set(mine.slice(pack.cards.length).map((c) => c.id))
+    for (let i = cards.length - 1; i >= 0; i--) if (drop.has(cards[i].id)) cards.splice(i, 1)
+    for (let i = states.length - 1; i >= 0; i--) if (drop.has(states[i].cardId)) states.splice(i, 1)
+  }
+
+  decks[di] = { ...decks[di], contentRev: rev, name: pack.name, icon: meta.icon }
+  writeTable(KEYS.decks, decks)
+  writeTable(KEYS.cards, cards)
+  writeTable(KEYS.states, states)
 }
 
 /** 当前学段(幼儿/小学/初中):决定首页展示与「内容库」里能选哪些包 */

@@ -5,6 +5,18 @@ import { getCurrentChildId } from '../../store/study'
 import { getStats, weakCards, earnedAchievements, type LearningStats } from '../../store/progress'
 import { ACHIEVEMENTS } from '../../core/achievements'
 import { readObject, writeObject } from '../../store/db'
+import { buildWeekly, type WeeklyReport } from '../../store/weekly'
+import {
+  ensureRewards,
+  listRewards,
+  listRedemptions,
+  grantRedemption,
+  cancelRedemption,
+  addReward,
+  removeReward,
+  type Redemption,
+  type Reward,
+} from '../../store/rewards'
 import './index.scss'
 
 /**
@@ -25,6 +37,9 @@ export default function Parent() {
   const [weak, setWeak] = useState<Array<{ front: string; lapses: number }>>([])
   const [earned, setEarned] = useState<string[]>([])
   const [limit, setLimit] = useState(DEFAULT_LIMIT)
+  const [weekly, setWeekly] = useState<WeeklyReport | null>(null)
+  const [rewards, setRewards] = useState<Reward[]>([])
+  const [redeems, setRedeems] = useState<Redemption[]>([])
 
   const load = () => {
     const childId = getCurrentChildId()
@@ -32,6 +47,50 @@ export default function Parent() {
     setWeak(weakCards(childId))
     setEarned(earnedAchievements(childId))
     setLimit(readObject<number>(GOAL_KEY, DEFAULT_LIMIT))
+    setWeekly(buildWeekly(childId))
+    ensureRewards()
+    setRewards(listRewards())
+    setRedeems(listRedemptions().filter((d) => !d.granted))
+  }
+
+  /** 把学习进度导成一段文本,家长可以复制走存着(不上云也能防丢) */
+  const exportData = () => {
+    const w = buildWeekly(getCurrentChildId())
+    const st = stats
+    const text = [
+      `成长学习 · 数据备份 ${new Date().toLocaleString()}`,
+      st ? `等级 Lv.${st.level.cur.level} ${st.level.cur.name} / 成长值 ${st.xp}` : '',
+      st ? `已掌握 ${st.mastered} / 学习中 ${st.learning} / 连续 ${st.streak} 天` : '',
+      st ? `累计 ${st.sessions} 组 ${st.answered} 题,正确 ${st.correct} 题` : '',
+      `本周 ${w.days} 天 ${w.answered} 题,新掌握 ${w.newMastered},习惯完成率 ${w.habitRate}%`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+    Taro.setClipboardData({
+      data: text,
+      success: () =>
+        Taro.showModal({ title: '已复制到剪贴板', content: text, showCancel: false }),
+    })
+  }
+
+  const addNewReward = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(Taro.showModal as any)({
+      title: '新增奖励',
+      editable: true,
+      placeholderText: '格式:名称 空格 分数,如「去游乐园 200」',
+      success: (res: { confirm: boolean; content?: string }) => {
+        if (!res.confirm) return
+        const raw = (res.content || '').trim()
+        const m = raw.match(/^(.+?)\s+(\d+)$/)
+        if (!m) {
+          Taro.showToast({ title: '格式:名称 空格 分数', icon: 'none' })
+          return
+        }
+        addReward(m[1], Number(m[2]))
+        load()
+      },
+    })
   }
 
   useDidShow(() => {
@@ -217,8 +276,97 @@ export default function Parent() {
         </View>
       </View>
 
+      {/* 本周小结 */}
+      {weekly ? (
+        <View className='sec'>
+          <Text className='sec__t'>本周小结</Text>
+          <View className='wk'>
+            <View className='wk__c'>
+              <Text className='wk__n'>{weekly.days}</Text>
+              <Text className='wk__l'>练习天数</Text>
+            </View>
+            <View className='wk__c'>
+              <Text className='wk__n'>{weekly.answered}</Text>
+              <Text className='wk__l'>题量</Text>
+            </View>
+            <View className='wk__c'>
+              <Text className='wk__n'>{weekly.newMastered}</Text>
+              <Text className='wk__l'>新掌握</Text>
+            </View>
+            <View className='wk__c'>
+              <Text className='wk__n'>{weekly.habitRate}%</Text>
+              <Text className='wk__l'>习惯完成</Text>
+            </View>
+          </View>
+          <Text className='wk__cmt'>{weekly.comment}</Text>
+          {weekly.advice.map((a) => (
+            <Text key={a} className='wk__adv'>💡 {a}</Text>
+          ))}
+        </View>
+      ) : null}
+
+      {/* 待兑现的奖励 */}
+      <View className='sec'>
+        <Text className='sec__t'>奖励{redeems.length > 0 ? `(${redeems.length} 项待兑现)` : ''}</Text>
+        {redeems.length === 0 ? (
+          <Text className='sec__tip'>目前没有待兑现的奖励。</Text>
+        ) : (
+          redeems.map((d) => (
+            <View key={d.id} className='wrow'>
+              <Text className='wrow__t'>
+                {d.emoji} {d.name}
+              </Text>
+              <Text
+                className='grant'
+                onClick={() => {
+                  grantRedemption(d.id)
+                  load()
+                }}
+              >
+                已给他
+              </Text>
+              <Text
+                className='grant grant--ghost'
+                onClick={() => {
+                  cancelRedemption(d.id)
+                  load()
+                }}
+              >
+                退回
+              </Text>
+            </View>
+          ))
+        )}
+        <Text className='sec__tip'>
+          奖励尽量用「体验和陪伴」而不是玩具零食 —— 用物质换学习,长期会削弱孩子本身的兴趣。
+        </Text>
+        {rewards.map((r) => (
+          <View key={r.id} className='wrow'>
+            <Text className='wrow__t'>
+              {r.emoji} {r.name}
+            </Text>
+            <Text className='wrow__n'>{r.cost} 分</Text>
+            <Text
+              className='grant grant--ghost'
+              onClick={() => {
+                removeReward(r.id)
+                load()
+              }}
+            >
+              删
+            </Text>
+          </View>
+        ))}
+        <View className='lrow' onClick={addNewReward}>
+          <Text className='lrow__t'>+ 新增奖励</Text>
+        </View>
+      </View>
+
       <View className='sec'>
         <Text className='sec__t'>其它</Text>
+        <View className='lrow' onClick={exportData}>
+          <Text className='lrow__t'>导出数据(复制到剪贴板)</Text>
+        </View>
         <View className='lrow' onClick={changePin}>
           <Text className='lrow__t'>修改家长密码</Text>
         </View>

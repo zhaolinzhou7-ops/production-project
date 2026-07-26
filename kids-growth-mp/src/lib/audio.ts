@@ -265,6 +265,37 @@ function playSequence(
   }, 4500)
 }
 
+/**
+ * 慢速朗读(英语跟读用)。
+ * InnerAudioContext 支持 playbackRate,0.75 倍速对小朋友刚好 —— 比听不清再重放有效得多。
+ */
+export function playEnglishSlow(text: string, rate = 0.75): void {
+  const t = text.trim()
+  if (!t) return
+  token += 1
+  const my = token
+  const a = Taro.createInnerAudioContext()
+  try {
+    a.obeyMuteSwitch = false
+  } catch {
+    /* 忽略 */
+  }
+  try {
+    a.playbackRate = rate
+  } catch {
+    /* 老基础库不支持变速,按原速播 */
+  }
+  if (my !== token) return
+  current = a
+  try {
+    a.onError(() => dispose(a))
+    a.src = ordered(EN_SOURCES, PREF_KEY_EN)[0].url(t)
+    a.play()
+  } catch {
+    dispose(a)
+  }
+}
+
 /** 播放单词的真人发音(英语) */
 export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
@@ -467,6 +498,10 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
   const youdaoZh = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
   const jobs: Array<{ label: string; url: string; id?: string }> = [
     ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple'), id: s.id })),
+    {
+      label: '有道·英语整句',
+      url: `https://dict.youdao.com/dictvoice?audio=${enc('This is a red apple.')}&type=2`,
+    },
     { label: '有道·中文 单字「好」', url: youdaoZh('好') },
     { label: '有道·中文 词「你好」', url: youdaoZh('你好') },
     { label: '有道·中文 四字「春眠不觉」', url: youdaoZh('春眠不觉') },
