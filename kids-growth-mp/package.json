@@ -13,6 +13,7 @@
     "build:weapp": "taro build --type weapp",
     "clean": "node scripts/clean.js",
     "rebuild": "node scripts/clean.js && taro build --type weapp",
+    "build:si": "node scripts/build-si.js",
     "dev:weapp": "taro build --type weapp --watch",
     "typecheck": "tsc --noEmit"
   },

@@ -2,7 +2,7 @@
   "miniprogramRoot": "dist/",
   "projectname": "kids-growth-mp",
   "description": "儿童学习小程序",
-  "appid": "touristappid",
+  "appid": "wx73000ca8dd20ad93",
   "libVersion": "latest",
   "setting": {
     "urlCheck": false,
