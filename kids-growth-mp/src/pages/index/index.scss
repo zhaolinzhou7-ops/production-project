@@ -315,3 +315,30 @@
     border-radius: 999px;
   }
 }
+
+.entry--parent {
+  background: linear-gradient(135deg, #34d399, #10b981);
+}
+
+/* 等级条 */
+.lvbar {
+  display: flex;
+  align-items: center;
+  background: rgba(52, 211, 153, 0.16);
+  border-radius: 22px;
+  padding: 18px 24px;
+  margin-bottom: 20px;
+
+  &__e { font-size: 48px; margin-right: 18px; }
+  &__meta { flex: 1; }
+  &__n { display: block; font-size: 26px; color: #047857; font-weight: bold; }
+  &__track {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 999px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  &__fill { height: 100%; background: linear-gradient(90deg, #34d399, #10b981); border-radius: 999px; }
+  &__h { font-size: 22px; color: #059669; margin-left: 16px; }
+}

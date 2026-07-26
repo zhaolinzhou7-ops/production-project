@@ -356,6 +356,28 @@ export function addErrorCard(
   return cardId
 }
 
+/**
+ * 答错自动进错题本(按题干去重)。
+ *
+ * 教学上这一步很关键:孩子答错的当下最有印象,但过后既不会自己记录、
+ * 也想不起来错过什么。自动收进来,再由 SRS 安排重做,错题才真的被消化。
+ */
+export function autoAddErrorCard(
+  childId: string,
+  entry: { front: string; back: string; subject?: string },
+): void {
+  const front = entry.front.trim()
+  if (!front) return
+  const deckId = getErrorDeckId(childId)
+  if (deckId) {
+    const dup = readTable<LearnCard>(KEYS.cards).some(
+      (c) => c.deckId === deckId && c.front === front,
+    )
+    if (dup) return
+  }
+  addErrorCard(childId, entry)
+}
+
 export function getErrorDeckId(childId: string): string | undefined {
   return readTable<LearnDeck>(KEYS.decks).find(
     (d) => d.childId === childId && d.source === 'wrong' && d.itemType === 'wrong',

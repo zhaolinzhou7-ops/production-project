@@ -26,6 +26,8 @@ export default defineAppConfig({
     'pages/errorbook/index',
     'pages/packs/index',
     'pages/fun/index',
+    'pages/parent/index',
+    'pages/privacy/index',
   ],
   window: {
     backgroundTextStyle: 'light',

@@ -1,0 +1,11 @@
+.pv {
+  min-height: 100vh;
+  padding: 32px 28px;
+  box-sizing: border-box;
+
+  &__h { display: block; font-size: 36px; font-weight: bold; color: #374151; margin-bottom: 20px; }
+  &__st { display: block; font-size: 28px; font-weight: bold; color: #374151; margin: 28px 0 10px; }
+  &__p { display: block; font-size: 25px; color: #4b5563; line-height: 1.8; }
+  &__li { display: block; font-size: 25px; color: #4b5563; line-height: 1.8; margin-left: 8px; }
+  &__foot { display: block; font-size: 22px; color: #9ca3af; line-height: 1.7; margin-top: 34px; }
+}

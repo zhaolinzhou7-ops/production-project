@@ -9,8 +9,12 @@ import {
   applyGrade,
   finishSession,
   addStudyTime,
+  autoAddErrorCard,
   type DueCard,
 } from '../../store/study'
+import { noteSessionEnd, claimNewAchievements } from '../../store/progress'
+import { getAchievement } from '../../core/achievements'
+import { levelOf } from '../../core/levels'
 import { playWordAudio, playText } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
@@ -62,6 +66,10 @@ export default function Session() {
   const [gotSticker, setGotSticker] = useState<StickerDef | null>(null)
   const [evolved, setEvolved] = useState(false)
   const [challengeDone, setChallengeDone] = useState(false)
+  const [newBadges, setNewBadges] = useState<string[]>([])
+  const [leveledTo, setLeveledTo] = useState('')
+  /** 本组最高连对,用于成就统计 */
+  const [bestCombo, setBestCombo] = useState(0)
   const [ready, setReady] = useState(false)
 
   const itemType = deck?.itemType ?? 'word'
@@ -193,7 +201,14 @@ export default function Session() {
     try {
       setGotSticker(awardSticker(finalCorrect, total) ?? null)
       setEvolved(feedPet(finalCorrect))
-      setChallengeDone(bumpChallenge())
+      const chal = bumpChallenge()
+      setChallengeDone(chal)
+      // 升级判定要用「加分前后」的成长值对比
+      const before = levelOf(res.newXp - res.pointsAwarded)
+      const after = levelOf(res.newXp)
+      if (after.cur.level > before.cur.level) setLeveledTo(`${after.cur.emoji} ${after.cur.name}`)
+      noteSessionEnd({ correct: finalCorrect, total, bestCombo, challengeJustDone: chal })
+      setNewBadges(claimNewAchievements(childId))
     } catch {
       /* 忽略 */
     }
@@ -222,7 +237,11 @@ export default function Session() {
     if (!current) return
     applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     if (wasCorrect) {
-      setCombo((c) => c + 1)
+      setCombo((c) => {
+        const n = c + 1
+        setBestCombo((b) => Math.max(b, n))
+        return n
+      })
       setBurst((b) => b + 1)
       try {
         Taro.vibrateShort({ type: 'light' })
@@ -231,6 +250,16 @@ export default function Session() {
       }
     } else {
       setCombo(0)
+      // 答错的题自动收进错题本,交给 SRS 安排重做
+      try {
+        autoAddErrorCard(childId, {
+          front: current.card.front,
+          back: current.card.back,
+          subject: deck?.subject,
+        })
+      } catch {
+        /* 忽略 */
+      }
     }
     const nextCorrect = correct + (wasCorrect ? 1 : 0)
     setCorrect(nextCorrect)
@@ -312,6 +341,22 @@ export default function Session() {
           <View className='reward'>
             <Text className='reward__e'>{gotSticker.emoji}</Text>
             <Text className='reward__t'>获得新贴纸「{gotSticker.name}」!</Text>
+          </View>
+        ) : null}
+        {leveledTo ? <Text className='reward__line'>🎉 升级啦!现在是 {leveledTo}</Text> : null}
+        {newBadges.length > 0 ? (
+          <View className='badges'>
+            {newBadges.map((code) => {
+              const a = getAchievement(code)
+              if (!a) return null
+              return (
+                <View key={code} className='badge'>
+                  <Text className='badge__e'>{a.emoji}</Text>
+                  <Text className='badge__n'>{a.name}</Text>
+                </View>
+              )
+            })}
+            <Text className='reward__line'>解锁新徽章!</Text>
           </View>
         ) : null}
         {evolved ? <Text className='reward__line'>🎊 你的小宠物进化啦!</Text> : null}

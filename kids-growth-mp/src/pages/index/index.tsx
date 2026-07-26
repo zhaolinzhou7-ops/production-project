@@ -18,6 +18,7 @@ import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
 import { getLine, stageOf } from '../../core/pets'
+import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -27,7 +28,7 @@ interface DeckRow {
   due: number
 }
 
-/** 每日建议学习时长上限(分钟),超过给护眼提醒 */
+/** 每日建议学习时长上限(分钟)的默认值,家长中心可改 */
 const DAILY_LIMIT_MIN = 30
 
 function msgOf(e: unknown): string {
@@ -52,6 +53,8 @@ export default function Index() {
   const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
   const [stickerCount, setStickerCount] = useState(0)
   const [petEmoji, setPetEmoji] = useState('🥚')
+  const [level, setLevel] = useState<LevelInfo>(levelOf(0))
+  const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
 
   /**
    * 载入首页数据。
@@ -78,7 +81,10 @@ export default function Index() {
         (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
       )
       setRows(decks.map((deck) => ({ deck, due: countDue(childId, deck.id) })))
-      setXp(getPoints().xp)
+      const points = getPoints()
+      setXp(points.xp)
+      setLevel(levelOf(points.xp))
+      setLimitMin(readObject<number>('dailyMinuteLimit', DAILY_LIMIT_MIN))
       setStreak(getStudyStreak())
       setMinutes(getTodayStudyMinutes())
       setChallenge(getChallenge())
@@ -201,7 +207,7 @@ export default function Index() {
         </View>
       ) : null}
 
-      {minutes >= DAILY_LIMIT_MIN ? (
+      {minutes >= limitMin ? (
         <View className='rest'>
           <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
         </View>
@@ -216,6 +222,20 @@ export default function Index() {
           <Text className='entry__icon'>📕</Text>
           <Text className='entry__t'>错题本</Text>
         </View>
+      </View>
+
+      {/* 等级:成长值攒到下一级还差多少,一眼可见 */}
+      <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>
+        <Text className='lvbar__e'>{level.cur.emoji}</Text>
+        <View className='lvbar__meta'>
+          <Text className='lvbar__n'>
+            Lv.{level.cur.level} {level.cur.name}
+          </Text>
+          <View className='lvbar__track'>
+            <View className='lvbar__fill' style={{ width: `${level.progress * 100}%` }} />
+          </View>
+        </View>
+        <Text className='lvbar__h'>{level.next ? `再 ${level.toNext} 升级` : '满级'}</Text>
       </View>
 
       {/* 今日挑战:一眼看到还差几组,给孩子一个明确的小目标 */}
@@ -244,6 +264,10 @@ export default function Index() {
         <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
           <Text className='entry__icon'>📚</Text>
           <Text className='entry__t'>内容库</Text>
+        </View>
+        <View className='entry entry--parent' onClick={() => openPage('/pages/parent/index')}>
+          <Text className='entry__icon'>👨‍👩‍👧</Text>
+          <Text className='entry__t'>家长中心</Text>
         </View>
         <View className='entry entry--sound' onClick={() => void checkSound()}>
           <Text className='entry__icon'>🔊</Text>
