@@ -9,3 +9,8 @@ dist/
 # 微信开发者工具的「个人设置」文件:里面是本机/本账号专属的配置,
 # 不入库,避免每人一份互相覆盖。
 project.private.config.json
+
+# 微信开发者工具会自动改写这个文件(写入 appid/本地设置等),
+# 让它每次都和仓库冲突、挡住 git pull。改为不入库,各人本地一份。
+# 新环境可从 project.config.template.json 复制一份。
+project.config.json

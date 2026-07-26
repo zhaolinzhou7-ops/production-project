@@ -13,6 +13,7 @@ import {
 } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
+import { BUILD_TAG } from '../../lib/version'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -286,6 +287,7 @@ export default function Index() {
       <Text className='home__note'>
         单词发音为网络真人音源(需联网);古诗/识字用系统语音朗读。跟读的录音只在本地处理、不上传。
       </Text>
+      <Text className='home__ver'>版本 {BUILD_TAG}</Text>
     </View>
   )
 }
