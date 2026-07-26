@@ -16,6 +16,8 @@ import {
 import { readObject, writeObject } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
+import { getChallenge, ownedStickers, getPet } from '../../store/fun'
+import { getLine, stageOf } from '../../core/pets'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { LearnDeck } from '../../types'
 import './index.scss'
@@ -47,6 +49,9 @@ export default function Index() {
   const [checking, setChecking] = useState(false)
   const [progress, setProgress] = useState(0)
   const [diag, setDiag] = useState<DiagLine[]>([])
+  const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
+  const [stickerCount, setStickerCount] = useState(0)
+  const [petEmoji, setPetEmoji] = useState('🥚')
 
   /**
    * 载入首页数据。
@@ -76,6 +81,11 @@ export default function Index() {
       setXp(getPoints().xp)
       setStreak(getStudyStreak())
       setMinutes(getTodayStudyMinutes())
+      setChallenge(getChallenge())
+      setStickerCount(ownedStickers().length)
+      const pet = getPet()
+      const pl = pet.line ? getLine(pet.line) : undefined
+      setPetEmoji(pl ? pl.stages[stageOf(pet.fed)].emoji : '🥚')
       // app.ts 里记下的「上一次未捕获报错」也一并显示出来
       const last = readObject<string>('_lastError', '')
       setErr([failed.join(' / '), last].filter(Boolean).join(' / '))
@@ -205,6 +215,28 @@ export default function Index() {
         <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
           <Text className='entry__icon'>📕</Text>
           <Text className='entry__t'>错题本</Text>
+        </View>
+      </View>
+
+      {/* 今日挑战:一眼看到还差几组,给孩子一个明确的小目标 */}
+      <View className='chalbar' onClick={() => openPage('/pages/fun/index')}>
+        <Text className='chalbar__t'>
+          {challenge.done >= challenge.goal
+            ? '🏆 今日挑战完成!'
+            : `今日挑战 ${challenge.done}/${challenge.goal} 组`}
+        </Text>
+        <View className='chalbar__track'>
+          <View
+            className='chalbar__fill'
+            style={{ width: `${Math.min(100, (challenge.done / challenge.goal) * 100)}%` }}
+          />
+        </View>
+      </View>
+
+      <View className='entries'>
+        <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
+          <Text className='entry__icon'>{petEmoji}</Text>
+          <Text className='entry__t'>宠物·贴纸 {stickerCount}</Text>
         </View>
       </View>
 

@@ -15,6 +15,9 @@ import { playWordAudio, playText } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
+import CorrectBurst from '../../components/CorrectBurst'
+import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
+import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
 import './index.scss'
 
@@ -54,6 +57,11 @@ export default function Session() {
   const [recording, setRecording] = useState(false)
   const [startedAt] = useState(Date.now())
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number } | null>(null)
+  /** 答对特效:每答对一次 +1,用来重新触发动画 */
+  const [burst, setBurst] = useState(0)
+  const [gotSticker, setGotSticker] = useState<StickerDef | null>(null)
+  const [evolved, setEvolved] = useState(false)
+  const [challengeDone, setChallengeDone] = useState(false)
   const [ready, setReady] = useState(false)
 
   const itemType = deck?.itemType ?? 'word'
@@ -181,6 +189,14 @@ export default function Session() {
     const durationSec = Math.round((Date.now() - startedAt) / 1000)
     addStudyTime(durationSec)
     const res = finishSession({ childId, deckId, mode, total, correct: finalCorrect, durationSec })
+    // 结算趣味化:掉贴纸、喂宠物、记每日挑战。任何一步出问题都不能挡住结算页。
+    try {
+      setGotSticker(awardSticker(finalCorrect, total) ?? null)
+      setEvolved(feedPet(finalCorrect))
+      setChallengeDone(bumpChallenge())
+    } catch {
+      /* 忽略 */
+    }
     setSummary({ correct: finalCorrect, total, points: res.pointsAwarded })
     setPhase('done')
   }
@@ -207,6 +223,7 @@ export default function Session() {
     applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     if (wasCorrect) {
       setCombo((c) => c + 1)
+      setBurst((b) => b + 1)
       try {
         Taro.vibrateShort({ type: 'light' })
       } catch {
@@ -291,6 +308,14 @@ export default function Session() {
           <View className='result__cell'><Text className='result__num'>{summary.correct}/{summary.total}</Text><Text className='result__lab'>答对</Text></View>
           <View className='result__cell'><Text className='result__num result__num--sun'>+{summary.points}</Text><Text className='result__lab'>积分</Text></View>
         </View>
+        {gotSticker ? (
+          <View className='reward'>
+            <Text className='reward__e'>{gotSticker.emoji}</Text>
+            <Text className='reward__t'>获得新贴纸「{gotSticker.name}」!</Text>
+          </View>
+        ) : null}
+        {evolved ? <Text className='reward__line'>🎊 你的小宠物进化啦!</Text> : null}
+        {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
         <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
       </View>
     )
@@ -310,6 +335,7 @@ export default function Session() {
         <Text className='sess__count'>{idx + 1}/{cards.length}</Text>
       </View>
       {combo >= 2 ? <Text className='combo'>🔥 连对 {combo}</Text> : null}
+      {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
 
       {/* 认词 / 认字 */}
       {mode === 'recognize' && (

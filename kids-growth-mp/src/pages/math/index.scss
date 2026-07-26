@@ -192,3 +192,43 @@
   gap: 24px;
   margin-top: 40px;
 }
+
+.combo {
+  display: block;
+  text-align: center;
+  font-size: 26px;
+  color: #f59e0b;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+/* 结算页的奖励展示 */
+.reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(251, 191, 36, 0.15);
+  border-radius: 28px;
+  padding: 24px 32px;
+  margin: 20px 0;
+
+  &__e {
+    font-size: 90px;
+    line-height: 1.1;
+  }
+
+  &__t {
+    margin-top: 10px;
+    font-size: 28px;
+    color: #b45309;
+    font-weight: bold;
+  }
+
+  &__line {
+    display: block;
+    margin: 12px 0;
+    font-size: 28px;
+    color: #059669;
+    font-weight: bold;
+  }
+}

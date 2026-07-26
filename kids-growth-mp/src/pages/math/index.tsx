@@ -3,6 +3,9 @@ import { View, Text, Input } from '@tarojs/components'
 import Taro, { useUnload } from '@tarojs/taro'
 import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../../core/mathDrill'
 import { getCurrentChildId, finishDrill, addStudyTime } from '../../store/study'
+import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
+import CorrectBurst from '../../components/CorrectBurst'
+import type { StickerDef } from '../../core/stickers'
 import './index.scss'
 
 type Screen = 'config' | 'run' | 'done'
@@ -19,6 +22,12 @@ export default function MathPage() {
   const [feedback, setFeedback] = useState<'none' | 'ok' | 'no'>('none')
   const [startedAt, setStartedAt] = useState(0)
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number; sec: number } | null>(null)
+  const [combo, setCombo] = useState(0)
+  /** 答对特效:每答对一题 +1,用来重新触发动画 */
+  const [burst, setBurst] = useState(0)
+  const [gotSticker, setGotSticker] = useState<StickerDef | null>(null)
+  const [evolved, setEvolved] = useState(false)
+  const [challengeDone, setChallengeDone] = useState(false)
 
   useUnload(() => {})
 
@@ -32,6 +41,22 @@ export default function MathPage() {
     setScreen('run')
   }
 
+  const finishAll = (nextCorrect: number) => {
+    const sec = Math.round((Date.now() - startedAt) / 1000)
+    addStudyTime(sec)
+    const res = finishDrill({ childId: getCurrentChildId(), kind, total: problems.length, correct: nextCorrect, durationSec: sec })
+    // 和背单词一样的结算奖励:贴纸、喂宠物、每日挑战
+    try {
+      setGotSticker(awardSticker(nextCorrect, problems.length) ?? null)
+      setEvolved(feedPet(nextCorrect))
+      setChallengeDone(bumpChallenge())
+    } catch {
+      /* 忽略 */
+    }
+    setSummary({ correct: nextCorrect, total: problems.length, points: res.pointsAwarded, sec })
+    setScreen('done')
+  }
+
   const submit = () => {
     if (feedback !== 'none') return
     const p = problems[idx]
@@ -40,20 +65,20 @@ export default function MathPage() {
     setCorrect(nextCorrect)
     setFeedback(isRight ? 'ok' : 'no')
     if (isRight) {
+      setCombo((c) => c + 1)
+      setBurst((b) => b + 1)
       try {
         Taro.vibrateShort({ type: 'light' })
       } catch {
         /* 忽略 */
       }
+    } else {
+      setCombo(0)
     }
     setTimeout(
       () => {
         if (idx + 1 >= problems.length) {
-          const sec = Math.round((Date.now() - startedAt) / 1000)
-          addStudyTime(sec)
-          const res = finishDrill({ childId: getCurrentChildId(), kind, total: problems.length, correct: nextCorrect, durationSec: sec })
-          setSummary({ correct: nextCorrect, total: problems.length, points: res.pointsAwarded, sec })
-          setScreen('done')
+          finishAll(nextCorrect)
         } else {
           setIdx(idx + 1)
           setInput('')
@@ -100,6 +125,14 @@ export default function MathPage() {
           <View className='mresult__c'><Text className='mresult__n'>{summary.sec}s</Text><Text className='mresult__l'>用时</Text></View>
           <View className='mresult__c'><Text className='mresult__n mresult__n--sun'>+{summary.points}</Text><Text className='mresult__l'>积分</Text></View>
         </View>
+        {gotSticker ? (
+          <View className='reward'>
+            <Text className='reward__e'>{gotSticker.emoji}</Text>
+            <Text className='reward__t'>获得新贴纸「{gotSticker.name}」!</Text>
+          </View>
+        ) : null}
+        {evolved ? <Text className='reward__line'>🎊 你的小宠物进化啦!</Text> : null}
+        {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
         <View className='row'>
           <View className='btn btn--gray' onClick={() => setScreen('config')}><Text className='btn__t'>再来一组</Text></View>
           <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
@@ -115,6 +148,8 @@ export default function MathPage() {
         <Text className='math__exit' onClick={() => Taro.navigateBack()}>退出</Text>
         <Text className='math__count'>{idx + 1}/{problems.length}</Text>
       </View>
+      {combo >= 2 ? <Text className='combo'>🔥 连对 {combo}</Text> : null}
+      {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
       <View className='q'>
         <Text className='q__t'>{p?.text}</Text>
         <Input
