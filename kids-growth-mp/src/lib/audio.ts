@@ -95,12 +95,35 @@ export const EN_SOURCES: AudioSource[] = [
 /** 记住上次真正出过声的音源,下次优先用它(省掉重复试错的等待) */
 const PREF_KEY_ZH = '_prefZh'
 const PREF_KEY_EN = '_prefEn'
+/** 自检里确认「连不上/不返回音频」的音源,之后直接跳过,不再让用户干等 */
+const DEAD_KEY = '_deadSources'
+
+function deadSet(): Record<string, boolean> {
+  return readObject<Record<string, boolean>>(DEAD_KEY, {})
+}
 
 function ordered(list: AudioSource[], prefKey: string): AudioSource[] {
+  const dead = deadSet()
+  const alive = list.filter((s) => !dead[s.id])
+  const use = alive.length > 0 ? alive : list
   const pref = readObject<string>(prefKey, '')
-  if (!pref) return list
-  const hit = list.find((s) => s.id === pref)
-  return hit ? [hit, ...list.filter((s) => s !== hit)] : list
+  if (!pref) return use
+  const hit = use.find((s) => s.id === pref)
+  return hit ? [hit, ...use.filter((s) => s !== hit)] : use
+}
+
+/** 中文长句的兜底:按标点切段,段太长再切成词/单字 —— 有道词典对词和单字是有音的 */
+export function zhChunks(text: string): string[] {
+  const segs = text.split(/[，,。.！!？?、;；:：\s\n]+/).filter(Boolean)
+  const out: string[] = []
+  for (const seg of segs) {
+    if (seg.length <= 4) {
+      out.push(seg)
+      continue
+    }
+    for (let i = 0; i < seg.length; i += 2) out.push(seg.slice(i, i + 2))
+  }
+  return out
 }
 
 // ---------------------------------------------------------------- 播放
@@ -136,13 +159,26 @@ export function stopAudio(): void {
   }
 }
 
-/** 逐个音源尝试播放,第一个真能出声的就留下 */
-function playSequence(text: string, list: AudioSource[], prefKey: string, i: number, my: number): void {
+/**
+ * 逐个音源尝试播放,第一个真能出声的就留下。
+ * 全部试完仍不出声时调用 onExhausted(中文用它转入「拆词逐段读」的兜底)。
+ */
+function playSequence(
+  text: string,
+  list: AudioSource[],
+  prefKey: string,
+  i: number,
+  my: number,
+  onExhausted?: () => void,
+): void {
   if (my !== token) return
-  if (i >= list.length) return
+  if (i >= list.length) {
+    onExhausted?.()
+    return
+  }
   const s = list[i]
   if (text.length > s.maxLen) {
-    playSequence(text, list, prefKey, i + 1, my)
+    playSequence(text, list, prefKey, i + 1, my, onExhausted)
     return
   }
 
@@ -161,7 +197,7 @@ function playSequence(text: string, list: AudioSource[], prefKey: string, i: num
     if (moved) return
     moved = true
     dispose(a)
-    playSequence(text, list, prefKey, i + 1, my)
+    playSequence(text, list, prefKey, i + 1, my, onExhausted)
   }
   const succeeded = () => {
     if (started) return
@@ -255,9 +291,71 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
       const yd = list.find((s) => s.id === 'youdao-zh-le')
       if (yd) list = [yd, ...list.filter((s) => s !== yd)]
     }
-    playSequence(t, list, PREF_KEY_ZH, 0, token)
+    const my = token
+    playSequence(t, list, PREF_KEY_ZH, 0, my, () => {
+      // 整句读不出来(有道是词典,查不到整句)→ 拆成词逐段读,总比没有声音好
+      const chunks = zhChunks(t)
+      if (chunks.length > 1) void playChunks(chunks, my)
+    })
   } else {
     playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN), PREF_KEY_EN, 0, token)
+  }
+}
+
+/** 播完一个 URL 再播下一个(播完/失败/超时都算这一段结束) */
+function playOnce(url: string, my: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (my !== token) {
+      resolve()
+      return
+    }
+    let done = false
+    let a: Taro.InnerAudioContext
+    const finish = () => {
+      if (done) return
+      done = true
+      try {
+        dispose(a)
+      } catch {
+        /* 忽略 */
+      }
+      resolve()
+    }
+    try {
+      a = Taro.createInnerAudioContext()
+    } catch {
+      resolve()
+      return
+    }
+    try {
+      a.obeyMuteSwitch = false
+    } catch {
+      /* 忽略 */
+    }
+    current = a
+    try {
+      a.onEnded(finish)
+      a.onError(finish)
+    } catch {
+      /* 忽略 */
+    }
+    try {
+      a.src = url
+      a.play()
+    } catch {
+      finish()
+      return
+    }
+    setTimeout(finish, 5000)
+  })
+}
+
+/** 逐段朗读(中文长句兜底):一段读完再读下一段,中间留一点点停顿 */
+async function playChunks(chunks: string[], my: number): Promise<void> {
+  const url = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
+  for (const c of chunks) {
+    if (my !== token) return
+    await playOnce(url(c), my)
   }
 }
 
@@ -341,8 +439,8 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
   // 有道是**词典**发音:查得到的词才有音频。所以中文要按「单字/词/整句」
   // 分档测,才能知道哪些内容(识字=单字、古诗=整句)真的能出声。
   const youdaoZh = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
-  const jobs: Array<{ label: string; url: string }> = [
-    ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple') })),
+  const jobs: Array<{ label: string; url: string; id?: string }> = [
+    ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple'), id: s.id })),
     { label: '有道·中文 单字「好」', url: youdaoZh('好') },
     { label: '有道·中文 词「你好」', url: youdaoZh('你好') },
     { label: '有道·中文 四字「春眠不觉」', url: youdaoZh('春眠不觉') },
@@ -350,9 +448,11 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
     ...ZH_SOURCES.filter((s) => s.id !== 'youdao-zh-le').map((s) => ({
       label: s.label,
       url: s.url('白日依山尽'),
+      id: s.id,
     })),
   ]
   const out: DiagLine[] = []
+  const dead: Record<string, boolean> = {}
   for (let i = 0; i < jobs.length; i++) {
     let ok = false
     try {
@@ -361,12 +461,16 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
       ok = false
     }
     out.push({ label: jobs[i].label, ok })
+    if (jobs[i].id && !ok) dead[jobs[i].id as string] = true
     try {
       onProgress?.(i + 1, jobs.length)
     } catch {
       /* 忽略:进度提示失败不影响自检 */
     }
   }
+  // 把不通的记下来:之后朗读时直接跳过,不用每次都干等 4.5 秒超时。
+  // (有道中文那几档是拿不同长度的文本测同一个通道,不代表通道本身死了,故不入册)
+  writeObject(DEAD_KEY, dead)
   return out
 }
 
