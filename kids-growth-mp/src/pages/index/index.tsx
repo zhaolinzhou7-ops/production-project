@@ -17,6 +17,7 @@ import { readObject, writeObject } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
+import { ensureHabits, todayProgress } from '../../store/habits'
 import { getLine, stageOf } from '../../core/pets'
 import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
@@ -55,6 +56,7 @@ export default function Index() {
   const [petEmoji, setPetEmoji] = useState('🥚')
   const [level, setLevel] = useState<LevelInfo>(levelOf(0))
   const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
+  const [habit, setHabit] = useState({ done: 0, total: 0 })
 
   /**
    * 载入首页数据。
@@ -88,6 +90,8 @@ export default function Index() {
       setStreak(getStudyStreak())
       setMinutes(getTodayStudyMinutes())
       setChallenge(getChallenge())
+      ensureHabits()
+      setHabit(todayProgress())
       setStickerCount(ownedStickers().length)
       const pet = getPet()
       const pl = pet.line ? getLine(pet.line) : undefined
@@ -212,6 +216,23 @@ export default function Index() {
           <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
         </View>
       ) : null}
+
+      {/* 生活习惯放最前:这是每天最先要做的事,不该埋在学习内容下面 */}
+      <View className='habitcard' onClick={() => openPage('/pages/habits/index')}>
+        <Text className='habitcard__e'>{habit.total > 0 && habit.done >= habit.total ? '🎉' : '🪥'}</Text>
+        <View className='habitcard__meta'>
+          <Text className='habitcard__t'>今日习惯</Text>
+          <Text className='habitcard__n'>
+            {habit.total > 0 ? `${habit.done}/${habit.total} 件已完成` : '点这里安排每天要做的事'}
+          </Text>
+        </View>
+        <View className='habitcard__track'>
+          <View
+            className='habitcard__fill'
+            style={{ width: `${habit.total > 0 ? (habit.done / habit.total) * 100 : 0}%` }}
+          />
+        </View>
+      </View>
 
       <View className='entries'>
         <View className='entry entry--math' onClick={() => openPage('/pages/math/index')}>

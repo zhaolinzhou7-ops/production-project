@@ -43,6 +43,20 @@ export function getPoints(): PointStats {
   return readObject<PointStats>(KEYS.points, { balance: 0, xp: 0 })
 }
 
+/**
+ * 直接增减成长值(习惯打卡用)。
+ * 取消打卡要能扣回去 —— 否则反复勾选就能刷分。xp 不会被扣成负数。
+ */
+export function adjustPoints(delta: number): PointStats {
+  const cur = getPoints()
+  const next = {
+    balance: cur.balance + delta,
+    xp: Math.max(0, cur.xp + delta),
+  }
+  writeObject(KEYS.points, next)
+  return next
+}
+
 function addPoints(delta: number): PointStats {
   const cur = getPoints()
   const next = { balance: cur.balance + delta, xp: delta > 0 ? cur.xp + delta : cur.xp }

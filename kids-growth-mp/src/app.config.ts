@@ -26,6 +26,7 @@ export default defineAppConfig({
     'pages/errorbook/index',
     'pages/packs/index',
     'pages/fun/index',
+    'pages/habits/index',
     'pages/parent/index',
     'pages/privacy/index',
   ],

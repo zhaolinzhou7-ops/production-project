@@ -1,0 +1,119 @@
+.hb {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__hero {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    border-radius: 28px;
+    padding: 26px;
+    margin-bottom: 24px;
+  }
+
+  &__meta { flex: 1; margin-left: 22px; }
+  &__cheer { display: block; font-size: 28px; color: #fff; font-weight: bold; line-height: 1.4; }
+  &__track {
+    height: 14px;
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    margin: 14px 0 8px;
+    overflow: hidden;
+  }
+  &__fill { height: 100%; background: #fff; border-radius: 999px; }
+  &__streak { font-size: 22px; color: rgba(255, 255, 255, 0.95); }
+
+  &__acts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+  &__btn {
+    font-size: 24px;
+    color: #fff;
+    background: #3b82f6;
+    padding: 14px 28px;
+    border-radius: 999px;
+    &--ghost { color: #6b7280; background: rgba(107, 114, 128, 0.12); }
+  }
+
+  &__note {
+    display: block;
+    margin-top: 26px;
+    font-size: 21px;
+    color: #9ca3af;
+    line-height: 1.7;
+  }
+}
+
+.ring {
+  width: 128px;
+  height: 128px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 8px solid rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &__n { font-size: 38px; color: #fff; font-weight: bold; }
+}
+
+.grp {
+  margin-bottom: 24px;
+
+  &__t {
+    display: block;
+    font-size: 27px;
+    color: #6b7280;
+    font-weight: bold;
+    margin-bottom: 12px;
+  }
+}
+
+.hrow {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 22px;
+  margin-bottom: 14px;
+
+  &--on {
+    background: rgba(52, 211, 153, 0.18);
+  }
+
+  &__e { font-size: 46px; margin-right: 20px; }
+  &__meta { flex: 1; }
+  &__n { display: block; font-size: 30px; color: #374151; font-weight: bold; }
+
+  &__week { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  &__s { font-size: 20px; color: #f59e0b; margin-left: 8px; }
+
+  &__ck {
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: 4rpx solid #d1d5db;
+    box-sizing: border-box;
+    text-align: center;
+    line-height: 48px;
+    font-size: 34px;
+    color: transparent;
+
+    &--on {
+      border-color: #10b981;
+      background: #10b981;
+      color: #fff;
+    }
+  }
+
+  &__del { font-size: 24px; color: #ef4444; }
+}
+
+.dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #e5e7eb;
+
+  &--on { background: #34d399; }
+}

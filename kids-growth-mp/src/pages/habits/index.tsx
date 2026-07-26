@@ -1,0 +1,189 @@
+import { useState } from 'react'
+import { View, Text } from '@tarojs/components'
+import Taro, { useDidShow } from '@tarojs/taro'
+import { PERIODS, habitCheer, templatesFor, type HabitPeriod } from '../../core/habits'
+import {
+  ensureHabits,
+  listHabits,
+  doneToday,
+  toggleHabit,
+  habitStreak,
+  weekGrid,
+  allDoneStreak,
+  addHabitFromTemplate,
+  addCustomHabit,
+  removeHabit,
+  type Habit,
+} from '../../store/habits'
+import { getStage } from '../../store/study'
+import CorrectBurst from '../../components/CorrectBurst'
+import './index.scss'
+
+export default function Habits() {
+  const [habits, setHabits] = useState<Habit[]>([])
+  const [done, setDone] = useState<string[]>([])
+  const [fullStreak, setFullStreak] = useState(0)
+  const [burst, setBurst] = useState(0)
+  const [manage, setManage] = useState(false)
+
+  const refresh = () => {
+    ensureHabits()
+    setHabits(listHabits())
+    setDone(doneToday())
+    setFullStreak(allDoneStreak())
+  }
+
+  useDidShow(refresh)
+
+  const tap = (h: Habit) => {
+    if (manage) return
+    const nowDone = toggleHabit(h.id)
+    if (nowDone) {
+      setBurst((b) => b + 1)
+      try {
+        Taro.vibrateShort({ type: 'light' })
+      } catch {
+        /* 忽略 */
+      }
+    }
+    refresh()
+  }
+
+  const askRemove = (h: Habit) => {
+    Taro.showModal({
+      title: `去掉「${h.name}」?`,
+      content: '以后不再出现在清单里,已有的打卡记录保留。',
+      success: (res) => {
+        if (!res.confirm) return
+        removeHabit(h.id)
+        refresh()
+      },
+    })
+  }
+
+  const addFromTemplate = () => {
+    const have = new Set(habits.map((h) => h.id))
+    const pool = templatesFor(getStage()).filter((t) => !have.has(t.key))
+    if (pool.length === 0) {
+      Taro.showToast({ title: '模板都加过了', icon: 'none' })
+      return
+    }
+    Taro.showActionSheet({
+      itemList: pool.slice(0, 10).map((t) => `${t.emoji} ${t.name}`),
+      success: (res) => {
+        addHabitFromTemplate(pool[res.tapIndex])
+        refresh()
+      },
+      fail: () => undefined,
+    })
+  }
+
+  const addCustom = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(Taro.showModal as any)({
+      title: '自己加一条',
+      editable: true,
+      placeholderText: '比如:给绿植浇水',
+      success: (res: { confirm: boolean; content?: string }) => {
+        if (!res.confirm) return
+        const name = (res.content || '').trim()
+        if (!name) return
+        Taro.showActionSheet({
+          itemList: PERIODS.map((p) => `${p.emoji} ${p.label}`),
+          success: (r) => {
+            addCustomHabit(name, PERIODS[r.tapIndex].key as HabitPeriod)
+            refresh()
+          },
+          fail: () => undefined,
+        })
+      },
+    })
+  }
+
+  const total = habits.length
+  const doneCount = done.filter((id) => habits.some((h) => h.id === id)).length
+  const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0
+
+  return (
+    <View className='hb'>
+      {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
+
+      <View className='hb__hero'>
+        <View className='ring'>
+          <Text className='ring__n'>
+            {doneCount}/{total}
+          </Text>
+        </View>
+        <View className='hb__meta'>
+          <Text className='hb__cheer'>{habitCheer(doneCount, total)}</Text>
+          <View className='hb__track'>
+            <View className='hb__fill' style={{ width: `${pct}%` }} />
+          </View>
+          {fullStreak > 0 ? <Text className='hb__streak'>🔥 全部做到已连续 {fullStreak} 天</Text> : null}
+        </View>
+      </View>
+
+      {PERIODS.map((p) => {
+        const list = habits.filter((h) => h.period === p.key)
+        if (list.length === 0) return null
+        return (
+          <View key={p.key} className='grp'>
+            <Text className='grp__t'>
+              {p.emoji} {p.label}
+            </Text>
+            {list.map((h) => {
+              const isDone = done.includes(h.id)
+              const streak = habitStreak(h.id)
+              const week = weekGrid(h.id)
+              return (
+                <View
+                  key={h.id}
+                  className={isDone ? 'hrow hrow--on' : 'hrow'}
+                  onClick={() => tap(h)}
+                  onLongPress={() => askRemove(h)}
+                >
+                  <Text className='hrow__e'>{h.emoji}</Text>
+                  <View className='hrow__meta'>
+                    <Text className='hrow__n'>{h.name}</Text>
+                    <View className='hrow__week'>
+                      {week.map((d) => (
+                        <View key={d.date} className={d.done ? 'dot dot--on' : 'dot'} />
+                      ))}
+                      {streak > 1 ? <Text className='hrow__s'>连续 {streak} 天</Text> : null}
+                    </View>
+                  </View>
+                  {manage ? (
+                    <Text className='hrow__del' onClick={() => askRemove(h)}>
+                      删除
+                    </Text>
+                  ) : (
+                    <Text className={isDone ? 'hrow__ck hrow__ck--on' : 'hrow__ck'}>
+                      {isDone ? '✓' : ''}
+                    </Text>
+                  )}
+                </View>
+              )
+            })}
+          </View>
+        )
+      })}
+
+      <View className='hb__acts'>
+        <Text className='hb__btn' onClick={addFromTemplate}>
+          + 从模板添加
+        </Text>
+        <Text className='hb__btn' onClick={addCustom}>
+          + 自己加一条
+        </Text>
+        <Text className='hb__btn hb__btn--ghost' onClick={() => setManage(!manage)}>
+          {manage ? '完成' : '管理'}
+        </Text>
+      </View>
+
+      <Text className='hb__note'>
+        点一下就算完成,再点一次可以取消。漏了一天不扣分,第二天照样从头开始 ——
+        习惯是靠一次次做成的,不是靠罚出来的。长按某一条也可以删掉它。
+      </Text>
+    </View>
+  )
+}
