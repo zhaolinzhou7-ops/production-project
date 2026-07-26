@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { packsForStage } from '../../core/learningContent'
+import { defaultPacksForStage } from '../../core/learningContent'
+import { modesFor } from '../../core/practiceModes'
 import {
   getCurrentChildId,
   ensureBuiltinDeck,
@@ -10,6 +11,7 @@ import {
   getPoints,
   getStudyStreak,
   getTodayStudyMinutes,
+  getStage,
 } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
@@ -58,7 +60,9 @@ export default function Index() {
     try {
       const childId = getCurrentChildId()
       const failed: string[] = []
-      for (const p of packsForStage('primary')) {
+      // 只自动加「默认包」;其余在内容库里自助添加 —— 一次实例化太多包会
+      // 往本地存储写上万张卡,既慢又容易撑爆。
+      for (const p of defaultPacksForStage(getStage())) {
         try {
           ensureBuiltinDeck(childId, p.key)
         } catch (e) {
@@ -154,14 +158,6 @@ export default function Index() {
     Taro.showToast({ title: up === 'ok' ? '已同步' : '同步完成', icon: 'success' })
   }
 
-  const wordModes: Array<[string, string, string]> = [
-    ['recognize', '👀', '认词'],
-    ['listenChoose', '👂', '听音选义'],
-    ['spell', '⌨️', '拼写'],
-    ['dictation', '✍️', '听写'],
-    ['speak', '🎤', '跟读'],
-  ]
-
   return (
     <View className='home'>
       <View className='home__hero'>
@@ -213,6 +209,10 @@ export default function Index() {
       </View>
 
       <View className='entries'>
+        <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
+          <Text className='entry__icon'>📚</Text>
+          <Text className='entry__t'>内容库</Text>
+        </View>
         <View className='entry entry--sound' onClick={() => void checkSound()}>
           <Text className='entry__icon'>🔊</Text>
           <Text className='entry__t'>{checking ? `检测中 ${progress}%` : '声音自检'}</Text>
@@ -243,22 +243,12 @@ export default function Index() {
 
       {loading ? <Text className='home__tip'>正在准备内容包…</Text> : null}
       {!loading && !err && rows.length === 0 ? (
-        <Text className='home__tip'>还没有内容包,点上面「声音自检」旁的按钮或下拉重进试试。</Text>
+        <Text className='home__tip'>还没有内容包,点上面的「📚 内容库」挑几个加进来。</Text>
       ) : null}
 
       {rows.map(({ deck, due }) => {
-        const modes: Array<[string, string, string]> =
-          deck.itemType === 'word'
-            ? wordModes
-            : deck.itemType === 'poem'
-              ? [
-                  ['recite', '📖', '朗读背诵'],
-                  ['fillBlank', '✏️', '补全诗句'],
-                ]
-              : [
-                  ['recognize', '👀', '认字'],
-                  ['listenChoose', '👂', '听音选字'],
-                ]
+        // 练习模式由卡片类型决定(单词/古诗/识字/看图/问答各有各的玩法)
+        const modes = modesFor(deck.itemType, true)
         return (
           <View key={deck.id} className='deck'>
             <View className='deck__head'>
@@ -274,10 +264,10 @@ export default function Index() {
               )}
             </View>
             <View className='deck__modes'>
-              {modes.map(([m, icon, label]) => (
-                <View key={m} className='mode' onClick={() => go(deck.id, m)}>
-                  <Text className='mode__icon'>{icon}</Text>
-                  <Text className='mode__label'>{label}</Text>
+              {modes.map((m) => (
+                <View key={m.mode} className='mode' onClick={() => go(deck.id, m.mode)}>
+                  <Text className='mode__icon'>{m.icon}</Text>
+                  <Text className='mode__label'>{m.label}</Text>
                 </View>
               ))}
             </View>

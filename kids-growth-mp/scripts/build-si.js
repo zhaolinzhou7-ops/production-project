@@ -18,4 +18,11 @@ const r = spawnSync('npx', ['taro', 'build', '--type', 'weapp'], {
   env: process.env,
   cwd: path.join(__dirname, '..'),
 })
+if (r.status === 0) {
+  const v = spawnSync('node', [path.join(__dirname, 'verify-bundle.js')], {
+    stdio: 'inherit',
+    cwd: path.join(__dirname, '..'),
+  })
+  process.exit(v.status === null ? 1 : v.status)
+}
 process.exit(r.status === null ? 1 : r.status)

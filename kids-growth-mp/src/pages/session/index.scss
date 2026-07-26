@@ -386,3 +386,42 @@
     line-height: 1.6;
   }
 }
+
+/* ---- 看图启蒙(pic)与常识问答(fact) ---- */
+.pic__emoji {
+  display: block;
+  text-align: center;
+  font-size: 160px;
+  line-height: 1.2;
+  margin: 20px 0 8px;
+}
+
+.picgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.picopt {
+  width: calc(50% - 10px);
+  box-sizing: border-box;
+  background: #f8f8fa;
+  border-radius: 28px;
+  padding: 24px 0;
+  display: flex;
+  justify-content: center;
+
+  &__e {
+    font-size: 92px;
+    line-height: 1.1;
+  }
+
+  &--right {
+    background: rgba(52, 211, 153, 0.2);
+  }
+
+  &--wrong {
+    background: rgba(239, 68, 68, 0.16);
+  }
+}

@@ -15,7 +15,7 @@ import { playWordAudio, playText } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
-import type { LearnDeck, PracticeMode } from '../../types'
+import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
 import './index.scss'
 
 type Phase = 'prompt' | 'reveal' | 'done'
@@ -37,6 +37,7 @@ export default function Session() {
   const [childId, setChildId] = useState('')
   const [deck, setDeck] = useState<LearnDeck | null>(null)
   const [cards, setCards] = useState<DueCard[]>([])
+  const [allCards, setAllCards] = useState<LearnCard[]>([])
   const [poolBack, setPoolBack] = useState<string[]>([])
   const [poolFront, setPoolFront] = useState<string[]>([])
   const [linePool, setLinePool] = useState<string[]>([])
@@ -58,10 +59,21 @@ export default function Session() {
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
   const isWord = itemType === 'word'
+  const isPic = itemType === 'pic'
+  const isFact = itemType === 'fact'
+  /** 看图题里的「英语档」:读英文、选英文 */
+  const picEn = mode === 'picChooseEn' || mode === 'listenPicEn'
 
   const playPrompt = (text: string) => {
     if (isWord) playWordAudio(text)
     else void playText(text, 'zh_CN')
+  }
+
+  /** 看图卡:按当前模式决定读中文还是读英文 */
+  const playPic = (card: LearnCard) => {
+    const en = (card.extra as { en?: string } | undefined)?.en
+    if (picEn && en) playWordAudio(en)
+    else void playText(card.front, 'zh_CN')
   }
 
   // ⚠️ 整体 try/catch:页面加载阶段抛异常会导致整页渲染不出来(只剩导航栏),
@@ -74,6 +86,7 @@ export default function Session() {
       const all = getDeckCards(deckId)
       setChildId(cid)
       setDeck(d)
+      setAllCards(all)
       setPoolBack(all.map((c) => c.back))
       setPoolFront(all.map((c) => c.front))
       const lines: string[] = []
@@ -84,10 +97,20 @@ export default function Session() {
       setLinePool(lines)
       setCards(list)
       setReady(true)
-      if (list[0] && (mode === 'listenChoose' || mode === 'dictation')) {
+      const autoPlay = mode === 'listenChoose' || mode === 'dictation' || mode === 'listenPic' || mode === 'listenPicEn'
+      if (list[0] && autoPlay) {
         const c0 = list[0].card
-        if ((d?.itemType ?? 'word') === 'word') playWordAudio(c0.audioText ?? c0.front)
-        else void playText(c0.audioText ?? c0.front, 'zh_CN')
+        const t = (d?.itemType ?? 'word') as string
+        if (mode === 'listenPicEn') {
+          const en = (c0.extra as { en?: string } | undefined)?.en
+          playWordAudio(en ?? c0.front)
+        } else if (mode === 'listenPic') {
+          void playText(c0.front, 'zh_CN')
+        } else if (t === 'word') {
+          playWordAudio(c0.audioText ?? c0.front)
+        } else {
+          void playText(c0.audioText ?? c0.front, 'zh_CN')
+        }
       }
     } catch (e) {
       setReady(true)
@@ -122,8 +145,36 @@ export default function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, mode, linePool, idx])
 
+  /** 看图题「选文字」:选项是中文名或英文名 */
+  const picTextOptions = useMemo(() => {
+    if (!current || (mode !== 'picChoose' && mode !== 'picChooseEn')) return []
+    const pick = (c: LearnCard) => (mode === 'picChooseEn' ? c.back : c.front)
+    const answer = pick(current.card)
+    const distractors = shuffle(allCards.filter((c) => pick(c) !== answer).map(pick)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, allCards])
+
+  /** 看图题「选图片」:选项是 emoji */
+  const picEmojiOptions = useMemo(() => {
+    if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
+    const emojiOf = (c: LearnCard) => (c.extra as { emoji?: string } | undefined)?.emoji ?? '❓'
+    const answer = emojiOf(current.card)
+    const distractors = shuffle(allCards.filter((c) => emojiOf(c) !== answer).map(emojiOf)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, allCards])
+
+  /** 常识问答「选一选」:选项是其它题的答案 */
+  const quizOptions = useMemo(() => {
+    if (!current || mode !== 'quiz') return []
+    const answer = current.card.back
+    const distractors = shuffle(allCards.filter((c) => c.back !== answer).map((c) => c.back)).slice(0, 3)
+    return shuffle([answer, ...distractors])
+  }, [current, mode, allCards])
+
   const playCurrent = () => {
-    if (current) playPrompt(current.card.audioText ?? current.card.front)
+    if (!current) return
+    if (isPic) playPic(current.card)
+    else playPrompt(current.card.audioText ?? current.card.front)
   }
 
   const finish = (finalCorrect: number, total: number) => {
@@ -146,6 +197,8 @@ export default function Session() {
     if (mode === 'listenChoose' || mode === 'dictation') {
       const c = cards[nextIdx].card
       playPrompt(c.audioText ?? c.front)
+    } else if (mode === 'listenPic' || mode === 'listenPicEn') {
+      playPic(cards[nextIdx].card)
     }
   }
 
@@ -429,6 +482,97 @@ export default function Session() {
           ) : (
             <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>看答案</Text></View>
           )}
+        </View>
+      )}
+
+      {/* 看图选一选 / 英语·看图选词:大图在上,文字选项在下 */}
+      {(mode === 'picChoose' || mode === 'picChooseEn') && (
+        <View className='card'>
+          <Text className='pic__emoji'>{(current.card.extra as { emoji?: string } | undefined)?.emoji ?? '❓'}</Text>
+          <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          <Text className='card__tip'>{picEn ? '这是什么?选英语单词' : '这是什么?选出名字'}</Text>
+          <View className='opts'>
+            {picTextOptions.map((opt) => {
+              const answer = picEn ? current.card.back : current.card.front
+              const show = picked !== null
+              const cls = show ? (opt === answer ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
+              return (
+                <View
+                  key={opt}
+                  className={cls}
+                  onClick={() => {
+                    if (picked) return
+                    setPicked(opt)
+                    if (opt === answer) playPic(current.card)
+                    setTimeout(() => advance(opt === answer), 900)
+                  }}
+                >
+                  <Text className='opt__t'>{opt}</Text>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 听音选图 / 英语·听音选图:听声音,在四张大图里点出来 */}
+      {(mode === 'listenPic' || mode === 'listenPicEn') && (
+        <View className='card'>
+          <View className='audio audio--big' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          <Text className='card__tip'>{picEn ? '听英语,点出正确的图' : '听一听,点出正确的图'}</Text>
+          <View className='picgrid'>
+            {picEmojiOptions.map((opt) => {
+              const answer = (current.card.extra as { emoji?: string } | undefined)?.emoji ?? '❓'
+              const show = picked !== null
+              const cls = show
+                ? opt === answer
+                  ? 'picopt picopt--right'
+                  : opt === picked
+                    ? 'picopt picopt--wrong'
+                    : 'picopt'
+                : 'picopt'
+              return (
+                <View
+                  key={opt}
+                  className={cls}
+                  onClick={() => {
+                    if (picked) return
+                    setPicked(opt)
+                    setTimeout(() => advance(opt === answer), 900)
+                  }}
+                >
+                  <Text className='picopt__e'>{opt}</Text>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* 常识问答·选一选 */}
+      {mode === 'quiz' && (
+        <View className='card'>
+          <View className='qbox'><Text className='qbox__t'>{current.card.front}</Text></View>
+          <View className='opts'>
+            {quizOptions.map((opt) => {
+              const answer = current.card.back
+              const show = picked !== null
+              const cls = show ? (opt === answer ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
+              return (
+                <View
+                  key={opt}
+                  className={cls}
+                  onClick={() => {
+                    if (picked) return
+                    setPicked(opt)
+                    setTimeout(() => advance(opt === answer), 900)
+                  }}
+                >
+                  <Text className='opt__t'>{opt}</Text>
+                </View>
+              )
+            })}
+          </View>
         </View>
       )}
     </View>

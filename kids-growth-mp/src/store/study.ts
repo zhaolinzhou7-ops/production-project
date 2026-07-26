@@ -4,13 +4,16 @@ import { initialSrs, gradeCard, isDue } from '../core/srs'
 import { getPackMeta } from '../core/learningContent'
 import type {
   BuiltinCard,
+  BuiltinFactCard,
   BuiltinHanziCard,
+  BuiltinPicCard,
   BuiltinPoemCard,
   BuiltinWordCard,
 } from '../core/learningContent'
 import { todayISO } from '../core/dateUtils'
 import { computeStreak } from '../core/streak'
 import type {
+  AgeStage,
   CardItemType,
   LearnCard,
   LearnDeck,
@@ -75,6 +78,20 @@ function builtinCardToLearnCard(
       extra: h.w ? { word: h.w } : undefined,
     }
   }
+  if (itemType === 'pic') {
+    const p = c as BuiltinPicCard
+    return {
+      ...base,
+      front: p.front,
+      back: p.en,
+      audioText: p.say ?? p.front,
+      extra: { emoji: p.emoji, en: p.en },
+    }
+  }
+  if (itemType === 'fact') {
+    const f = c as BuiltinFactCard
+    return { ...base, front: f.q, back: f.a, audioText: f.q }
+  }
   const w = c as BuiltinWordCard
   return {
     ...base,
@@ -123,6 +140,43 @@ export function ensureBuiltinDeck(childId: string, builtinKey: string): string {
   writeTable(KEYS.cards, cards)
   writeTable(KEYS.states, states)
   return deckId
+}
+
+/** 当前学段(幼儿/小学/初中):决定首页展示与「内容库」里能选哪些包 */
+export function getStage(): AgeStage {
+  return readObject<AgeStage>('stage', 'primary')
+}
+
+export function setStage(stage: AgeStage): void {
+  writeObject('stage', stage)
+}
+
+/** 该孩子已加过哪些内置包 */
+export function addedPackKeys(childId: string): Set<string> {
+  return new Set(
+    readTable<LearnDeck>(KEYS.decks)
+      .filter((d) => d.childId === childId && d.builtinKey)
+      .map((d) => d.builtinKey as string),
+  )
+}
+
+/** 移除一个内置卡组(连同卡片与学习进度) */
+export function removeBuiltinDeck(childId: string, builtinKey: string): void {
+  const decks = readTable<LearnDeck>(KEYS.decks)
+  const deck = decks.find((d) => d.childId === childId && d.builtinKey === builtinKey)
+  if (!deck) return
+  writeTable(
+    KEYS.decks,
+    decks.filter((d) => d.id !== deck.id),
+  )
+  writeTable(
+    KEYS.cards,
+    readTable<LearnCard>(KEYS.cards).filter((c) => c.deckId !== deck.id),
+  )
+  writeTable(
+    KEYS.states,
+    readTable<StudyState>(KEYS.states).filter((s) => s.deckId !== deck.id),
+  )
 }
 
 export function listChildDecks(childId: string): LearnDeck[] {

@@ -24,6 +24,7 @@ export default defineAppConfig({
     'pages/session/index',
     'pages/math/index',
     'pages/errorbook/index',
+    'pages/packs/index',
   ],
   window: {
     backgroundTextStyle: 'light',

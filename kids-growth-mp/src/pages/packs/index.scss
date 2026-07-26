@@ -1,0 +1,84 @@
+.packs {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__tip {
+    display: block;
+    font-size: 22px;
+    color: #9ca3af;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+}
+
+.tabs {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  padding: 18px 0;
+  display: flex;
+  justify-content: center;
+
+  &__t {
+    font-size: 26px;
+    color: #6b7280;
+  }
+
+  &--on {
+    background: #f9497a;
+    .tab__t {
+      color: #fff;
+      font-weight: bold;
+    }
+  }
+}
+
+.prow {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 22px;
+  margin-bottom: 16px;
+
+  &__icon {
+    font-size: 46px;
+    margin-right: 20px;
+  }
+
+  &__meta {
+    flex: 1;
+  }
+
+  &__name {
+    display: block;
+    font-size: 30px;
+    color: #374151;
+    font-weight: bold;
+  }
+
+  &__sub {
+    font-size: 22px;
+    color: #9ca3af;
+  }
+
+  &__btn {
+    font-size: 24px;
+    color: #fff;
+    background: #f9497a;
+    padding: 10px 24px;
+    border-radius: 999px;
+
+    &--on {
+      color: #059669;
+      background: rgba(52, 211, 153, 0.16);
+    }
+  }
+}

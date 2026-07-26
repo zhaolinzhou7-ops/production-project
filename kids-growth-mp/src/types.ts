@@ -4,7 +4,7 @@
 export type AgeStage = 'toddler' | 'primary' | 'junior' | 'senior'
 
 /** 卡片内容类型,决定支持哪些练习模式 */
-export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong'
+export type CardItemType = 'word' | 'poem' | 'hanzi' | 'wrong' | 'pic' | 'fact'
 export type DeckSource = 'builtin' | 'custom' | 'wrong'
 
 /** 练习模式 */
@@ -17,6 +17,14 @@ export type PracticeMode =
   | 'fillBlank'
   | 'recite'
   | 'review'
+  // 看图启蒙(pic)
+  | 'picChoose'
+  | 'listenPic'
+  | 'picChooseEn'
+  | 'listenPicEn'
+  | 'earTrain'
+  // 常识问答(fact)
+  | 'quiz'
 
 /** SRS 记忆状态机 */
 export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'

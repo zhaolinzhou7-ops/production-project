@@ -10,12 +10,13 @@
     "framework": "react"
   },
   "scripts": {
-    "build:weapp": "taro build --type weapp",
+    "build:weapp": "taro build --type weapp && node scripts/verify-bundle.js",
     "clean": "node scripts/clean.js",
-    "rebuild": "node scripts/clean.js && taro build --type weapp",
+    "rebuild": "node scripts/clean.js && taro build --type weapp && node scripts/verify-bundle.js",
     "build:si": "node scripts/build-si.js",
     "dev:weapp": "taro build --type weapp --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify-bundle.js"
   },
   "browserslist": [
     "defaults and fully supports es6-module",
