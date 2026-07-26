@@ -102,6 +102,33 @@ function deadSet(): Record<string, boolean> {
   return readObject<Record<string, boolean>>(DEAD_KEY, {})
 }
 
+/**
+ * 播放时连续失败的音源也记为「不通」。
+ *
+ * 不然每读一句都要把连不上的几家重试一遍:每家等 4.5 秒超时,还会在控制台
+ * 刷一堆「Unable to decode audio data」。连着失败两次就不再试它。
+ */
+const failStreak = new Map<string, number>()
+const FAIL_LIMIT = 2
+
+function noteFail(id: string): void {
+  const n = (failStreak.get(id) ?? 0) + 1
+  failStreak.set(id, n)
+  if (n < FAIL_LIMIT) return
+  const dead = deadSet()
+  if (dead[id]) return
+  dead[id] = true
+  writeObject(DEAD_KEY, dead)
+}
+
+function noteOk(id: string): void {
+  failStreak.delete(id)
+  const dead = deadSet()
+  if (!dead[id]) return
+  delete dead[id]
+  writeObject(DEAD_KEY, dead)
+}
+
 function ordered(list: AudioSource[], prefKey: string): AudioSource[] {
   const dead = deadSet()
   const alive = list.filter((s) => !dead[s.id])
@@ -193,12 +220,14 @@ function playSequence(
   const next = () => {
     if (moved) return
     moved = true
+    noteFail(s.id)
     dispose(a)
     playSequence(text, list, prefKey, i + 1, my, onExhausted)
   }
   const succeeded = () => {
     if (started) return
     started = true
+    noteOk(s.id)
     writeObject(prefKey, s.id)
   }
 

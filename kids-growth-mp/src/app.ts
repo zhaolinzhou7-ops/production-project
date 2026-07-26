@@ -16,7 +16,11 @@ function App({ children }: PropsWithChildren) {
   // (给非技术用户用:不用打开调试器,也能把出错原因念给我们听)
   useError((err) => {
     try {
-      writeObject('_lastError', String(err).slice(0, 400))
+      const msg = String(err)
+      // 音频解码失败是**预期内**的:某些音源连得上但返回的是网页而不是音频,
+      // 播放器解不出来就报这个。管线会自动换下一家,不该拿它去吓用户。
+      if (/decode audio|MEDIA_ERR|innerAudioContext/i.test(msg)) return
+      writeObject('_lastError', msg.slice(0, 400))
     } catch {
       /* 忽略 */
     }
