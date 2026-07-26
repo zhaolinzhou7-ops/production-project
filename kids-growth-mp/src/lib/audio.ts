@@ -248,7 +248,14 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
   }
   token += 1
   if (lang === 'zh_CN') {
-    playSequence(t, ordered(ZH_SOURCES, PREF_KEY_ZH), PREF_KEY_ZH, 0, token)
+    let list = ordered(ZH_SOURCES, PREF_KEY_ZH)
+    // 短词(识字的单字、词语)优先走有道词典 —— 词典查得到的词才有真人音,
+    // 而有道是目前唯一确认可达的音源。长句子则按常规顺序试。
+    if (t.length <= 4) {
+      const yd = list.find((s) => s.id === 'youdao-zh-le')
+      if (yd) list = [yd, ...list.filter((s) => s !== yd)]
+    }
+    playSequence(t, list, PREF_KEY_ZH, 0, token)
   } else {
     playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN), PREF_KEY_EN, 0, token)
   }
@@ -272,7 +279,7 @@ function msgOf(e: unknown): string {
  * 属性/方法支持不一样(比如老版本没有 onCanplay),任何一步抛错都不能
  * 让整个自检崩掉 —— 崩了用户就只剩一个看不懂的堆栈。
  */
-function probeSource(s: AudioSource, sample: string): Promise<boolean> {
+function probeUrl(url: string): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false
     let a: Taro.InnerAudioContext | null = null
@@ -309,7 +316,7 @@ function probeSource(s: AudioSource, sample: string): Promise<boolean> {
       /* 忽略 */
     }
     try {
-      a.src = s.url(sample)
+      a.src = url
       a.play()
     } catch {
       finish(false)
@@ -331,19 +338,29 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
   } catch {
     /* 忽略 */
   }
-  const jobs: Array<{ s: AudioSource; sample: string }> = [
-    ...EN_SOURCES.map((s) => ({ s, sample: 'apple' })),
-    ...ZH_SOURCES.map((s) => ({ s, sample: '白日依山尽' })),
+  // 有道是**词典**发音:查得到的词才有音频。所以中文要按「单字/词/整句」
+  // 分档测,才能知道哪些内容(识字=单字、古诗=整句)真的能出声。
+  const youdaoZh = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
+  const jobs: Array<{ label: string; url: string }> = [
+    ...EN_SOURCES.map((s) => ({ label: s.label, url: s.url('apple') })),
+    { label: '有道·中文 单字「好」', url: youdaoZh('好') },
+    { label: '有道·中文 词「你好」', url: youdaoZh('你好') },
+    { label: '有道·中文 四字「春眠不觉」', url: youdaoZh('春眠不觉') },
+    { label: '有道·中文 整句「白日依山尽」', url: youdaoZh('白日依山尽') },
+    ...ZH_SOURCES.filter((s) => s.id !== 'youdao-zh-le').map((s) => ({
+      label: s.label,
+      url: s.url('白日依山尽'),
+    })),
   ]
   const out: DiagLine[] = []
   for (let i = 0; i < jobs.length; i++) {
     let ok = false
     try {
-      ok = await probeSource(jobs[i].s, jobs[i].sample)
+      ok = await probeUrl(jobs[i].url)
     } catch {
       ok = false
     }
-    out.push({ label: jobs[i].s.label, ok })
+    out.push({ label: jobs[i].label, ok })
     try {
       onProgress?.(i + 1, jobs.length)
     } catch {
