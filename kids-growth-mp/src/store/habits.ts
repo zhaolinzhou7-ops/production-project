@@ -131,9 +131,12 @@ export interface HabitProgress {
 }
 
 export function todayProgress(): HabitProgress {
-  const total = listHabits().length
-  const done = doneToday().filter((id) => listHabits().some((h) => h.id === id)).length
-  return { done, total }
+  // 清单只取一次:原先写成 filter 回调里再调 listHabits(),等于每条打卡记录
+  // 都重读一遍清单 —— 首页每次刷新都要跑,是白花的开销。
+  const habits = listHabits()
+  const ids = new Set(habits.map((h) => h.id))
+  const done = doneToday().filter((id) => ids.has(id)).length
+  return { done, total: habits.length }
 }
 
 /** 全部习惯都做到的连续天数(用于「全勤」类鼓励) */

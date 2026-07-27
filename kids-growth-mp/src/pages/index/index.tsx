@@ -42,6 +42,12 @@ const DAILY_LIMIT_MIN = 30
  */
 let syncedThisLaunch = false
 
+/**
+ * 本次启动已经确认装好的内容包。
+ * 有了它,后面每次回首页都不必再逐个调 ensureBuiltinDeck 去「确认一遍」。
+ */
+const installedKeys = new Set<string>()
+
 function msgOf(e: unknown): string {
   if (e instanceof Error) return e.message || String(e)
   try {
@@ -69,6 +75,8 @@ function Index() {
   const [habit, setHabit] = useState({ done: 0, total: 0 })
   const [canSpend, setCanSpend] = useState(0)
   const [pending, setPending] = useState(0)
+  /** 首次装内容包时的进度提示(装完就消失) */
+  const [installing, setInstalling] = useState('')
 
   /**
    * 载入首页数据。
@@ -82,18 +90,41 @@ function Index() {
     try {
       const childId = getCurrentChildId()
       const failed: string[] = []
-      // 只自动加「默认包」;其余在内容库里自助添加 —— 一次实例化太多包会
-      // 往本地存储写上万张卡,既慢又容易撑爆。
-      for (const p of defaultPacksForStage(getStage())) {
-        try {
-          ensureBuiltinDeck(childId, p.key)
-          // 内容包更新过就就地补齐(卡片 id 不变,复习进度保留)。每次启动只做一次。
-          if (!syncedThisLaunch) syncDeckContent(childId, p.key)
-        } catch (e) {
-          failed.push(`${p.name}: ${msgOf(e)}`)
+      /*
+       * 只自动加「默认包」;其余在内容库里自助添加。
+       *
+       * ⚠️ 装包要往本地存储写上千张卡,同步一口气装完会把界面整段卡住
+       * (第一次打开时最明显)。所以这里**一次只装一个**,装完让界面喘口气
+       * 再装下一个,并把进度显示出来 —— 孩子看到的是「正在准备…」而不是卡死。
+       */
+      const packs = defaultPacksForStage(getStage())
+      const missing = packs.filter((p) => !installedKeys.has(p.key))
+      if (missing.length > 0) {
+        const p = missing[0]
+        setInstalling(`正在准备「${p.name}」…(还剩 ${missing.length} 个)`)
+        setTimeout(() => {
+          try {
+            ensureBuiltinDeck(childId, p.key)
+          } catch (e) {
+            failed.push(`${p.name}: ${msgOf(e)}`)
+          }
+          installedKeys.add(p.key)
+          refresh()
+        }, 30)
+      } else {
+        setInstalling('')
+        // 内容包更新过就就地补齐(卡片 id 不变,复习进度保留)。每次启动只做一次。
+        if (!syncedThisLaunch) {
+          for (const p of packs) {
+            try {
+              syncDeckContent(childId, p.key)
+            } catch (e) {
+              failed.push(`${p.name}: ${msgOf(e)}`)
+            }
+          }
+          syncedThisLaunch = true
         }
       }
-      syncedThisLaunch = true
       const decks = listChildDecks(childId).filter(
         (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
       )
@@ -171,6 +202,7 @@ function Index() {
         if (!res.confirm) return
         clearAll()
         syncedThisLaunch = false
+        installedKeys.clear()
         setLoading(true)
         refresh()
       },
@@ -224,6 +256,12 @@ function Index() {
           >
             知道了
           </Text>
+        </View>
+      ) : null}
+
+      {installing ? (
+        <View className='rest'>
+          <Text className='rest__t'>{installing}</Text>
         </View>
       ) : null}
 

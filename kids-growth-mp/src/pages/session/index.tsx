@@ -15,7 +15,7 @@ import {
 import { noteSessionEnd, claimNewAchievements } from '../../store/progress'
 import { getAchievement } from '../../core/achievements'
 import { levelOf } from '../../core/levels'
-import { playWordAudio, playText, playEnglishSlow, stopAudio } from '../../lib/audio'
+import { playWordAudio, playText, playEnglishSlow, stopAudio, prefetchAudio } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
@@ -172,6 +172,20 @@ function Session() {
   useEffect(() => {
     return () => stopAudio()
   }, [])
+
+  /**
+   * 预取下一题的发音。
+   * 「点了要等一下才响」主要是网络耗时,提前拉一遍,轮到它时基本秒响。
+   */
+  useEffect(() => {
+    const nxt = cards[idx + 1]
+    if (!nxt) return
+    const en = (nxt.card.extra as { en?: string } | undefined)?.en
+    if (isWord) prefetchAudio(nxt.card.audioText ?? nxt.card.front, 'en')
+    else if (isPic) prefetchAudio(picEn && en ? en : nxt.card.front, picEn ? 'en' : 'zh')
+    else prefetchAudio(nxt.card.audioText ?? nxt.card.front, 'zh')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, cards])
 
   const current = cards[idx]
 
@@ -493,7 +507,7 @@ function Session() {
               const isRight = opt === answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={`${cls}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === answer), 800) }}>
+                <View key={opt} className={`${cls}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === answer), 550) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -636,7 +650,7 @@ function Session() {
                     if (picked) return
                     setPicked(opt)
                     if (opt === answer) void playText(answer, 'zh_CN')
-                    setTimeout(() => advance(opt === answer), 900)
+                    setTimeout(() => advance(opt === answer), 550)
                   }}
                 >
                   <Text className='opt__t'>{opt}</Text>
@@ -687,7 +701,7 @@ function Session() {
               const isRight = opt === blank.answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={cls} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === blank.answer), 1000) }}>
+                <View key={opt} className={cls} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === blank.answer), 650) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -736,7 +750,7 @@ function Session() {
                     if (picked) return
                     setPicked(opt)
                     if (opt === answer) playPic(current.card)
-                    setTimeout(() => advance(opt === answer), 900)
+                    setTimeout(() => advance(opt === answer), 550)
                   }}
                 >
                   <Text className='opt__t'>{opt}</Text>
@@ -770,7 +784,7 @@ function Session() {
                   onClick={() => {
                     if (picked) return
                     setPicked(opt)
-                    setTimeout(() => advance(opt === answer), 900)
+                    setTimeout(() => advance(opt === answer), 550)
                   }}
                 >
                   <Text className='picopt__e'>{opt}</Text>
@@ -797,7 +811,7 @@ function Session() {
                   onClick={() => {
                     if (picked) return
                     setPicked(opt)
-                    setTimeout(() => advance(opt === answer), 900)
+                    setTimeout(() => advance(opt === answer), 550)
                   }}
                 >
                   <Text className='opt__t'>{opt}</Text>

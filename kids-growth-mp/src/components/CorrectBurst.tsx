@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import './CorrectBurst.scss'
 
@@ -17,8 +18,22 @@ export interface CorrectBurstProps {
 }
 
 export default function CorrectBurst({ seed, combo }: CorrectBurstProps) {
+  /**
+   * 播完就把自己摘掉。
+   * 原先只要答对过一次,这组元素就一直挂在页面上(动画 forwards 后虽然看不见,
+   * 但每次状态变化都要参与 diff)。低端机上白白多一份开销。
+   */
+  const [alive, setAlive] = useState(true)
+  useEffect(() => {
+    setAlive(true)
+    const t = setTimeout(() => setAlive(false), 1100)
+    return () => clearTimeout(t)
+  }, [seed])
+  if (!alive) return null
+
   const grand = combo > 0 && combo % 5 === 0
-  const count = grand ? 18 : 10
+  // 粒子数按「够热闹又不拖累低端机」取:普通 8 片,连击关口 14 片
+  const count = grand ? 14 : 8
   const items: Array<{ key: string; emoji: string; x: number; y: number; delay: number }> = []
   for (let i = 0; i < count; i++) {
     const angle = (360 / count) * i

@@ -327,6 +327,45 @@ export function playEnglishSlow(text: string, rate = 0.75): void {
   }
 }
 
+/**
+ * 预取:提前把某段文字的音频下载下来(静音、不出声)。
+ *
+ * 「点了要等一下才响」的主要成分是**网络**:建连 + 下载。等孩子点下去再开始
+ * 下载,那段等待就完整暴露给他。所以在当前这题显示出来时,就顺手把下一题的
+ * 音频拉一遍 —— 微信会缓存同一个 URL 的响应,真正播的时候基本是秒响。
+ *
+ * 用完即弃,不占播放通道,也不动 token(不会打断正在播的声音)。
+ */
+export function prefetchAudio(text: string, lang: 'zh' | 'en'): void {
+  const t = text.trim()
+  if (!t) return
+  let a: Taro.InnerAudioContext
+  try {
+    a = Taro.createInnerAudioContext()
+    a.volume = 0
+  } catch {
+    return
+  }
+  const done = () => dispose(a)
+  try {
+    a.onCanplay(done)
+    a.onError(done)
+    const bucket = bucketOf(t, lang)
+    const list = lang === 'zh' ? ordered(ZH_SOURCES, PREF_KEY_ZH, bucket) : ordered(EN_SOURCES, PREF_KEY_EN, bucket)
+    if (!list[0] || t.length > list[0].maxLen) {
+      dispose(a)
+      return
+    }
+    a.src = list[0].url(t)
+    a.play()
+  } catch {
+    dispose(a)
+    return
+  }
+  // 兜底清理:预取失败也不能把上下文泄漏掉
+  setTimeout(done, 8000)
+}
+
 /** 播放单词的真人发音(英语) */
 export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
