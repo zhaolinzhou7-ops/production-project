@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { defaultPacksForStage } from '../../core/learningContent'
@@ -7,14 +7,14 @@ import {
   getCurrentChildId,
   ensureBuiltinDeck,
   listChildDecks,
-  countDue,
+  countDueByDeck,
   getPoints,
   getStudyStreak,
   getTodayStudyMinutes,
   getStage,
   syncDeckContent,
 } from '../../store/study'
-import { readObject, writeObject } from '../../store/db'
+import { readObject, writeObject, clearAll } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
@@ -34,6 +34,13 @@ interface DeckRow {
 
 /** 每日建议学习时长上限(分钟)的默认值,家长中心可改 */
 const DAILY_LIMIT_MIN = 30
+
+/**
+ * 内容包同步一次启动只做一次。
+ * 它要遍历整包卡片做比对,放在每次「回到首页」都跑纯属浪费 —— 内容包不会
+ * 在一次使用过程中变。模块级变量,冷启动自然重置。
+ */
+let syncedThisLaunch = false
 
 function msgOf(e: unknown): string {
   if (e instanceof Error) return e.message || String(e)
@@ -80,16 +87,19 @@ function Index() {
       for (const p of defaultPacksForStage(getStage())) {
         try {
           ensureBuiltinDeck(childId, p.key)
-          // 内容包更新过就就地补齐(卡片 id 不变,复习进度保留)
-          syncDeckContent(childId, p.key)
+          // 内容包更新过就就地补齐(卡片 id 不变,复习进度保留)。每次启动只做一次。
+          if (!syncedThisLaunch) syncDeckContent(childId, p.key)
         } catch (e) {
           failed.push(`${p.name}: ${msgOf(e)}`)
         }
       }
+      syncedThisLaunch = true
       const decks = listChildDecks(childId).filter(
         (d) => !(d.source === 'wrong' && d.itemType === 'wrong'),
       )
-      setRows(decks.map((deck) => ({ deck, due: countDue(childId, deck.id) })))
+      // 一次扫描算出所有卡组的待学数(原先每个卡组各扫一遍全表)
+      const dueMap = countDueByDeck(childId)
+      setRows(decks.map((deck) => ({ deck, due: dueMap[deck.id] ?? 0 })))
       const points = getPoints()
       setXp(points.xp)
       setLevel(levelOf(points.xp))
@@ -115,7 +125,7 @@ function Index() {
     }
   }
 
-  useEffect(refresh, [])
+  // 只用 useDidShow:它首次显示时也会触发,再加 useEffect 等于每次进首页算两遍
   useDidShow(refresh)
 
   const go = (deckId: string, mode: string) => {
@@ -159,11 +169,8 @@ function Index() {
       content: '会清掉本机的学习进度并重新生成内容包。确定吗?',
       success: (res) => {
         if (!res.confirm) return
-        try {
-          Taro.clearStorageSync()
-        } catch {
-          /* 忽略 */
-        }
+        clearAll()
+        syncedThisLaunch = false
         setLoading(true)
         refresh()
       },

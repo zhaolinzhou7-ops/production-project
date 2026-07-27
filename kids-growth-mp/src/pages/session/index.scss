@@ -539,3 +539,16 @@
   padding: 8px 14px;
   border-radius: 999px;
 }
+
+.chip--main {
+  background: rgba(249, 73, 122, 0.14);
+  .chip__t { color: #f9497a; font-weight: bold; }
+}
+.poem__hidden {
+  display: block;
+  text-align: center;
+  font-size: 24px;
+  color: #9ca3af;
+  padding: 40px 0;
+  line-height: 1.6;
+}

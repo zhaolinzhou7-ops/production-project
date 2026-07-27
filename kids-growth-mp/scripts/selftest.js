@@ -113,6 +113,27 @@ function run() {
   const srs = L('core/srs.js')
   const levels = L('core/levels.js')
   const talk = L('core/talkContent.js')
+  const db = L('store/db.js')
+
+  // 存储层现在有内存缓存,清空存储时必须连缓存一起清,否则旧值会被「复活」
+  const reset = () => {
+    storage.clear()
+    db.__resetCache()
+  }
+
+  // ---- 存储层:缓存读写一致 + 合并落盘 ----
+  reset()
+  db.writeTable('t', [1, 2, 3])
+  eq(db.readTable('t'), [1, 2, 3], '写完立刻读应拿到新值(走缓存)')
+  ok(storage.get('t') === undefined, '写入应先只进缓存,不立刻落盘')
+  db.flushNow()
+  eq(storage.get('t'), [1, 2, 3], 'flush 之后应真正落盘')
+  db.writeObject('o', { a: 1 })
+  eq(db.readObject('o', null), { a: 1 }, '对象写完立刻读应一致')
+  db.flushNow()
+  eq(storage.get('o'), { a: 1 }, '对象 flush 后应落盘')
+  db.clearAll()
+  eq(db.readTable('t'), [], 'clearAll 之后缓存和存储都应为空')
 
   // ---- 内容包完整性:每个包都能载入,且卡片形状与 itemType 对得上 ----
   for (const meta of content.BUILTIN_PACKS) {
@@ -154,7 +175,7 @@ function run() {
   }
 
   // ---- 卡组实例化 + 内容更新不丢进度 ----
-  storage.clear()
+  reset()
   const childId = study.getCurrentChildId()
   const deckId = study.ensureBuiltinDeck(childId, 'hanzi-toddler')
   const cards0 = study.getDeckCards(deckId)
@@ -190,7 +211,7 @@ function run() {
   }
 
   // ---- 习惯:打卡加分、取消退分、不出现负分 ----
-  storage.clear()
+  reset()
   study.getCurrentChildId()
   habits.ensureHabits()
   const hs = habits.listHabits()
@@ -213,7 +234,7 @@ function run() {
   eq(habits.habitStreak(h0.id), 1, '今天打卡后连续天数应为 1')
 
   // ---- 奖励:余额、兑换、退回 ----
-  storage.clear()
+  reset()
   study.getCurrentChildId()
   rewards.ensureRewards()
   const rs = rewards.listRewards()
@@ -240,7 +261,7 @@ function run() {
   eq(rewards.spendable(), 0, '已发放的兑换不能撤销退分')
 
   // ---- 贴纸 / 宠物 ----
-  storage.clear()
+  reset()
   eq(fun.awardSticker(1, 10), undefined, '正确率太低不该掉贴纸')
   const got = fun.awardSticker(9, 10)
   ok(got && got.key, '正确率够高应掉一张贴纸')
@@ -250,7 +271,7 @@ function run() {
   ok(fun.getPet().fed === 20, '喂食量应累计')
 
   // ---- 每日挑战 ----
-  storage.clear()
+  reset()
   eq(fun.getChallenge().done, 0, '新的一天挑战从 0 开始')
   fun.bumpChallenge()
   fun.bumpChallenge()
@@ -258,9 +279,14 @@ function run() {
   eq(fun.bumpChallenge(), false, '达标后不应重复报喜')
 
   // ---- 统计与周报不崩、数值合理 ----
-  storage.clear()
+  reset()
   const cid2 = study.getCurrentChildId()
   study.ensureBuiltinDeck(cid2, 'hanzi-toddler')
+  const byDeck = study.countDueByDeck(cid2)
+  const decks2 = study.listChildDecks(cid2)
+  for (const d of decks2) {
+    eq(byDeck[d.id] ?? 0, study.countDue(cid2, d.id), `批量待学数应与逐个统计一致(${d.name})`)
+  }
   const st = progress.getStats(cid2)
   ok(st.curve.length === 14, '学习曲线应是 14 天')
   ok(st.mastered + st.learning + st.fresh > 0, '统计应能算出卡片数')

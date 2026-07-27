@@ -1,6 +1,7 @@
 import { Component, type ComponentType, type ReactNode } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
+import { clearAll } from '../store/db'
 import './Guard.scss'
 
 /**
@@ -54,11 +55,7 @@ class ErrorBoundary extends Component<Props, State> {
               content: '会清掉本机的学习进度,通常能解决数据损坏导致的报错。',
               success: (r) => {
                 if (!r.confirm) return
-                try {
-                  Taro.clearStorageSync()
-                } catch {
-                  /* 忽略 */
-                }
+                clearAll()
                 Taro.reLaunch({ url: '/pages/index/index' })
               },
             })

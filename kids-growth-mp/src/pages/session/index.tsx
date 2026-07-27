@@ -24,6 +24,7 @@ import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
 import { withGuard } from '../../components/Guard'
+import { flushNow } from '../../store/db'
 import './index.scss'
 
 type Phase = 'prompt' | 'reveal' | 'done'
@@ -283,6 +284,8 @@ function Session() {
     }
     setSummary({ correct: finalCorrect, total, points: res.pointsAwarded })
     setPhase('done')
+    // 一组练完是关键节点,把攒着的写入立刻落盘,别等合并窗口
+    flushNow()
   }
 
   const resetPerCard = (nextIdx: number) => {
@@ -575,7 +578,7 @@ function Session() {
             让孩子自己点,既有声音又不难听,还顺便认了字。
           */}
           <View className='poem__body'>
-            {poemLines.map((l, i) => (
+            {(phase === 'reveal' ? [] : poemLines).map((l, i) => (
               <View key={i} className='poem__row'>
                 {l.split('').map((ch, j) => (
                   <Text
@@ -586,14 +589,28 @@ function Session() {
                     {ch}
                   </Text>
                 ))}
-                {/* 明确标成「逐字」,孩子知道会是一个字一个字读,不会觉得是坏了 */}
-                <Text className='poem__lineplay' onClick={() => readLineByChar(l)}>
-                  逐字
+                {/* 单句朗读;整句读不出来时管线会自动退回逐字 */}
+                <Text className='poem__lineplay' onClick={() => void playText(l, 'zh_CN')}>
+                  🔊
                 </Text>
               </View>
             ))}
+            {phase === 'reveal' ? (
+              <Text className='poem__hidden'>先自己背一遍,想不起来再点「看诗句」</Text>
+            ) : null}
           </View>
-          <Text className='poem__tip'>点每个字都能听到读音(中文整句暂时没有可用音源)</Text>
+          <View className='row row--wrap'>
+            <View
+              className='chip chip--main'
+              onClick={() => void playText(poemLines.join('，'), 'zh_CN')}
+            >
+              <Text className='chip__t'>🔊 朗读整首</Text>
+            </View>
+            <View className='chip' onClick={() => setPhase(phase === 'reveal' ? 'prompt' : 'reveal')}>
+              <Text className='chip__t'>{phase === 'reveal' ? '🙈 藏起来背' : '👀 看诗句'}</Text>
+            </View>
+          </View>
+          <Text className='poem__tip'>整首读不出来时,点单个字也能听 —— 每个字都是可点的</Text>
           <View className='row'>
             <View className='btn btn--gray' onClick={() => advance(false)}><Text className='btn__t'>还不熟</Text></View>
             <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>会背了</Text></View>

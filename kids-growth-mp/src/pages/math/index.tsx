@@ -7,6 +7,7 @@ import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import CorrectBurst from '../../components/CorrectBurst'
 import type { StickerDef } from '../../core/stickers'
 import { withGuard } from '../../components/Guard'
+import { flushNow } from '../../store/db'
 import './index.scss'
 
 type Screen = 'config' | 'run' | 'done'
@@ -56,6 +57,7 @@ function MathPage() {
     }
     setSummary({ correct: nextCorrect, total: problems.length, points: res.pointsAwarded, sec })
     setScreen('done')
+    flushNow()
   }
 
   const submit = () => {

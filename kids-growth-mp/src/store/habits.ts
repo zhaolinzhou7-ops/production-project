@@ -1,4 +1,4 @@
-import { readObject, writeObject } from './db'
+import { readObject, writeObject, flushNow } from './db'
 import { todayISO, addDays } from '../core/dateUtils'
 import { computeStreak } from '../core/streak'
 import { defaultHabitsFor, type HabitPeriod, type HabitTemplate } from '../core/habits'
@@ -99,6 +99,7 @@ export function toggleHabit(id: string, date = todayISO()): boolean {
     nowDone = true
   }
   writeObject(LOG_KEY, log)
+  flushNow()
   return nowDone
 }
 

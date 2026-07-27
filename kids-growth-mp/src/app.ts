@@ -1,7 +1,7 @@
 import { PropsWithChildren } from 'react'
-import { useLaunch, useError } from '@tarojs/taro'
+import { useLaunch, useError, useDidHide } from '@tarojs/taro'
 import { initCloud, pullFromCloud } from './cloud/sync'
-import { writeObject } from './store/db'
+import { writeObject, flushNow } from './store/db'
 import './app.scss'
 
 function App({ children }: PropsWithChildren) {
@@ -11,6 +11,10 @@ function App({ children }: PropsWithChildren) {
       void pullFromCloud()
     }
   })
+
+  // 切后台时把攒着的写入落盘。平时写只更新内存、合并落盘(见 store/db.ts),
+  // 这里补一刀,保证退出前一定写下去。
+  useDidHide(() => flushNow())
 
   // 兜底:把任何未捕获的运行时报错记下来,首页会显示出来。
   // (给非技术用户用:不用打开调试器,也能把出错原因念给我们听)

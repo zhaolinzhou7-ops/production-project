@@ -255,6 +255,23 @@ export function countDue(childId: string, deckId: string): number {
   ).length
 }
 
+/**
+ * 一次扫描算出**所有**卡组的待学数。
+ *
+ * 首页原先对每个卡组各调一次 countDue —— 7 个卡组就把 1400 条状态扫 7 遍。
+ * 这里改成扫一遍分桶,首页只调这一个。
+ */
+export function countDueByDeck(childId: string): Record<string, number> {
+  const today = todayISO()
+  const out: Record<string, number> = {}
+  for (const s of readTable<StudyState>(KEYS.states)) {
+    if (s.childId !== childId) continue
+    if (!isDue(s, today)) continue
+    out[s.deckId] = (out[s.deckId] ?? 0) + 1
+  }
+  return out
+}
+
 export interface DueCard {
   card: LearnCard
   state: StudyState

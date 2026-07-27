@@ -1,4 +1,4 @@
-import { readObject, writeObject } from './db'
+import { readObject, writeObject, flushNow } from './db'
 import { todayISO } from '../core/dateUtils'
 import { getPoints } from './study'
 
@@ -118,6 +118,8 @@ export function redeem(rewardId: string): RedeemResult {
     },
     ...listRedemptions(),
   ])
+  // 兑换是「花掉真金白银」的操作,立刻落盘,不能因为退出丢掉
+  flushNow()
   return 'ok'
 }
 
