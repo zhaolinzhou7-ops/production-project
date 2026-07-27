@@ -205,6 +205,46 @@ export function syncDeckContent(childId: string, builtinKey: string): void {
   writeTable(KEYS.states, states)
 }
 
+/**
+ * 清理历史遗留的坏数据。
+ *
+ * 这个项目迭代过很多版,早期版本写进去的记录可能缺字段(比如没有 itemType、
+ * icon 或 childId)。这类记录渲染出来会是空节点或异常节点,表现为莫名其妙的
+ * 运行时报错 —— 而「清空本地数据后就好了」正是这种情况的典型症状。
+ * 启动时静默修一遍,用户不需要知道发生过什么。
+ */
+export function sanitizeData(childId: string): void {
+  const KNOWN: CardItemType[] = ['word', 'poem', 'hanzi', 'wrong', 'pic', 'fact']
+  const decks = readTable<LearnDeck>(KEYS.decks)
+  const good: LearnDeck[] = []
+  const dropped = new Set<string>()
+  for (const d of decks) {
+    if (!d || !d.id || !KNOWN.includes(d.itemType)) {
+      if (d && d.id) dropped.add(d.id)
+      continue
+    }
+    good.push({
+      ...d,
+      childId: d.childId ?? childId,
+      name: d.name || '未命名卡组',
+      icon: d.icon || '📘',
+      subject: d.subject || '学习',
+      createdAt: d.createdAt || Date.now(),
+    })
+  }
+  if (dropped.size === 0 && good.length === decks.length) return
+
+  writeTable(KEYS.decks, good)
+  writeTable(
+    KEYS.cards,
+    readTable<LearnCard>(KEYS.cards).filter((c) => c && c.id && !dropped.has(c.deckId)),
+  )
+  writeTable(
+    KEYS.states,
+    readTable<StudyState>(KEYS.states).filter((s) => s && s.id && !dropped.has(s.deckId)),
+  )
+}
+
 /** 当前学段(幼儿/小学/初中):决定首页展示与「内容库」里能选哪些包 */
 export function getStage(): AgeStage {
   return readObject<AgeStage>('stage', 'primary')

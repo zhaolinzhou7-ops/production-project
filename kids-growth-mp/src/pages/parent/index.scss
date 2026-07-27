@@ -190,3 +190,32 @@
 
   &--ghost { color: #6b7280; background: rgba(107, 114, 128, 0.12); }
 }
+
+/* 音色选择 */
+.vlab {
+  display: block;
+  font-size: 24px;
+  color: #9ca3af;
+  margin: 16px 0 8px;
+}
+.vrow {
+  display: flex;
+  align-items: center;
+  background: #f8f8fa;
+  border-radius: 20px;
+  padding: 18px 20px;
+  margin-bottom: 10px;
+
+  &--on { background: rgba(52, 211, 153, 0.16); }
+  &__meta { flex: 1; }
+  &__n { display: block; font-size: 27px; color: #374151; font-weight: bold; }
+  &__d { font-size: 21px; color: #9ca3af; }
+  &__pick {
+    font-size: 22px;
+    color: #6b7280;
+    background: rgba(107, 114, 128, 0.12);
+    padding: 8px 18px;
+    border-radius: 999px;
+  }
+  &--on .vrow__pick { color: #059669; background: rgba(52, 211, 153, 0.2); }
+}

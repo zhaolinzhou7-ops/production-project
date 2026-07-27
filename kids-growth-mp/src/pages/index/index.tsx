@@ -13,6 +13,7 @@ import {
   getTodayStudyMinutes,
   getStage,
   syncDeckContent,
+  sanitizeData,
 } from '../../store/study'
 import { readObject, writeObject, clearAll } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
@@ -47,6 +48,9 @@ let syncedThisLaunch = false
  * 有了它,后面每次回首页都不必再逐个调 ensureBuiltinDeck 去「确认一遍」。
  */
 const installedKeys = new Set<string>()
+
+/** 旧数据清理每次启动只做一次 */
+let sanitizedThisLaunch = false
 
 function msgOf(e: unknown): string {
   if (e instanceof Error) return e.message || String(e)
@@ -90,6 +94,11 @@ function Index() {
     try {
       const childId = getCurrentChildId()
       const failed: string[] = []
+      // 先把历史遗留的坏记录清掉(见 sanitizeData 的说明),每次启动一次就够
+      if (!sanitizedThisLaunch) {
+        sanitizeData(childId)
+        sanitizedThisLaunch = true
+      }
       /*
        * 只自动加「默认包」;其余在内容库里自助添加。
        *
@@ -202,6 +211,7 @@ function Index() {
         if (!res.confirm) return
         clearAll()
         syncedThisLaunch = false
+        sanitizedThisLaunch = false
         installedKeys.clear()
         setLoading(true)
         refresh()

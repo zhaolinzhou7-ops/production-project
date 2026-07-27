@@ -612,6 +612,8 @@ function Session() {
             {phase === 'reveal' ? (
               <Text className='poem__hidden'>先自己背一遍,想不起来再点「看诗句」</Text>
             ) : null}
+            {/* 说明:上面这种「有/无」的条件渲染是安全的;要避免的是同一位置在
+                带事件节点与静态节点之间互换(见 talk 页注释)。 */}
           </View>
           <View className='row row--wrap'>
             <View

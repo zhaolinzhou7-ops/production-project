@@ -231,13 +231,18 @@ function Talk() {
           <View className='bubble__body'>
             <Text className='bubble__lab'>轮到你说</Text>
             <Text className='bubble__en'>{turn.expect}</Text>
-            {showZh ? (
-              <Text className='bubble__zh'>{turn.expectZh}</Text>
-            ) : (
-              <Text className='bubble__peek' onClick={() => setShowZh(true)}>
-                看中文提示
-              </Text>
-            )}
+            {/*
+              ⚠️ 这里必须是**同一个节点**在两种状态间切换,不能写成
+              「有 onClick 的 Text」和「没有 onClick 的 Text」二选一。
+              Taro 对带事件和不带事件的节点编译方式不同,在同一位置互换会让
+              节点别名对不上,真机上报 `componentsAlias[...]._num` 的错。
+            */}
+            <Text
+              className={showZh ? 'bubble__zh' : 'bubble__peek'}
+              onClick={() => setShowZh(true)}
+            >
+              {showZh ? turn.expectZh : '看中文提示'}
+            </Text>
           </View>
         </View>
 
@@ -279,16 +284,14 @@ function Talk() {
           <View className='bigplay' onClick={() => playWordAudio(s.en)}>
             <Text className='bigplay__t'>🔊</Text>
           </View>
-          {showZh ? (
-            <View>
-              <Text className='card2__en'>{s.en}</Text>
-              <Text className='card2__zh'>{s.zh}</Text>
-            </View>
-          ) : (
-            <Text className='card2__peek' onClick={() => setShowZh(true)}>
-              看原句
-            </Text>
-          )}
+          {/* 同上:保持同一个可点节点,只换样式和内容 */}
+          <Text
+            className={showZh ? 'card2__en' : 'card2__peek'}
+            onClick={() => setShowZh(true)}
+          >
+            {showZh ? s.en : '看原句'}
+          </Text>
+          {showZh ? <Text className='card2__zh'>{s.zh}</Text> : null}
         </View>
 
         {toolbar(s.en)}

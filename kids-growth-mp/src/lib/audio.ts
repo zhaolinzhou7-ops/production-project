@@ -34,9 +34,45 @@ const baidu = (lan: 'zh' | 'en', per: number, id: string, label: string): AudioS
     `https://tts.baidu.com/text2audio?lan=${lan}&text=${enc(t)}&spd=4&pit=5&vol=9&per=${per}&cuid=kidsgrowth&ctp=1&idx=1&aue=6`,
 })
 
+/**
+ * 可选音色。家长可以在家长中心挑,选完记在本地,朗读时排到最前。
+ *
+ * 为什么要给选择:好不好听很主观 —— 有的孩子喜欢童声(度丫丫),
+ * 有的家长觉得女声更清楚、更适合读古诗。与其我替他定,不如让他听一遍自己挑。
+ */
+export interface VoiceOption {
+  id: string
+  label: string
+  desc: string
+}
+
+export const ZH_VOICES: VoiceOption[] = [
+  { id: 'baidu-zh-child', label: '童声 · 度丫丫', desc: '活泼的小朋友声音,幼儿最容易接受' },
+  { id: 'baidu-zh-female', label: '女声 · 度小美', desc: '温和清晰,读古诗、句子更耐听' },
+  { id: 'baidu-zh-male', label: '男声 · 度小宇', desc: '沉稳,适合大一点的孩子' },
+]
+
+export const EN_VOICES: VoiceOption[] = [
+  { id: 'youdao-en-us', label: '美音 · 真人', desc: '有道真人录音,单词最自然' },
+  { id: 'youdao-en-uk', label: '英音 · 真人', desc: '英式发音' },
+  { id: 'baidu-en-child', label: '英语童声', desc: '合成音,句子更连贯' },
+]
+
+const VOICE_ZH_KEY = 'voiceZh'
+const VOICE_EN_KEY = 'voiceEn'
+
+export function getVoice(lang: 'zh' | 'en'): string {
+  return readObject<string>(lang === 'zh' ? VOICE_ZH_KEY : VOICE_EN_KEY, '')
+}
+
+export function setVoice(lang: 'zh' | 'en', id: string): void {
+  writeObject(lang === 'zh' ? VOICE_ZH_KEY : VOICE_EN_KEY, id)
+}
+
 export const ZH_SOURCES: AudioSource[] = [
   baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
-  baidu('zh', 0, 'baidu-zh-female', '百度·女声'),
+  baidu('zh', 0, 'baidu-zh-female', '百度·女声(度小美)'),
+  baidu('zh', 1, 'baidu-zh-male', '百度·男声(度小宇)'),
   {
     id: 'baidu-zh-plain',
     label: '百度·简版(参数最少)',
@@ -162,11 +198,17 @@ export function markDead(id: string, bucket: LenBucket, isDead: boolean): void {
 function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): AudioSource[] {
   const dead = deadSet()
   const alive = list.filter((s) => !dead[deadKey(s.id, bucket)])
-  const use = alive.length > 0 ? alive : list
-  const pref = readObject<string>(`${prefKey}|${bucket}`, '')
-  if (!pref) return use
-  const hit = use.find((s) => s.id === pref)
-  return hit ? [hit, ...use.filter((s) => s !== hit)] : use
+  let use = alive.length > 0 ? alive : list
+
+  const front = (id: string) => {
+    const hit = use.find((s) => s.id === id)
+    if (hit) use = [hit, ...use.filter((s) => s !== hit)]
+  }
+
+  // 先按「上次真出过声的」排,再让家长选的音色盖在最前面 —— 选择优先于历史。
+  front(readObject<string>(`${prefKey}|${bucket}`, ''))
+  front(getVoice(prefKey === PREF_KEY_ZH ? 'zh' : 'en'))
+  return use
 }
 
 /**
@@ -214,6 +256,19 @@ export function stopAudio(): void {
 }
 
 /**
+ * 换上新的播放上下文,并把上一个销毁掉。
+ *
+ * ⚠️ 这是一个真实的泄漏:原先只在**播放失败**时 dispose,成功播完的上下文
+ * 一个都没销毁。一节课下来会攒下几十个 InnerAudioContext ——
+ * 微信对同时存在的音频实例有上限,超了之后新的播放会变慢、甚至播一半就断。
+ * 「反应慢」和「有时候没读完」都有它的份。
+ */
+function setCurrent(a: Taro.InnerAudioContext | null): void {
+  if (current && current !== a) dispose(current)
+  current = a
+}
+
+/**
  * 逐个音源尝试播放,第一个真能出声的就留下。
  * 全部试完仍不出声时调用 onExhausted(中文用它转入「拆词逐段读」的兜底)。
  */
@@ -244,7 +299,7 @@ function playSequence(
   } catch {
     /* 老版本基础库没有这个属性 */
   }
-  current = a
+  setCurrent(a)
 
   let moved = false
   let started = false
@@ -271,6 +326,9 @@ function playSequence(
     a.onPlay(succeeded)
     a.onEnded(() => {
       moved = true
+      // 播完就把上下文交还系统,不然会一直占着
+      if (current === a) current = null
+      dispose(a)
     })
     a.onError(() => {
       // 有的源会「先能播、再报错」(返回的其实是网页不是音频),照样往下试
@@ -317,8 +375,12 @@ export function playEnglishSlow(text: string, rate = 0.75): void {
     /* 老基础库不支持变速,按原速播 */
   }
   if (my !== token) return
-  current = a
+  setCurrent(a)
   try {
+    a.onEnded(() => {
+      if (current === a) current = null
+      dispose(a)
+    })
     a.onError(() => dispose(a))
     a.src = ordered(EN_SOURCES, PREF_KEY_EN, bucketOf(t, 'en'))[0].url(t)
     a.play()
@@ -392,7 +454,15 @@ async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> 
       /* 忽略 */
     }
     if (my !== token) return true
-    current = a
+    setCurrent(a)
+    try {
+      a.onEnded(() => {
+        if (current === a) current = null
+        dispose(a)
+      })
+    } catch {
+      /* 忽略 */
+    }
     a.src = file
     a.play()
     return true

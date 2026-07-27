@@ -6,7 +6,15 @@ import { getStats, weakCards, earnedAchievements, type LearningStats } from '../
 import { ACHIEVEMENTS } from '../../core/achievements'
 import { readObject, writeObject } from '../../store/db'
 import { buildWeekly, type WeeklyReport } from '../../store/weekly'
-import { resetAudioMemory } from '../../lib/audio'
+import {
+  resetAudioMemory,
+  ZH_VOICES,
+  EN_VOICES,
+  getVoice,
+  setVoice,
+  playText,
+  playWordAudio,
+} from '../../lib/audio'
 import {
   ensureRewards,
   listRewards,
@@ -42,6 +50,8 @@ function Parent() {
   const [weekly, setWeekly] = useState<WeeklyReport | null>(null)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [redeems, setRedeems] = useState<Redemption[]>([])
+  const [zhVoice, setZhVoice] = useState('')
+  const [enVoice, setEnVoice] = useState('')
 
   const load = () => {
     const childId = getCurrentChildId()
@@ -53,6 +63,20 @@ function Parent() {
     ensureRewards()
     setRewards(listRewards())
     setRedeems(listRedemptions().filter((d) => !d.granted))
+    setZhVoice(getVoice('zh'))
+    setEnVoice(getVoice('en'))
+  }
+
+  /** 选音色:选完立刻念一句,好不好听当场就知道 */
+  const pickZh = (id: string) => {
+    setVoice('zh', id)
+    setZhVoice(id)
+    void playText('白日依山尽,黄河入海流', 'zh_CN')
+  }
+  const pickEn = (id: string) => {
+    setVoice('en', id)
+    setEnVoice(id)
+    playWordAudio('apple')
   }
 
   /** 把学习进度导成一段文本,家长可以复制走存着(不上云也能防丢) */
@@ -362,6 +386,40 @@ function Parent() {
         <View className='lrow' onClick={addNewReward}>
           <Text className='lrow__t'>+ 新增奖励</Text>
         </View>
+      </View>
+
+      {/* 音色 */}
+      <View className='sec'>
+        <Text className='sec__t'>朗读音色</Text>
+        <Text className='sec__tip'>点一下就会念一句给你听,挑顺耳的那个。</Text>
+        <Text className='vlab'>中文</Text>
+        {ZH_VOICES.map((v) => (
+          <View
+            key={v.id}
+            className={v.id === zhVoice ? 'vrow vrow--on' : 'vrow'}
+            onClick={() => pickZh(v.id)}
+          >
+            <View className='vrow__meta'>
+              <Text className='vrow__n'>{v.label}</Text>
+              <Text className='vrow__d'>{v.desc}</Text>
+            </View>
+            <Text className='vrow__pick'>{v.id === zhVoice ? '✓ 在用' : '试听'}</Text>
+          </View>
+        ))}
+        <Text className='vlab'>英语</Text>
+        {EN_VOICES.map((v) => (
+          <View
+            key={v.id}
+            className={v.id === enVoice ? 'vrow vrow--on' : 'vrow'}
+            onClick={() => pickEn(v.id)}
+          >
+            <View className='vrow__meta'>
+              <Text className='vrow__n'>{v.label}</Text>
+              <Text className='vrow__d'>{v.desc}</Text>
+            </View>
+            <Text className='vrow__pick'>{v.id === enVoice ? '✓ 在用' : '试听'}</Text>
+          </View>
+        ))}
       </View>
 
       <View className='sec'>
