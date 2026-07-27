@@ -35,10 +35,13 @@ function build() {
   walk(path.join(ROOT, 'src', 'store'))
   files.push(path.join(ROOT, 'src', 'types.ts'))
 
+  // 直接用 node 跑 tsc 的入口,不经过 shell —— 经 shell 传参在 Node 22 上会打
+  // 「security vulnerabilities」弃用警告,在 Windows 控制台里看着像出了错。
+  const tsc = path.join(ROOT, 'node_modules', 'typescript', 'lib', 'tsc.js')
   const r = spawnSync(
-    'npx',
+    process.execPath,
     [
-      'tsc',
+      tsc,
       ...files,
       '--outDir', OUT,
       '--module', 'commonjs',
@@ -49,7 +52,7 @@ function build() {
       '--skipLibCheck',
       '--types', 'node',
     ],
-    { cwd: ROOT, encoding: 'utf8', shell: true },
+    { cwd: ROOT, encoding: 'utf8' },
   )
   if (r.status !== 0) {
     console.error(r.stdout || '')

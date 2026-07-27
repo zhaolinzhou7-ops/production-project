@@ -12,9 +12,10 @@ require(path.join(__dirname, 'clean.js'))
 
 process.env.WITH_SI = '1'
 console.log('正在编译【带同声传译插件】的版本…')
-const r = spawnSync('npx', ['taro', 'build', '--type', 'weapp'], {
+// 直接用 node 跑 taro 的入口,不经过 shell(避免 Node 22 的弃用警告)
+const taroBin = path.join(__dirname, '..', 'node_modules', '@tarojs', 'cli', 'bin', 'taro')
+const r = spawnSync(process.execPath, [taroBin, 'build', '--type', 'weapp'], {
   stdio: 'inherit',
-  shell: true,
   env: process.env,
   cwd: path.join(__dirname, '..'),
 })
