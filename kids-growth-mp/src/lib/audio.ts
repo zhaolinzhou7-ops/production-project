@@ -143,12 +143,36 @@ export const EN_SOURCES: AudioSource[] = [
 
 /**
  * 最近一次真正出声的音源标签。
- * 家长中心试听时显示出来 —— 四个百度音色如果听着一样,
- * 至少能看到「确实都是百度」,而不是怀疑自己耳朵。
+ *
+ * ⚠️ 每次开播都要先清空。
+ * 原先只写不清:上一次播放留下的旧值会一直挂着,新的一次还没出声时
+ * 读到的是**上一次**的结果 —— 家长换了音色、看到的却还是老名字,
+ * 于是得出「换了没用」的错误结论。这个诊断本身把人带偏了。
  */
 let lastPlayedLabel = ''
 export function getLastPlayedLabel(): string {
   return lastPlayedLabel
+}
+function clearLastPlayed(): void {
+  lastPlayedLabel = ''
+  lastFailedSentence = ''
+}
+
+/**
+ * 最近一句「所有音源都读不出来」的英文。
+ * 界面据此显示「整句读不出来,要逐词听吗?」—— 逐词由用户点,不自动播。
+ */
+let lastFailedSentence = ''
+export function getFailedSentence(): string {
+  return lastFailedSentence
+}
+
+/** 用户主动选择逐词听时才调这个 */
+export function playWordByWord(text: string): void {
+  const words = text.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
+  if (words.length === 0) return
+  token += 1
+  void playChunks(words, token, 'en')
 }
 
 /** 记住上次真正出过声的音源,下次优先用它(省掉重复试错的等待) */
@@ -566,6 +590,7 @@ export function prefetchAudio(text: string, lang: 'zh' | 'en'): void {
 export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
   if (!t) return
+  clearLastPlayed()
   buzz()
   token += 1
   const bucket = bucketOf(t, 'en')
@@ -575,9 +600,8 @@ export function playWordAudio(word: string, accent: Accent = 2): void {
     accent === 1 ? [...list].sort((a, b) => (a.id === 'youdao-en-uk' ? -1 : b.id === 'youdao-en-uk' ? 1 : 0)) : list
   const my = token
   playSequence(t, arranged, PREF_KEY_EN, 0, my, bucket, () => {
-    // 整句全挂时逐词读,别静默 ——「点了听也没用」就是这么来的
-    const words = t.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
-    if (words.length > 1) void playChunks(words, my, 'en')
+    // 同上:不自动逐词播,只记下来给界面用
+    lastFailedSentence = t
   })
 }
 
@@ -617,6 +641,7 @@ async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> 
 export async function playText(text: string, lang: SpeechLang): Promise<void> {
   const t = text.trim()
   if (!t) return
+  clearLastPlayed()
   buzz()
   if (isSpeechAvailable()) {
     if (await playPluginText(t, lang)) return
@@ -649,13 +674,15 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
     const my = token
     playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN, b), PREF_KEY_EN, 0, my, b, () => {
       /*
-       * 英语整句一个音源都不出声时的兜底 —— 以前这里是**静默**,
-       * 孩子点了「听」什么反应都没有,只会以为程序坏了。
-       * 拆成单词逐个读:有道词典对单词几乎必有真人音,
-       * 逐词虽然不连贯,但至少听得到、跟得上,比没有声音强得多。
+       * 整句一个音源都不出声。
+       *
+       * ⚠️ 这里**不能**自动改成逐词播 —— 用户明确否决过「一个一个字往外蹦」,
+       * 说那比没声音更难受。上一版我加了自动逐词,结果就是他反馈的
+       * 「英语怎么又开始一个一个字地蹦」。
+       * 现在只记一笔状态,由界面决定要不要给一个「逐词听」的按钮,
+       * 让用户自己选,而不是替他决定。
        */
-      const words = t.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
-      if (words.length > 1) void playChunks(words, my, 'en')
+      lastFailedSentence = t
     })
   }
 }
@@ -789,6 +816,56 @@ function probeUrl(url: string): Promise<boolean> {
 export interface DiagLine {
   label: string
   ok: boolean
+  /** 失败原因(能拿到就填)—— 只报「❌」等于什么都没说 */
+  reason?: string
+}
+
+/**
+ * 用 downloadFile 探一次,拿到**具体失败原因**。
+ *
+ * 为什么必须这么做:原先自检只播一下、报个 ✅/❌。全是 ❌ 的时候
+ * 用户和我都不知道到底是「域名没加白名单」「接口返回 403」还是
+ * 「返回的是网页不是音频」—— 这三种的解法完全不同,却长得一模一样。
+ * downloadFile 的 errMsg 和 statusCode 能把它们分开。
+ */
+function probeReason(url: string): Promise<{ ok: boolean; reason: string }> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (ok: boolean, reason: string) => {
+      if (done) return
+      done = true
+      resolve({ ok, reason })
+    }
+    try {
+      Taro.downloadFile({
+        url,
+        success: (res) => {
+          const code = res.statusCode
+          if (code === 200) {
+            finish(true, '')
+            return
+          }
+          finish(false, `服务器返回 ${code}`)
+        },
+        fail: (e) => {
+          const msg = String((e && (e as { errMsg?: string }).errMsg) || e)
+          // 这句是微信在域名没配白名单时给的原话,单独挑出来说人话
+          if (/not in domain list|域名/.test(msg)) {
+            finish(false, '域名没加白名单(要在小程序后台配置)')
+            return
+          }
+          if (/timeout|超时/.test(msg)) {
+            finish(false, '连接超时(网络慢或对方拒绝)')
+            return
+          }
+          finish(false, msg.replace('downloadFile:fail ', '').slice(0, 60))
+        },
+      })
+    } catch (e) {
+      finish(false, msgOf(e).slice(0, 60))
+    }
+    setTimeout(() => finish(false, '超过 8 秒没有响应'), 8000)
+  })
 }
 
 /** 声音自检:把中英文各音源挨个试一遍,如实返回哪家能用 */
@@ -830,13 +907,19 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
   const dead: Record<string, boolean> = {}
   for (let i = 0; i < jobs.length; i++) {
     let ok = false
+    let reason = ''
     try {
-      ok = await probeUrl(jobs[i].url)
-    } catch {
+      // 先用 downloadFile 探原因;能下下来再用播放器确认「真的是音频」
+      const probe = await probeReason(jobs[i].url)
+      reason = probe.reason
+      ok = probe.ok ? await probeUrl(jobs[i].url) : false
+      if (probe.ok && !ok) reason = '下下来了但播不出(多半返回的是网页不是音频)'
+    } catch (e) {
       ok = false
+      reason = msgOf(e).slice(0, 60)
     }
     const job = jobs[i]
-    out.push({ label: job.label, ok })
+    out.push({ label: job.label, ok, reason: ok ? undefined : reason })
     // 只记「这个音源在这个长度档上不通」—— 长句不通不代表单字也不通
     if (job.id && job.bucket && !ok) dead[`${job.id}|${job.bucket}`] = true
     try {

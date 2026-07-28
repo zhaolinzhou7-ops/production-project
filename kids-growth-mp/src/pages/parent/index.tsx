@@ -82,6 +82,29 @@ function Parent() {
 
   /** 选音色:选完立刻念一句,好不好听当场就知道 */
   /**
+   * 轮询「到底是谁发的声」。
+   *
+   * 不能只在固定时刻读一次:前面几家各要等几秒超时,2 秒时往往还没轮到
+   * 真正出声的那家,读到的会是上一次的残留值 —— 我上一版就是这么
+   * 把「换了音色也显示同一个名字」这个假象做出来的。
+   * 现在每 400ms 看一次,拿到就停,最多等 12 秒。
+   */
+  const pollHeard = () => {
+    let n = 0
+    const tick = () => {
+      n += 1
+      const got = getLastPlayedLabel()
+      if (got) {
+        setHeardFrom(got)
+        return
+      }
+      if (n < 30) setTimeout(tick, 400)
+      else setHeardFrom('一个音源都没出声 —— 回首页跑一次「声音自检」看原因')
+    }
+    setTimeout(tick, 400)
+  }
+
+  /**
    * 试听用**较长的句子**,不用「你好」这种两字词。
    * 短词会走词典音源(有道对词有真人录音),听到的根本不是选中的合成音色 ——
    * 这正是之前「选哪个都一样」的一部分原因。长句才能真正试出音色差别。
@@ -91,15 +114,14 @@ function Parent() {
     setZhVoice(id)
     setHeardFrom('')
     void playText('白日依山尽,黄河入海流,欲穷千里目,更上一层楼', 'zh_CN')
-    // 播放是异步的,等它真出声之后再读「是谁发的声」
-    setTimeout(() => setHeardFrom(getLastPlayedLabel()), 2200)
+    pollHeard()
   }
   const pickEn = (id: string) => {
     setVoice('en', id)
     setEnVoice(id)
     setHeardFrom('')
     void playText('The little cat is sleeping on the warm chair', 'en_US')
-    setTimeout(() => setHeardFrom(getLastPlayedLabel()), 2200)
+    pollHeard()
   }
 
   /** 每日目标与自定义词本 */

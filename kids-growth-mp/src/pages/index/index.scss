@@ -444,3 +444,15 @@
   font-size: 20px;
   color: #9a4444;
 }
+
+/* 自检里「域名白名单」这类必须由用户去后台改的问题,单独醒目提示 */
+.diag__hint {
+  display: block;
+  margin-top: 16px;
+  font-size: 22px;
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.16);
+  border-radius: 16px;
+  padding: 18px;
+  line-height: 1.8;
+}

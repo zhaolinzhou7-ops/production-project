@@ -35,7 +35,13 @@ import {
   type LevelChoice,
 } from '../../store/talk'
 import { getStage, adjustPoints } from '../../store/study'
-import { playWordAudio, playEnglishSlow, stopAudio } from '../../lib/audio'
+import {
+  playWordAudio,
+  playEnglishSlow,
+  stopAudio,
+  getFailedSentence,
+  playWordByWord,
+} from '../../lib/audio'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { isSpeechAvailable } from '../../lib/speech'
@@ -225,10 +231,25 @@ function Talk() {
     })
   }
 
+  /**
+   * 整句读不出来的提示。
+   *
+   * ⚠️ 不自动逐词播 —— 用户明确说过「一个一个字往外蹦」不能接受。
+   * 只在真读不出来时给一个按钮,要不要逐词听由他自己决定。
+   */
+  const [failedSent, setFailedSent] = useState('')
+
+  const listen = (sentence: string) => {
+    setFailedSent('')
+    playWordAudio(sentence)
+    // 全部音源试完大约要几秒,之后再看这一句是不是彻底没读出来
+    setTimeout(() => setFailedSent(getFailedSentence()), 6000)
+  }
+
   /** 一句台词下面通用的「听 / 慢 / 录 / 对比 / 打分」工具条 */
   const toolbar = (sentence: string, alts?: string[]) => (
     <View className='tools'>
-      <View className='tool' onClick={() => playWordAudio(sentence)}>
+      <View className='tool' onClick={() => listen(sentence)}>
         <Text className='tool__t'>🔊 听</Text>
       </View>
       <View className='tool' onClick={() => playEnglishSlow(sentence)}>
@@ -250,6 +271,17 @@ function Talk() {
 
   const feedback = () => (
     <View>
+      {failedSent ? (
+        <View className='failbox'>
+          <Text className='failbox__t'>这一句所有发音接口都没读出来。</Text>
+          <View className='failbox__btn' onClick={() => playWordByWord(failedSent)}>
+            <Text className='failbox__bt'>一个词一个词地听</Text>
+          </View>
+          <Text className='failbox__h'>
+            逐词听不连贯,所以不自动播 —— 想听再点。回首页跑一次「声音自检」能看到是哪一步卡住了。
+          </Text>
+        </View>
+      ) : null}
       {stars >= 0 ? (
         <Text className='stars'>
           {'⭐'.repeat(stars)}

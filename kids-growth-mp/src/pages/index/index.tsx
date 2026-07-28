@@ -432,11 +432,21 @@ function Index() {
             可用音源 {diag.filter((l) => l.ok).length}/{diag.length}
             {diag.some((l) => l.ok) ? '(打勾的会自动优先使用)' : ''}
           </Text>
+          {/* 失败要说清原因 —— 只报一个 ❌ 等于什么都没说 */}
           {diag.map((l) => (
             <Text key={l.label} className={l.ok ? 'diag__l diag__l--ok' : 'diag__l'}>
               {l.ok ? '✅' : '❌'} {l.label}
+              {l.reason ? ` —— ${l.reason}` : ''}
             </Text>
           ))}
+          {diag.some((l) => l.reason && l.reason.indexOf('域名') >= 0) ? (
+            <Text className='diag__hint'>
+              有音源因为「域名没加白名单」失败。这个只能在微信公众平台改:
+              登录 mp.weixin.qq.com → 开发管理 → 开发设置 → 服务器域名,
+              把 tts.baidu.com、dict.youdao.com、fanyi.baidu.com、fanyi.sogou.com
+              四个都加进「downloadFile 合法域名」。加完等几分钟再试。
+            </Text>
+          ) : null}
           {diag.every((l) => !l.ok) ? (
             <Text className='diag__hint'>
               全部取不到:开发者工具请勾选「详情 → 本地设置 → 不校验合法域名」;真机需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。
