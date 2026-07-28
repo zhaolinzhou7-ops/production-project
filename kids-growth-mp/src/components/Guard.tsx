@@ -2,6 +2,7 @@ import { Component, type ComponentType, type ReactNode } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { clearAll } from '../store/db'
+import { noteError } from '../lib/errlog'
 import './Guard.scss'
 
 /**
@@ -28,12 +29,8 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(e: unknown) {
-    // 也存一份,首页会显示「上一次出错」,方便事后回看
-    try {
-      Taro.setStorageSync('_lastError', String(e).slice(0, 400))
-    } catch {
-      /* 忽略 */
-    }
+    // 也记一笔(带时间/版本/页面),家长中心能查到历史
+    noteError(e)
   }
 
   render() {

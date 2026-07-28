@@ -17,7 +17,8 @@ import {
   getDailyGoal,
   todayAnswered,
 } from '../../store/study'
-import { readObject, writeObject, clearAll } from '../../store/db'
+import { readObject, clearAll } from '../../store/db'
+import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
@@ -72,6 +73,8 @@ function Index() {
   const [goalN, setGoalN] = useState(20)
   const [minutes, setMinutes] = useState(0)
   const [err, setErr] = useState('')
+  /** 当前版本记下的报错(带时间和出错页面);旧版本的不显示 */
+  const [errEntry, setErrEntry] = useState<ErrEntry | null>(null)
   const [loading, setLoading] = useState(true)
   const [checking, setChecking] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -162,9 +165,17 @@ function Index() {
       const pet = getPet()
       const pl = pet.line ? getLine(pet.line) : undefined
       setPetEmoji(pl ? pl.stages[stageOf(pet.fed)].emoji : '🥚')
-      // app.ts 里记下的「上一次未捕获报错」也一并显示出来
-      const last = readObject<string>('_lastError', '')
-      setErr([failed.join(' / '), last].filter(Boolean).join(' / '))
+      /*
+       * 只显示**当前版本**记下的报错。
+       *
+       * 以前这里读的是一个没有时间戳的 `_lastError`:一条几天前、
+       * 早就随更新修好的报错会一直挂在首页,用户以为「又出错了」,
+       * 只能靠清空数据把它弄走 —— 清掉的其实只是这条留言。
+       * 现在旧版本的报错自动不显示,完整历史留在家长中心备查。
+       */
+      const live = currentError()
+      setErrEntry(live)
+      setErr(failed.join(' / '))
     } catch (e) {
       setErr(msgOf(e))
     } finally {
@@ -277,18 +288,25 @@ function Index() {
         {todayN >= goalN ? <Text className='dg__done'>🎉 今天的目标达成啦!</Text> : null}
       </View>
 
-      {err ? (
+      {err || errEntry ? (
         <View className='errbox'>
-          <Text className='errbox__t'>⚠️ 内容加载出错(把下面这行念给开发者听):</Text>
-          <Text className='errbox__m'>{err}</Text>
+          <Text className='errbox__t'>⚠️ 出错了(把下面这行念给开发者听):</Text>
+          <Text className='errbox__m'>{err || (errEntry ? errEntry.msg : '')}</Text>
+          {errEntry ? (
+            <Text className='errbox__when'>
+              {formatWhen(errEntry.at)}
+              {errEntry.page ? ` · 在「${errEntry.page}」` : ''} · {errEntry.ver}
+            </Text>
+          ) : null}
           <Text className='errbox__btn' onClick={resetLocal}>
             清空本地数据重试
           </Text>
           <Text
             className='errbox__btn errbox__btn--ghost'
             onClick={() => {
-              writeObject('_lastError', '')
+              clearErrors()
               setErr('')
+              setErrEntry(null)
             }}
           >
             知道了

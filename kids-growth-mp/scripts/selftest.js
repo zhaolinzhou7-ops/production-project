@@ -34,6 +34,9 @@ function build() {
   walk(path.join(ROOT, 'src', 'core'))
   walk(path.join(ROOT, 'src', 'store'))
   files.push(path.join(ROOT, 'src', 'types.ts'))
+  // lib/ 里大多要用小程序专有 API,不整目录编;errlog 只用存储 API,可以测
+  files.push(path.join(ROOT, 'src', 'lib', 'errlog.ts'))
+  files.push(path.join(ROOT, 'src', 'lib', 'version.ts'))
 
   // 直接用 node 跑 tsc 的入口,不经过 shell —— 经 shell 传参在 Node 22 上会打
   // 「security vulnerabilities」弃用警告,在 Windows 控制台里看着像出了错。
@@ -73,6 +76,8 @@ const fakeTaro = {
     storage.set(k, JSON.parse(JSON.stringify(v)))
   },
   clearStorageSync: () => storage.clear(),
+  // errlog 用它记「出错时在哪个页面」
+  getCurrentPages: () => [{ route: 'pages/index/index' }],
 }
 
 const origResolve = Module._resolveFilename
@@ -250,6 +255,61 @@ function run() {
   ok(poly.isPolyphone('长') === true, '「长」应判为多音字')
   ok(poly.isPolyphone('我') === false, '「我」不该判为多音字')
 
+
+
+  // ---- 报错记录本:必须分得清「刚出的」和「上个版本的」 ----
+  reset()
+  const errlog = L('lib/errlog.js')
+  const ver = L('lib/version.js').BUILD_TAG
+
+  ok(errlog.currentError() === null, '没出过错时首页不该告警')
+  eq(errlog.errorHistory().length, 0, '初始历史应为空')
+
+  errlog.noteError(new Error('u[c]._num 炸了'))
+  const live = errlog.currentError()
+  ok(live !== null, '当前版本出的错应该告警')
+  ok(live.msg.indexOf('_num') >= 0, '应记下报错文本')
+  eq(live.ver, ver, '应记下当前版本号')
+  ok(live.at > 0, '应记下时间戳')
+  eq(live.page, 'pages/index/index', '应记下出错页面')
+
+  // 音频解码失败是预期内的,不该拿去吓用户
+  errlog.noteError('Unable to decode audio data')
+  ok(
+    errlog.errorHistory().every((e) => e.msg.indexOf('decode audio') < 0),
+    '音频解码失败不该记进报错本',
+  )
+
+  // 同一条报错短时间内重复只记一条,不刷屏
+  const before = errlog.errorHistory().length
+  errlog.noteError(new Error('u[c]._num 炸了'))
+  eq(errlog.errorHistory().length, before, '同一条报错短时间内重复不该新增')
+
+  // 关键:旧版本记下的报错不该在新版本告警
+  const hist = errlog.errorHistory()
+  hist[0].ver = 'v1'
+  db.__resetCache()
+  storage.set('_errLog', JSON.parse(JSON.stringify(hist)))
+  ok(errlog.currentError() === null, '旧版本的报错不该在当前版本告警')
+  ok(errlog.errorHistory().length > 0, '但历史里要留着,家长中心能查')
+
+  // 只留最近 5 条
+  for (let i = 0; i < 8; i++) errlog.noteError(new Error('错误' + i))
+  ok(errlog.errorHistory().length <= 5, '报错本最多留 5 条')
+  eq(errlog.errorHistory()[0].msg.indexOf('错误7') >= 0, true, '最新一条应排在最前')
+
+  errlog.clearErrors()
+  eq(errlog.errorHistory().length, 0, '清空后历史应为空')
+  ok(errlog.currentError() === null, '清空后不该再告警')
+
+  // 存储里塞垃圾也不能崩
+  storage.set('_errLog', '不是数组')
+  eq(errlog.errorHistory().length, 0, '存储被写坏时应返回空数组而不是崩')
+  storage.set('_errLog', [null, { msg: 123 }])
+  eq(errlog.errorHistory().length, 0, '格式不对的条目应被过滤掉')
+
+  ok(errlog.formatWhen(Date.now()).indexOf('今天') === 0, '今天的时间应显示成「今天 HH:MM」')
+  ok(errlog.formatWhen(Date.now() - 86400000 * 3).indexOf('月') > 0, '几天前的应显示成「N月N日」')
 
   // ---- 英语口语:难度分档 / 内容质量 / 打分 / 练习记录 ----
   reset()

@@ -436,3 +436,11 @@
     text-align: center;
   }
 }
+
+/* 报错发生的时间/版本/页面 —— 有了它才分得清「刚出的」和「上个版本的」 */
+.errbox__when {
+  display: block;
+  margin-top: 8px;
+  font-size: 20px;
+  color: #9a4444;
+}

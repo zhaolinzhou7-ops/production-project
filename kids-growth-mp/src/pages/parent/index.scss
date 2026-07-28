@@ -282,3 +282,23 @@
   padding: 10px 16px;
   margin-left: 8px;
 }
+
+/* 报错记录行:报错文本可能很长,要能换行 */
+.erow {
+  flex: 1;
+
+  &__m {
+    display: block;
+    font-size: 23px;
+    color: #b91c1c;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  &__w {
+    display: block;
+    font-size: 20px;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+}

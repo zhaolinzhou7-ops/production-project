@@ -37,6 +37,7 @@ import {
   type Redemption,
   type Reward,
 } from '../../store/rewards'
+import { errorHistory, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -94,12 +95,15 @@ function Parent() {
   const [goal, setGoal] = useState(20)
   const [doneToday, setDoneToday] = useState(0)
   const [myDecks, setMyDecks] = useState<LearnDeck[]>([])
+  /** 报错历史:首页只提示当前版本的,这里能看到全部,排查时用 */
+  const [errs, setErrs] = useState<ErrEntry[]>([])
 
   const loadExtras = () => {
     const cid = getCurrentChildId()
     setGoal(getDailyGoal())
     setDoneToday(todayAnswered(cid))
     setMyDecks(listCustomDecks(cid))
+    setErrs(errorHistory())
   }
 
   const bumpGoal = (delta: number) => {
@@ -572,6 +576,41 @@ function Parent() {
         <View className='lrow' onClick={newDeck}>
           <Text className='lrow__t'>+ 新建词本并导入单词</Text>
         </View>
+      </View>
+
+      <View className='sec'>
+        <Text className='sec__t'>报错记录</Text>
+        {errs.length === 0 ? (
+          <Text className='sec__h'>没有记录过报错。</Text>
+        ) : (
+          <Text className='sec__h'>
+            最近 {errs.length} 条。首页只提示当前版本出的错;更早版本的问题多半
+            已经随更新修掉了,不必在意 —— 这里留档只是方便排查。
+          </Text>
+        )}
+        {errs.map((e, i) => (
+          <View className='lrow' key={i}>
+            <View className='erow'>
+              <Text className='erow__m'>{e.msg}</Text>
+              <Text className='erow__w'>
+                {formatWhen(e.at)} · {e.ver}
+                {e.page ? ` · ${e.page}` : ''}
+              </Text>
+            </View>
+          </View>
+        ))}
+        {errs.length > 0 ? (
+          <View
+            className='lrow'
+            onClick={() => {
+              clearErrors()
+              setErrs([])
+              Taro.showToast({ title: '已清空', icon: 'success' })
+            }}
+          >
+            <Text className='lrow__t'>清空报错记录</Text>
+          </View>
+        ) : null}
       </View>
 
       <View className='sec'>

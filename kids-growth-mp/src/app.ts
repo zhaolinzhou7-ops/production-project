@@ -1,7 +1,8 @@
 import { PropsWithChildren } from 'react'
 import { useLaunch, useError, useDidHide } from '@tarojs/taro'
 import { initCloud, pullFromCloud } from './cloud/sync'
-import { writeObject, flushNow } from './store/db'
+import { flushNow } from './store/db'
+import { noteError } from './lib/errlog'
 import { sanitizeData, getCurrentChildId } from './store/study'
 import { sanitizeRecords } from './store/records'
 import './app.scss'
@@ -29,19 +30,9 @@ function App({ children }: PropsWithChildren) {
   // 这里补一刀,保证退出前一定写下去。
   useDidHide(() => flushNow())
 
-  // 兜底:把任何未捕获的运行时报错记下来,首页会显示出来。
-  // (给非技术用户用:不用打开调试器,也能把出错原因念给我们听)
-  useError((err) => {
-    try {
-      const msg = String(err)
-      // 音频解码失败是**预期内**的:某些音源连得上但返回的是网页而不是音频,
-      // 播放器解不出来就报这个。管线会自动换下一家,不该拿它去吓用户。
-      if (/decode audio|MEDIA_ERR|innerAudioContext/i.test(msg)) return
-      writeObject('_lastError', msg.slice(0, 400))
-    } catch {
-      /* 忽略 */
-    }
-  })
+  // 兜底:把任何未捕获的运行时报错记下来(带时间、版本、页面),
+  // 首页只在**当前版本**出过错时才告警 —— 见 lib/errlog.ts 的说明。
+  useError((err) => noteError(err))
 
   return children
 }
