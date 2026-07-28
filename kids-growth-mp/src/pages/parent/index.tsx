@@ -555,6 +555,10 @@ function Parent() {
           </View>
         ))}
         {heardFrom ? <Text className='heard'>刚才这一句实际是「{heardFrom}」发的声</Text> : null}
+        <Text className='sec__h'>
+          百度那几个是同一套引擎,很可能听不出区别(首页「声音自检」最后一条会
+          直接验给你看)。想真的换个声音,选最上面的搜狗或有道。
+        </Text>
         <Text className='vlab'>英语</Text>
         {EN_VOICES.map((v) => (
           <View

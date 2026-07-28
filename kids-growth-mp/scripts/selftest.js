@@ -386,6 +386,31 @@ function run() {
   }
   ok(avgTip('easy') < avgTip('hard'), '入门档的提示句应比挑战档短')
 
+
+  // ---- 音色清单:必须真的能选到不同引擎 ----
+  // 音色清单在 core/voices.ts(纯数据);音源表在 core/audioSources.ts
+  const voices = L('core/voices.js')
+  const sources = L('core/audioSources.js')
+  const zhIds = voices.ZH_VOICES.map((v) => v.id)
+  const srcIds = new Set(sources.ZH_SOURCES.map((s) => s.id))
+  for (const id of zhIds) {
+    ok(srcIds.has(id), `中文音色「${id}」必须在 ZH_SOURCES 里真的存在,否则选了等于没选`)
+  }
+  eq(zhIds.length, new Set(zhIds).size, '中文音色 id 不能重复')
+  const enIds = voices.EN_VOICES.map((v) => v.id)
+  const enSrc = new Set(sources.EN_SOURCES.map((s) => s.id))
+  for (const id of enIds) {
+    ok(enSrc.has(id), `英语音色「${id}」必须在 EN_SOURCES 里真的存在`)
+  }
+  // 光有百度那几个不够 —— 它们是同一个引擎,可能听不出区别。
+  // 必须至少还有一个**别的引擎**可选,否则「换音色」这个功能是假的。
+  ok(
+    zhIds.some((id) => id.indexOf('baidu') < 0),
+    '中文音色里必须有非百度的选项(同一引擎换参数用户听不出区别)',
+  )
+  // 排在最前的应该是真正不同的引擎,而不是百度内部细分
+  ok(zhIds[0].indexOf('baidu') < 0, '中文音色列表第一个应该是非百度引擎')
+
   // ---- 报错记录本:必须分得清「刚出的」和「上个版本的」 ----
   reset()
   const errlog = L('lib/errlog.js')

@@ -15,61 +15,14 @@ export type Accent = 1 | 2
  * 小程序限制:InnerAudioContext 播放网络音频,**真机**需要在小程序后台
  * 把这些域名加入「downloadFile 合法域名」;开发者工具里关掉域名校验即可。
  */
-export interface AudioSource {
-  id: string
-  label: string
-  /** 超过这个字数就跳过该音源 */
-  maxLen: number
-  url: (t: string) => string
-}
+// 音源表与音色清单都是纯数据,放在 core/ 才能被自测覆盖
+// (见 core/audioSources.ts、core/voices.ts 的说明)
+export { ZH_SOURCES, EN_SOURCES, type AudioSource } from '../core/audioSources'
+export { ZH_VOICES, EN_VOICES, type VoiceOption } from '../core/voices'
+import { ZH_SOURCES, EN_SOURCES, enc } from '../core/audioSources'
+import type { AudioSource } from '../core/audioSources'
 
-const enc = encodeURIComponent
-
-/**
- * 百度语音公开接口。
- *
- * 参数是踩过坑的:
- * - 原来带 `aue=6`(输出 wav)。公开接口的 wav 码率低、底噪明显 —— 用户反馈的
- *   「有杂音、不清晰」多半来自这里。去掉后走默认 mp3,干净得多。
- * - `vol` 原来给到 9(最大),容易削顶失真,回到 5。
- * - `spd=4` 比正常语速稍慢半档,小朋友听得清。
- */
-const baidu = (lan: 'zh' | 'en', per: number, id: string, label: string): AudioSource => ({
-  id,
-  label,
-  maxLen: 300,
-  url: (t) =>
-    `https://tts.baidu.com/text2audio?lan=${lan}&text=${enc(t)}&spd=4&pit=5&vol=5&per=${per}&cuid=kidsgrowth&ctp=1&idx=1`,
-})
-
-/**
- * 可选音色。家长可以在家长中心挑,选完记在本地,朗读时排到最前。
- *
- * 为什么要给选择:好不好听很主观 —— 有的孩子喜欢童声(度丫丫),
- * 有的家长觉得女声更清楚、更适合读古诗。与其我替他定,不如让他听一遍自己挑。
- */
-export interface VoiceOption {
-  id: string
-  label: string
-  desc: string
-}
-
-export const ZH_VOICES: VoiceOption[] = [
-  { id: 'baidu-zh-child', label: '童声 · 度丫丫', desc: '活泼的小朋友声音' },
-  { id: 'baidu-zh-female', label: '女声 · 度小美', desc: '温和清晰,读古诗更耐听' },
-  { id: 'baidu-zh-male', label: '男声 · 度小宇', desc: '沉稳' },
-  { id: 'baidu-zh-yao', label: '磁性 · 度逍遥', desc: '语气舒缓' },
-  // 有道走的是完全不同的合成引擎,音质路子和百度不一样 —— 百度那几个如果
-  // 听起来差不多,这个多半能听出明显区别。
-  { id: 'youdao-zh-le', label: '有道 · 中文', desc: '另一套引擎,和上面几个音质不同' },
-]
-
-export const EN_VOICES: VoiceOption[] = [
-  { id: 'youdao-en-us', label: '美音 · 真人', desc: '有道真人录音,单词最自然' },
-  { id: 'youdao-en-uk', label: '英音 · 真人', desc: '英式发音' },
-  { id: 'baidu-en-child', label: '英语童声', desc: '合成音,句子更连贯' },
-]
-
+/** 家长选定的音色存在本地 —— 这部分要读写存储,所以留在 lib/ */
 const VOICE_ZH_KEY = 'voiceZh'
 const VOICE_EN_KEY = 'voiceEn'
 
@@ -81,65 +34,6 @@ export function setVoice(lang: 'zh' | 'en', id: string): void {
   writeObject(lang === 'zh' ? VOICE_ZH_KEY : VOICE_EN_KEY, id)
 }
 
-export const ZH_SOURCES: AudioSource[] = [
-  baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
-  baidu('zh', 0, 'baidu-zh-female', '百度·女声(度小美)'),
-  baidu('zh', 1, 'baidu-zh-male', '百度·男声(度小宇)'),
-  baidu('zh', 3, 'baidu-zh-yao', '百度·度逍遥'),
-  {
-    id: 'baidu-zh-plain',
-    label: '百度·简版(参数最少)',
-    maxLen: 300,
-    url: (t) => `https://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=5&text=${enc(t)}`,
-  },
-  {
-    id: 'youdao-zh-t2',
-    label: '有道·中文(通道1)',
-    maxLen: 120,
-    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`,
-  },
-  {
-    id: 'youdao-zh-le',
-    label: '有道·中文(le=zh)',
-    maxLen: 120,
-    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`,
-  },
-  {
-    id: 'sogou-zh',
-    label: '搜狗·中文',
-    maxLen: 200,
-    url: (t) =>
-      `https://fanyi.sogou.com/reventondc/synthesis?text=${enc(t)}&speed=1&lang=zh-CHS&from=translateweb&speaker=1`,
-  },
-  {
-    id: 'baidu-fanyi-zh',
-    label: '百度翻译·中文',
-    maxLen: 200,
-    url: (t) => `https://fanyi.baidu.com/gettts?lan=zh&text=${enc(t)}&spd=3&source=web`,
-  },
-]
-
-export const EN_SOURCES: AudioSource[] = [
-  {
-    id: 'youdao-en-us',
-    label: '有道·美音(真人词库)',
-    maxLen: 120,
-    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`,
-  },
-  {
-    id: 'youdao-en-uk',
-    label: '有道·英音(真人词库)',
-    maxLen: 120,
-    url: (t) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=1`,
-  },
-  baidu('en', 4, 'baidu-en-child', '百度·英语童声'),
-  {
-    id: 'baidu-en-plain',
-    label: '百度·英语简版',
-    maxLen: 300,
-    url: (t) => `https://tts.baidu.com/text2audio?lan=en&ie=UTF-8&spd=5&text=${enc(t)}`,
-  },
-]
 
 /**
  * 最近一次真正出声的音源标签。
@@ -813,6 +707,49 @@ function probeUrl(url: string): Promise<boolean> {
   })
 }
 
+/**
+ * 检测「百度那几个音色是不是真的不同」。
+ *
+ * 用户反馈「选哪个中文音色听起来都一样」,而自检显示四个音色**全部连得上**。
+ * 光靠耳朵没法下结论 —— 但可以下载同一句话的不同音色,比字节数:
+ * 完全一样几乎必然是同一个音频,说明公开接口已经不认 `per` 参数了。
+ * 这是个客观判据,把「是我耳朵的问题还是接口的问题」一次问清。
+ */
+async function probeSize(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (n: number) => {
+      if (done) return
+      done = true
+      resolve(n)
+    }
+    try {
+      Taro.downloadFile({
+        url,
+        success: (res) => {
+          if (res.statusCode !== 200 || !res.tempFilePath) {
+            finish(-1)
+            return
+          }
+          try {
+            Taro.getFileInfo({
+              filePath: res.tempFilePath,
+              success: (f) => finish(f.size),
+              fail: () => finish(-1),
+            })
+          } catch {
+            finish(-1)
+          }
+        },
+        fail: () => finish(-1),
+      })
+    } catch {
+      finish(-1)
+    }
+    setTimeout(() => finish(-1), 8000)
+  })
+}
+
 export interface DiagLine {
   label: string
   ok: boolean
@@ -903,8 +840,14 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
     })),
   ]
   const out: DiagLine[] = []
-  // 自检会重建整张「不通」表:每次自检都是一次重新认识,不带旧包袱
-  const dead: Record<string, boolean> = {}
+  /*
+   * 自检会重建整张「不通」表:每次自检都是一次重新认识,不带旧包袱。
+   *
+   * ⚠️ 值必须是**时间戳**。v30 把 deadSet() 改成了「只认 number、
+   * 其余当成已过期」,而这里当时还在写 true —— 于是自检的结论
+   * 每次都被静默丢弃,等于白测。
+   */
+  const dead: Record<string, number> = {}
   for (let i = 0; i < jobs.length; i++) {
     let ok = false
     let reason = ''
@@ -921,12 +864,34 @@ export async function diagnoseAudio(onProgress?: (done: number, total: number) =
     const job = jobs[i]
     out.push({ label: job.label, ok, reason: ok ? undefined : reason })
     // 只记「这个音源在这个长度档上不通」—— 长句不通不代表单字也不通
-    if (job.id && job.bucket && !ok) dead[`${job.id}|${job.bucket}`] = true
+    if (job.id && job.bucket && !ok) dead[`${job.id}|${job.bucket}`] = Date.now()
     try {
       onProgress?.(i + 1, jobs.length)
     } catch {
       /* 忽略:进度提示失败不影响自检 */
     }
+  }
+  // 最后加一条:百度那几个音色到底是不是同一个声音
+  try {
+    const sample = '小朋友你好呀'
+    const a = await probeSize(
+      `https://tts.baidu.com/text2audio?lan=zh&text=${enc(sample)}&spd=4&pit=5&vol=5&per=4&cuid=kidsgrowth&ctp=1&idx=1`,
+    )
+    const b = await probeSize(
+      `https://tts.baidu.com/text2audio?lan=zh&text=${enc(sample)}&spd=4&pit=5&vol=5&per=1&cuid=kidsgrowth&ctp=1&idx=1`,
+    )
+    if (a > 0 && b > 0) {
+      const same = a === b
+      out.push({
+        label: '百度音色是否真的不同',
+        ok: !same,
+        reason: same
+          ? `童声和男声下载到的是同样大小的文件(${a} 字节)—— 这个免费接口已经不认音色参数了,换哪个都一样。想换声音请选「搜狗·中文」或「有道·中文」`
+          : undefined,
+      })
+    }
+  } catch {
+    /* 这一项测不了就不报,不影响主自检 */
   }
   writeObject(DEAD_KEY, dead)
   return out
