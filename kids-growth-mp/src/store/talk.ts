@@ -14,12 +14,20 @@ import type { DialogLevel } from '../core/talkContent'
 const LEVEL_KEY = 'talkLevel'
 const RECORD_KEY = 'talkRecords'
 
-/** 'auto' = 跟着学段走(默认);其余是家长/孩子手动选定的档 */
-export type LevelChoice = 'auto' | DialogLevel
+/**
+ * 'auto' = 跟着学段走(默认)
+ * 'all'  = 不筛选,53 段全列出来
+ * 其余是手动选定的某一档
+ *
+ * 为什么要有 'all':按难度筛选之后,选「入门」就只看得到 21 段,
+ * 另外 32 段像是「不见了」—— 用户第一反应是内容缺失,而不是被筛掉了。
+ * 给一个「全部」出口,想练哪段练哪段。
+ */
+export type LevelChoice = 'auto' | 'all' | DialogLevel
 
 export function getLevelChoice(): LevelChoice {
   const v = readObject<LevelChoice>(LEVEL_KEY, 'auto')
-  return v === 'easy' || v === 'medium' || v === 'hard' ? v : 'auto'
+  return v === 'easy' || v === 'medium' || v === 'hard' || v === 'all' ? v : 'auto'
 }
 
 export function setLevelChoice(v: LevelChoice): void {

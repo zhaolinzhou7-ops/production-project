@@ -257,6 +257,79 @@ function run() {
 
 
 
+
+  // ---- 自由对话引擎 ----
+  const chat = L('core/chatEngine.js')
+
+  // 话题识别:整词匹配,长关键词优先
+  let cs = chat.newChatState()
+  ok(chat.detectTopic('I like my dog', cs).key === 'pet', '「dog」应识别成宠物话题')
+  ok(chat.detectTopic('my mom is nice', cs).key === 'family', '「mom」应识别成家人话题')
+  ok(chat.detectTopic('I am fine', cs).key === 'feeling-good', '「I am fine」应识别成心情好')
+  ok(chat.detectTopic('I am sad', cs).key === 'feeling-bad', '「I am sad」应识别成心情不好')
+  ok(chat.detectTopic('blah blah zzz', cs) === null, '完全不沾边的应识别不出话题')
+  ok(chat.detectTopic('', cs) === null, '空输入应识别不出话题')
+  // 这条最关键:子串匹配会让 "know" 里的 "no" 命中否定话题
+  const kt = chat.detectTopic('I know my teacher', cs)
+  ok(kt && kt.key === 'school', `「I know my teacher」应识别成学校而不是否定,实际 ${kt && kt.key}`)
+  // 长关键词优先:「i do not like」要胜过里面孤立的「no」
+  const dl = chat.detectTopic('I do not like it', cs)
+  ok(dl && dl.key === 'dislike', `「I do not like」应识别成不喜欢,实际 ${dl && dl.key}`)
+
+  // 回应:必须「接住 + 抛回」,而且不能重复
+  cs = chat.newChatState()
+  const r1 = chat.respond('I like my dog', cs)
+  ok(r1.reply.en.length > 0 && r1.reply.zh.length > 0, '回应应有中英文')
+  ok(!r1.reply.fallback, '听懂时不该走兜底')
+  ok(r1.reply.en.indexOf('?') > 0, '回应里必须带一个追问,否则会冷场')
+  eq(r1.next.turns, 1, '轮次应累加')
+
+  const r2 = chat.respond('I like my dog', r1.next)
+  ok(r2.reply.en !== r1.reply.en, '同一话题连说两次,回应必须换一句(重复最容易露馅)')
+
+  // 听不懂时:不装懂,且兜底话也要换着说
+  const f1 = chat.respond('zzz qqq xxx', chat.newChatState())
+  ok(f1.reply.fallback, '听不懂时应标记成兜底')
+  const f2 = chat.respond('zzz qqq xxx', f1.next)
+  ok(f2.reply.en !== f1.reply.en, '兜底话也要换着说')
+
+  // 内容质量:每个话题的三组文案数量要对得上,中英不能错位
+  for (const topic of chat.TOPICS) {
+    ok(topic.replies.length >= 2, `话题 ${topic.key} 至少要两条回应`)
+    eq(topic.replies.length, topic.repliesZh.length, `话题 ${topic.key} 中英回应数量应一致`)
+    eq(topic.asks.length, topic.asksZh.length, `话题 ${topic.key} 中英追问数量应一致`)
+    ok(topic.keys.length > 0, `话题 ${topic.key} 要有关键词`)
+    for (const key of topic.keys) {
+      ok(key === key.toLowerCase(), `话题 ${topic.key} 的关键词必须是小写:${key}`)
+    }
+    for (const en of [...topic.replies, ...topic.asks]) {
+      ok(!/[一-龥]/.test(en), `话题 ${topic.key} 的英文里不该有中文:${en}`)
+    }
+    for (const zh of [...topic.repliesZh, ...topic.asksZh]) {
+      ok(/[一-龥]/.test(zh), `话题 ${topic.key} 的中文字段应是中文:${zh}`)
+    }
+    ok(topic.asks.every((a) => a.indexOf('?') > 0 || a.indexOf('!') > 0), `话题 ${topic.key} 的追问应是问句或邀请`)
+  }
+  ok(chat.OPENERS.length >= 3, '开场白要有好几条,不能每次都一样')
+  for (const o of chat.OPENERS) {
+    ok(o.en && o.zh && !/[一-龥]/.test(o.en), '开场白中英要分开且英文里没有中文')
+  }
+
+  // 提示句:每个档、每个话题都要给得出,而且是英文
+  for (const lv of ['easy', 'medium', 'hard']) {
+    for (const topic of ['', 'pet', 'food', 'school', '不存在的话题']) {
+      const tips = chat.suggestions(lv, topic)
+      ok(Array.isArray(tips) && tips.length >= 2, `${lv}/${topic} 应给出提示句`)
+      ok(tips.every((t) => !/[一-龥]/.test(t)), `${lv}/${topic} 的提示句应是英文`)
+    }
+  }
+  // 入门档的提示句要比进阶档短 —— 否则「分档」没有意义
+  const avgTip = (lv) => {
+    const t = chat.suggestions(lv, '')
+    return t.join(' ').split(' ').length / t.length
+  }
+  ok(avgTip('easy') < avgTip('hard'), '入门档的提示句应比挑战档短')
+
   // ---- 报错记录本:必须分得清「刚出的」和「上个版本的」 ----
   reset()
   const errlog = L('lib/errlog.js')

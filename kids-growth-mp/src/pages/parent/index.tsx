@@ -25,6 +25,7 @@ import {
   setVoice,
   playText,
   playWordAudio,
+  getLastPlayedLabel,
 } from '../../lib/audio'
 import {
   ensureRewards,
@@ -80,15 +81,25 @@ function Parent() {
   }
 
   /** 选音色:选完立刻念一句,好不好听当场就知道 */
+  /**
+   * 试听用**较长的句子**,不用「你好」这种两字词。
+   * 短词会走词典音源(有道对词有真人录音),听到的根本不是选中的合成音色 ——
+   * 这正是之前「选哪个都一样」的一部分原因。长句才能真正试出音色差别。
+   */
   const pickZh = (id: string) => {
     setVoice('zh', id)
     setZhVoice(id)
-    void playText('白日依山尽,黄河入海流', 'zh_CN')
+    setHeardFrom('')
+    void playText('白日依山尽,黄河入海流,欲穷千里目,更上一层楼', 'zh_CN')
+    // 播放是异步的,等它真出声之后再读「是谁发的声」
+    setTimeout(() => setHeardFrom(getLastPlayedLabel()), 2200)
   }
   const pickEn = (id: string) => {
     setVoice('en', id)
     setEnVoice(id)
-    playWordAudio('apple')
+    setHeardFrom('')
+    void playText('The little cat is sleeping on the warm chair', 'en_US')
+    setTimeout(() => setHeardFrom(getLastPlayedLabel()), 2200)
   }
 
   /** 每日目标与自定义词本 */
@@ -97,6 +108,15 @@ function Parent() {
   const [myDecks, setMyDecks] = useState<LearnDeck[]>([])
   /** 报错历史:首页只提示当前版本的,这里能看到全部,排查时用 */
   const [errs, setErrs] = useState<ErrEntry[]>([])
+  /**
+   * 试听时「实际是哪个音源发的声」。
+   *
+   * 用户反馈过「中文选哪个都是一个声音」—— 原因之一是短句被强制走了
+   * 固定音源(已修);另一个可能是百度那几个音色本身差别就小。
+   * 把真正出声的那家显示出来,家长一眼就能分清是「没切换」还是
+   * 「切了但本来就像」,不用怀疑自己的耳朵。
+   */
+  const [heardFrom, setHeardFrom] = useState('')
 
   const loadExtras = () => {
     const cid = getCurrentChildId()
@@ -512,6 +532,7 @@ function Parent() {
             <Text className='vrow__pick'>{v.id === zhVoice ? '✓ 在用' : '试听'}</Text>
           </View>
         ))}
+        {heardFrom ? <Text className='heard'>刚才这一句实际是「{heardFrom}」发的声</Text> : null}
         <Text className='vlab'>英语</Text>
         {EN_VOICES.map((v) => (
           <View

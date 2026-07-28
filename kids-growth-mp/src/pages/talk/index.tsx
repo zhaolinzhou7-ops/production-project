@@ -19,6 +19,13 @@ import {
   type Rhyme,
 } from '../../core/talkContent'
 import {
+  OPENERS,
+  newChatState,
+  respond,
+  suggestions,
+  type ChatState,
+} from '../../core/chatEngine'
+import {
   getLevelChoice,
   setLevelChoice,
   getRecord,
@@ -37,14 +44,22 @@ import CorrectBurst from '../../components/CorrectBurst'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
-type Tab = 'dialog' | 'retell' | 'cartoon' | 'rhyme'
+type Tab = 'chat' | 'dialog' | 'retell' | 'cartoon' | 'rhyme'
 
 const TABS: Array<[Tab, string, string]> = [
+  ['chat', '🤖', '自由对话'],
   ['dialog', '💬', '情景对话'],
   ['retell', '👂', '听力复述'],
   ['cartoon', '🎬', '动画短片'],
   ['rhyme', '🎵', '英文儿歌'],
 ]
+
+/** 聊天记录的一条 */
+interface ChatLine {
+  who: 'bot' | 'me'
+  en: string
+  zh: string
+}
 
 /** 每完成一句跟读给的成长值 */
 const POINTS_PER_LINE = 1
@@ -61,10 +76,13 @@ function Talk() {
    */
   const [choice, setChoice] = useState<LevelChoice>('auto')
   const [showLevels, setShowLevels] = useState(false)
-  const level: DialogLevel = choice === 'auto' ? defaultLevelFor(stage) : choice
+  /** 'all' 时不筛选;其余情况算出最终生效的那一档 */
+  const showAll = choice === 'all'
+  const level: DialogLevel =
+    choice === 'auto' || choice === 'all' ? defaultLevelFor(stage) : choice
 
-  const dialogs = useMemo(() => dialogsByLevel(level), [level])
-  const cartoons = useMemo(() => cartoonsByLevel(level), [level])
+  const dialogs = useMemo(() => (showAll ? DIALOGS : dialogsByLevel(level)), [level, showAll])
+  const cartoons = useMemo(() => (showAll ? CARTOONS : cartoonsByLevel(level)), [level, showAll])
   const retells = useMemo(() => retellByLevel(level), [level])
   const counts = useMemo(() => dialogCounts(), [])
   /** 这一档练过几个,给孩子一个「打通这档」的目标 */
@@ -75,6 +93,14 @@ function Talk() {
 
   /** 本段对话里拿到的最高星,练完时存进记录 */
   const [bestStars, setBestStars] = useState(0)
+
+  // ---------------- 自由对话 ----------------
+  const [chatLines, setChatLines] = useState<ChatLine[]>([])
+  const [chatState, setChatState] = useState<ChatState>(newChatState())
+  const [lastTopic, setLastTopic] = useState('')
+  const [chatListening, setChatListening] = useState(false)
+  const [chatHint, setChatHint] = useState('')
+  const [chatZh, setChatZh] = useState(false)
 
   // 选中的条目(null = 显示列表)
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -234,6 +260,146 @@ function Talk() {
 
   // ---------------- 情景对话 ----------------
 
+  // ---------------- 自由对话 ----------------
+
+  /** 开一段新对话:随机挑个开场白,免得每次都是同一句 */
+  const startChat = () => {
+    const o = OPENERS[Math.floor(Math.random() * OPENERS.length)]
+    setChatLines([{ who: 'bot', en: o.en, zh: o.zh }])
+    setChatState(newChatState())
+    setLastTopic('')
+    setChatHint('')
+    playWordAudio(o.en)
+  }
+
+  /**
+   * 孩子说完一句之后。
+   *
+   * 这里有个刻意的设计:**不打分、不判错**。
+   * 自由聊天要的是「敢开口」,一旦开始纠正发音,孩子立刻就不敢说了 ——
+   * 打分留在情景对话那一栏,那里有标准答案可比。
+   */
+  const onChildSaid = (text: string) => {
+    const said = (text || '').trim()
+    if (!said) {
+      setChatHint('没听清呀,再说一遍试试')
+      return
+    }
+    const out = respond(said, chatState)
+    setChatState(out.next)
+    setLastTopic(out.reply.topic)
+    setChatLines((ls) => [
+      ...ls,
+      { who: 'me', en: said, zh: '' },
+      { who: 'bot', en: out.reply.en, zh: out.reply.zh },
+    ])
+    setChatHint(out.reply.fallback ? '这句我没太懂,换个简单点的说法试试' : '')
+    playWordAudio(out.reply.en)
+    // 说了就有分:自由对话奖励的是「开口」这个行为本身
+    reward()
+  }
+
+  const chatSpeak = () => {
+    if (!isSpeechAvailable()) {
+      setChatHint('这台设备没有语音识别,可以点下面的句子直接说给我听')
+      return
+    }
+    if (chatListening) {
+      stopRecognize()
+      return
+    }
+    setChatListening(true)
+    setChatHint('聆听中…说完点「说完了」')
+    startRecognize('en_US', {
+      onResult: (t) => {
+        setChatListening(false)
+        onChildSaid(t)
+      },
+      onError: (m) => {
+        setChatListening(false)
+        setChatHint(m + '(也可以点下面的句子)')
+      },
+    })
+  }
+
+  const renderChat = () => {
+    if (chatLines.length === 0) {
+      return (
+        <View className='chatstart'>
+          <Text className='chatstart__e'>🤖</Text>
+          <Text className='chatstart__t'>和小机器人聊天</Text>
+          <Text className='chatstart__d'>
+            这里没有标准答案,也不打分 —— 想说什么就说什么。
+            不知道说什么的时候,点下面给出的句子照着说就行。
+          </Text>
+          <View className='next' onClick={startChat}>
+            <Text className='next__t'>开始聊天</Text>
+          </View>
+        </View>
+      )
+    }
+    const tips = suggestions(level, lastTopic)
+    return (
+      <View className='play'>
+        <View className='play__bar'>
+          <Text className='play__back' onClick={() => setChatLines([])}>
+            ← 结束
+          </Text>
+          <Text className='play__t'>和小机器人聊天</Text>
+          <Text className='play__n'>{chatState.turns} 轮</Text>
+        </View>
+
+        {chatLines.map((l, i) => (
+          <View key={i} className={l.who === 'bot' ? 'bubble bubble--bot' : 'bubble bubble--me'}>
+            {l.who === 'bot' ? <Text className='bubble__e'>🤖</Text> : null}
+            <View className='bubble__body'>
+              <Text className='bubble__en' onClick={() => playWordAudio(l.en)}>
+                {l.en}
+              </Text>
+              {l.zh && chatZh ? <Text className='bubble__zh'>{l.zh}</Text> : null}
+            </View>
+          </View>
+        ))}
+
+        {chatHint ? <Text className='msg'>{chatHint}</Text> : null}
+
+        <View className='mic2' onClick={chatSpeak}>
+          <Text className='mic2__t'>{chatListening ? '✅ 说完了' : '🎤 按住说英语'}</Text>
+        </View>
+
+        {/*
+          「可以这样说」的脚手架。
+          自由对话最大的门槛不是不会说,是**不知道能说什么** ——
+          尤其五六岁的孩子,给个空框子等于把他晾在那儿。
+          点一句就当他说了这句,先跑起来,说顺了自然就不看提示了。
+        */}
+        <Text className='tiplab'>不知道说什么?点一句照着说:</Text>
+        <View className='tips'>
+          {tips.map((t) => (
+            <View key={t} className='tipbtn' onClick={() => onChildSaid(t)}>
+              <Text className='tipbtn__t'>{t}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View className='row row--wrap'>
+          <View className='tool' onClick={() => setChatZh(!chatZh)}>
+            <Text className='tool__t'>{chatZh ? '🙈 藏中文' : '👀 看中文'}</Text>
+          </View>
+          <View className='tool' onClick={startChat}>
+            <Text className='tool__t'>🔄 重新开始</Text>
+          </View>
+        </View>
+
+        <Text className='chatnote'>
+          小机器人是按规则回应的,不是真的 AI —— 它答得不一定完美,
+          但胜在随时都在、不会不耐烦,而且不会纠正你的发音。
+          先敢开口,说准是后面的事。
+        </Text>
+      </View>
+    )
+  }
+
   const renderDialog = () => {
     if (!dialog) {
       return (
@@ -257,9 +423,8 @@ function Talk() {
                 <View className='item__meta'>
                   <Text className='item__t'>{d.title}</Text>
                   <Text className='item__sub'>
-                    {rec
-                      ? `练过 ${rec.times} 遍 · 最好 ${'⭐'.repeat(rec.bestStars) || '—'}`
-                      : `${d.turns.length} 轮 · 还没练过`}
+                    {LEVEL_LABEL[d.level]} · {d.turns.length} 轮 ·{' '}
+                    {rec ? `练过 ${rec.times} 遍,最好 ${'⭐'.repeat(rec.bestStars) || '—'}` : '还没练过'}
                   </Text>
                 </View>
                 <Text className='item__n'>{rec ? '✓' : `${d.turns.length} 轮`}</Text>
@@ -559,15 +724,17 @@ function Talk() {
         只按年龄自动分档不够用 —— 同一个孩子听力可能超前、口语落后,
         或者今天状态好想挑一档难的。把选择权交出去比替他决定管用。
       */}
-      {!inDetail ? (
+      {!inDetail && tab !== 'chat' ? (
         <View className='lv'>
           <View className='lv__hd' onClick={() => setShowLevels(!showLevels)}>
             <View className='lv__meta'>
               <Text className='lv__t'>
-                难度:{LEVEL_LABEL[level]}
+                {showAll ? `全部 ${DIALOGS.length} 段` : `难度:${LEVEL_LABEL[level]}`}
                 {choice === 'auto' ? '(按年龄自动)' : ''}
               </Text>
-              <Text className='lv__d'>{LEVEL_DESC[level]}</Text>
+              <Text className='lv__d'>
+                {showAll ? '不筛选,想练哪段练哪段' : LEVEL_DESC[level]}
+              </Text>
             </View>
             <Text className='lv__a'>{showLevels ? '收起' : '换一档'}</Text>
           </View>
@@ -580,6 +747,13 @@ function Talk() {
               >
                 <Text className='lvopt__t'>跟着年龄走</Text>
                 <Text className='lvopt__d'>现在会给「{LEVEL_LABEL[defaultLevelFor(stage)]}」</Text>
+              </View>
+              <View
+                className={choice === 'all' ? 'lvopt lvopt--on' : 'lvopt'}
+                onClick={() => pickLevel('all')}
+              >
+                <Text className='lvopt__t'>全部 {DIALOGS.length} 段</Text>
+                <Text className='lvopt__d'>不筛选,每段旁边标着难度,自己挑</Text>
               </View>
               {LEVELS.map((lv) => (
                 <View
@@ -616,6 +790,7 @@ function Talk() {
         </View>
       ) : null}
 
+      {tab === 'chat' ? renderChat() : null}
       {tab === 'dialog' ? renderDialog() : null}
       {tab === 'retell' ? renderRetell() : null}
       {tab === 'cartoon' ? renderCartoon() : null}

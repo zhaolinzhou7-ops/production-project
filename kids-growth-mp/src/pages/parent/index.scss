@@ -302,3 +302,15 @@
     margin-top: 6px;
   }
 }
+
+/* 试听后显示「实际是哪个音源发的声」—— 分清「没切换」和「切了但本来就像」 */
+.heard {
+  display: block;
+  font-size: 22px;
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  line-height: 1.6;
+}

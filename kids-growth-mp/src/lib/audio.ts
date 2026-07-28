@@ -141,6 +141,16 @@ export const EN_SOURCES: AudioSource[] = [
   },
 ]
 
+/**
+ * 最近一次真正出声的音源标签。
+ * 家长中心试听时显示出来 —— 四个百度音色如果听着一样,
+ * 至少能看到「确实都是百度」,而不是怀疑自己耳朵。
+ */
+let lastPlayedLabel = ''
+export function getLastPlayedLabel(): string {
+  return lastPlayedLabel
+}
+
 /** 记住上次真正出过声的音源,下次优先用它(省掉重复试错的等待) */
 const PREF_KEY_ZH = '_prefZh'
 const PREF_KEY_EN = '_prefEn'
@@ -228,7 +238,9 @@ function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): Audio
    * 但整句它经常直接没有音频。所以整句一律先走百度的合成引擎(任意句子都能读),
    * 单词才优先有道真人。
    */
-  if (prefKey === PREF_KEY_EN && bucket === 'long') {
+  // 同样只在**家长没挑过音色**时才强行改序 —— 挑了就得听他的,
+  // 否则「选了没反应」比默认排序差得多(中文那个 bug 就是这么来的)。
+  if (prefKey === PREF_KEY_EN && bucket === 'long' && !getVoice('en')) {
     front('youdao-en-us')
     front('baidu-en-plain')
     front('baidu-en-child')
@@ -406,6 +418,7 @@ function playSequence(
   const succeeded = () => {
     if (started) return
     started = true
+    lastPlayedLabel = s.label
     noteOk(s.id, bucket)
     writeObject(`${prefKey}|${bucket}`, s.id)
   }
@@ -565,9 +578,16 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
   if (lang === 'zh_CN') {
     const bucket = bucketOf(t, 'zh')
     let list = ordered(ZH_SOURCES, PREF_KEY_ZH, bucket)
-    // 短词(识字的单字、词语)优先走有道词典 —— 词典查得到的词才有真人音,
-    // 而有道是目前唯一确认可达的音源。长句子则按常规顺序试。
-    if (t.length <= 4) {
+    /*
+     * 短词(识字的单字、词语)优先走有道词典 —— 词典查得到的词才有真人音。
+     *
+     * ⚠️ 但这条**只在家长没挑过音色时**才生效。
+     * 原先是无条件顶到最前,后果很严重:家长中心的试听放的是「小朋友你好」
+     * 这种短句,识字也是单字,全都 ≤4 字 —— 于是不管选哪个音色,
+     * 播出来的永远是有道那一个声音,选择完全失效。
+     * 用户反馈的「中文选哪个都是一个声音」就是这么来的。
+     */
+    if (t.length <= 4 && !getVoice('zh')) {
       const yd = list.find((s) => s.id === 'youdao-zh-le')
       if (yd) list = [yd, ...list.filter((s) => s !== yd)]
     }
@@ -579,7 +599,17 @@ export async function playText(text: string, lang: SpeechLang): Promise<void> {
     })
   } else {
     const b = bucketOf(t, 'en')
-    playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN, b), PREF_KEY_EN, 0, token, b)
+    const my = token
+    playSequence(t, ordered(EN_SOURCES, PREF_KEY_EN, b), PREF_KEY_EN, 0, my, b, () => {
+      /*
+       * 英语整句一个音源都不出声时的兜底 —— 以前这里是**静默**,
+       * 孩子点了「听」什么反应都没有,只会以为程序坏了。
+       * 拆成单词逐个读:有道词典对单词几乎必有真人音,
+       * 逐词虽然不连贯,但至少听得到、跟得上,比没有声音强得多。
+       */
+      const words = t.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
+      if (words.length > 1) void playChunks(words, my, 'en')
+    })
   }
 }
 
@@ -632,8 +662,12 @@ function playOnce(url: string, my: number): Promise<void> {
 }
 
 /** 逐段朗读(中文长句兜底):一段读完再读下一段,中间留一点点停顿 */
-async function playChunks(chunks: string[], my: number): Promise<void> {
-  const url = (t: string) => `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
+async function playChunks(chunks: string[], my: number, lang: 'zh' | 'en' = 'zh'): Promise<void> {
+  // 英语逐词走有道美音(单词几乎必有真人录音);中文走有道中文通道
+  const url = (t: string) =>
+    lang === 'en'
+      ? `https://dict.youdao.com/dictvoice?audio=${enc(t)}&type=2`
+      : `https://dict.youdao.com/dictvoice?audio=${enc(t)}&le=zh`
   for (const c of chunks) {
     if (my !== token) return
     await playOnce(url(c), my)

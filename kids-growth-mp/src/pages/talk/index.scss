@@ -379,3 +379,96 @@
   line-height: 1.6;
   margin-bottom: 14px;
 }
+
+/* ---------------- 自由对话 ---------------- */
+
+.chatstart {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 28px;
+  padding: 44px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  &__e { font-size: 96px; }
+  &__t {
+    font-size: 34px;
+    font-weight: bold;
+    color: #374151;
+    margin-top: 14px;
+  }
+  &__d {
+    font-size: 24px;
+    color: #9ca3af;
+    line-height: 1.8;
+    text-align: center;
+    margin: 16px 0 8px;
+  }
+}
+
+/* 说话按钮:自由对话里这是最重要的一个键,做到最大最显眼 */
+.mic2 {
+  min-height: 116px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 22px 0 18px;
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.3);
+  transition: transform 0.09s ease, filter 0.09s ease;
+
+  &:active {
+    transform: scale(0.96);
+    filter: brightness(0.93);
+  }
+
+  &__t {
+    font-size: 32px;
+    color: #fff;
+    font-weight: bold;
+  }
+}
+
+.tiplab {
+  display: block;
+  font-size: 22px;
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+
+.tips {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tipbtn {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-radius: 20px;
+  background: #f0f9ff;
+  border: 2px solid #bae6fd;
+  transition: transform 0.09s ease, filter 0.09s ease;
+
+  &:active {
+    transform: scale(0.97);
+    filter: brightness(0.95);
+  }
+
+  &__t {
+    font-size: 27px;
+    color: #0c4a6e;
+  }
+}
+
+.chatnote {
+  display: block;
+  font-size: 21px;
+  color: #9ca3af;
+  line-height: 1.8;
+  margin-top: 18px;
+}
