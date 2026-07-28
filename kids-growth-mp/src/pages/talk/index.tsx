@@ -2,15 +2,31 @@ import { useMemo, useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import {
-  dialogsFor,
-  cartoonsFor,
-  retellSentencesFor,
+  dialogsByLevel,
+  cartoonsByLevel,
+  retellByLevel,
+  defaultLevelFor,
+  dialogCounts,
+  LEVEL_LABEL,
+  LEVEL_DESC,
   RHYMES,
+  DIALOGS,
+  CARTOONS,
   type Dialog,
   type Cartoon,
+  type DialogLevel,
   type RetellSentence,
   type Rhyme,
 } from '../../core/talkContent'
+import {
+  getLevelChoice,
+  setLevelChoice,
+  getRecord,
+  noteFinished,
+  levelProgress,
+  sanitizeTalk,
+  type LevelChoice,
+} from '../../store/talk'
 import { getStage, adjustPoints } from '../../store/study'
 import { playWordAudio, playEnglishSlow, stopAudio } from '../../lib/audio'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
@@ -33,13 +49,32 @@ const TABS: Array<[Tab, string, string]> = [
 /** 每完成一句跟读给的成长值 */
 const POINTS_PER_LINE = 1
 
+const LEVELS: DialogLevel[] = ['easy', 'medium', 'hard']
+
 function Talk() {
   const [tab, setTab] = useState<Tab>('dialog')
   const stage = getStage()
 
-  const dialogs = useMemo(() => dialogsFor(stage), [stage])
-  const cartoons = useMemo(() => cartoonsFor(stage), [stage])
-  const retells = useMemo(() => retellSentencesFor(stage), [stage])
+  /**
+   * 难度:默认跟学段走,选过之后就按选的来。
+   * choice 存的是 'auto' 或具体某一档,level 是最终生效的那一档。
+   */
+  const [choice, setChoice] = useState<LevelChoice>('auto')
+  const [showLevels, setShowLevels] = useState(false)
+  const level: DialogLevel = choice === 'auto' ? defaultLevelFor(stage) : choice
+
+  const dialogs = useMemo(() => dialogsByLevel(level), [level])
+  const cartoons = useMemo(() => cartoonsByLevel(level), [level])
+  const retells = useMemo(() => retellByLevel(level), [level])
+  const counts = useMemo(() => dialogCounts(), [])
+  /** 这一档练过几个,给孩子一个「打通这档」的目标 */
+  const progress = useMemo(
+    () => levelProgress(dialogs.map((d) => d.key)),
+    [dialogs, tab],
+  )
+
+  /** 本段对话里拿到的最高星,练完时存进记录 */
+  const [bestStars, setBestStars] = useState(0)
 
   // 选中的条目(null = 显示列表)
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -56,7 +91,24 @@ function Talk() {
   const [stars, setStars] = useState(-1)
   const [msg, setMsg] = useState('')
 
-  useDidShow(() => undefined)
+  useDidShow(() => {
+    setChoice(getLevelChoice())
+    // 内容改版后可能留下指向已删场景的练习记录,进页面时顺手清一次。
+    // 放在这里而不是 app 启动:否则整份对话内容会被打进公共包。
+    sanitizeTalk([...DIALOGS.map((d) => d.key), ...CARTOONS.map((c) => c.key)])
+  })
+
+  const pickLevel = (v: LevelChoice) => {
+    setChoice(v)
+    setLevelChoice(v)
+    setShowLevels(false)
+    // 换档后把正在练的收起来,否则会停在上一档的内容里
+    setDialog(null)
+    setCartoon(null)
+    setRetellIdx(0)
+    setStep(0)
+    resetLine()
+  }
 
   const resetLine = () => {
     setShowZh(false)
@@ -116,7 +168,8 @@ function Talk() {
     }, 2600)
   }
 
-  const gradeSpeak = (target: string) => {
+  /** `alts` 是同样正确的其它说法,打分时一并比对,取最高分 */
+  const gradeSpeak = (target: string, alts?: string[]) => {
     if (!isSpeechAvailable()) {
       setMsg('这台设备没有语音识别,读完自己点「我读对了」就好')
       return
@@ -131,8 +184,9 @@ function Talk() {
     startRecognize('en_US', {
       onResult: (text) => {
         setListening(false)
-        const r = scorePronunciation(text, target)
+        const r = scorePronunciation(text, target, alts)
         setStars(r.stars)
+        setBestStars((b) => Math.max(b, r.stars))
         setMsg(r.message + (text ? `(听到:${text})` : ''))
         if (r.stars >= 2) reward()
       },
@@ -144,7 +198,7 @@ function Talk() {
   }
 
   /** 一句台词下面通用的「听 / 慢 / 录 / 对比 / 打分」工具条 */
-  const toolbar = (sentence: string) => (
+  const toolbar = (sentence: string, alts?: string[]) => (
     <View className='tools'>
       <View className='tool' onClick={() => playWordAudio(sentence)}>
         <Text className='tool__t'>🔊 听</Text>
@@ -160,7 +214,7 @@ function Talk() {
           <Text className='tool__t'>🆚 对比</Text>
         </View>
       ) : null}
-      <View className='tool' onClick={() => gradeSpeak(sentence)}>
+      <View className='tool' onClick={() => gradeSpeak(sentence, alts)}>
         <Text className='tool__t'>{listening ? '✅ 读完了' : '⭐ 打分'}</Text>
       </View>
     </View>
@@ -184,22 +238,34 @@ function Talk() {
     if (!dialog) {
       return (
         <View className='list'>
-          {dialogs.map((d) => (
-            <View
-              key={d.key}
-              className='item'
-              onClick={() => {
-                setDialog(d)
-                setStep(0)
-                resetLine()
-                playWordAudio(d.turns[0].bot)
-              }}
-            >
-              <Text className='item__e'>{d.icon}</Text>
-              <Text className='item__t'>{d.title}</Text>
-              <Text className='item__n'>{d.turns.length} 轮</Text>
-            </View>
-          ))}
+          {dialogs.map((d) => {
+            // 练过的标出来 —— 列表上没有任何痕迹时,孩子只会一直点第一个
+            const rec = getRecord(d.key)
+            return (
+              <View
+                key={d.key}
+                className={rec ? 'item item--done' : 'item'}
+                onClick={() => {
+                  setDialog(d)
+                  setStep(0)
+                  setBestStars(0)
+                  resetLine()
+                  playWordAudio(d.turns[0].bot)
+                }}
+              >
+                <Text className='item__e'>{d.icon}</Text>
+                <View className='item__meta'>
+                  <Text className='item__t'>{d.title}</Text>
+                  <Text className='item__sub'>
+                    {rec
+                      ? `练过 ${rec.times} 遍 · 最好 ${'⭐'.repeat(rec.bestStars) || '—'}`
+                      : `${d.turns.length} 轮 · 还没练过`}
+                  </Text>
+                </View>
+                <Text className='item__n'>{rec ? '✓' : `${d.turns.length} 轮`}</Text>
+              </View>
+            )
+          })}
         </View>
       )
     }
@@ -246,13 +312,18 @@ function Talk() {
           </View>
         </View>
 
-        {toolbar(turn.expect)}
+        {toolbar(turn.expect, turn.alts)}
+        {turn.alts && turn.alts.length > 0 ? (
+          <Text className='alts'>这样说也对:{turn.alts.join(' / ')}</Text>
+        ) : null}
         {feedback()}
 
         <View
           className='next'
           onClick={() => {
             if (last) {
+              // 记一笔:练过几遍、最好几星。列表上会标出来
+              noteFinished(dialog.key, bestStars)
               back()
               Taro.showToast({ title: '这段练完啦 🎉', icon: 'none' })
               return
@@ -369,6 +440,7 @@ function Talk() {
           className='next'
           onClick={() => {
             if (last) {
+              noteFinished(cartoon.key, bestStars)
               back()
               Taro.showToast({ title: '看完啦 🎬', icon: 'none' })
               return
@@ -479,6 +551,68 @@ function Talk() {
               <Text className='tab2__t'>{label}</Text>
             </View>
           ))}
+        </View>
+      ) : null}
+
+      {/*
+        难度选择。
+        只按年龄自动分档不够用 —— 同一个孩子听力可能超前、口语落后,
+        或者今天状态好想挑一档难的。把选择权交出去比替他决定管用。
+      */}
+      {!inDetail ? (
+        <View className='lv'>
+          <View className='lv__hd' onClick={() => setShowLevels(!showLevels)}>
+            <View className='lv__meta'>
+              <Text className='lv__t'>
+                难度:{LEVEL_LABEL[level]}
+                {choice === 'auto' ? '(按年龄自动)' : ''}
+              </Text>
+              <Text className='lv__d'>{LEVEL_DESC[level]}</Text>
+            </View>
+            <Text className='lv__a'>{showLevels ? '收起' : '换一档'}</Text>
+          </View>
+
+          {showLevels ? (
+            <View className='lv__opts'>
+              <View
+                className={choice === 'auto' ? 'lvopt lvopt--on' : 'lvopt'}
+                onClick={() => pickLevel('auto')}
+              >
+                <Text className='lvopt__t'>跟着年龄走</Text>
+                <Text className='lvopt__d'>现在会给「{LEVEL_LABEL[defaultLevelFor(stage)]}」</Text>
+              </View>
+              {LEVELS.map((lv) => (
+                <View
+                  key={lv}
+                  className={choice === lv ? 'lvopt lvopt--on' : 'lvopt'}
+                  onClick={() => pickLevel(lv)}
+                >
+                  <Text className='lvopt__t'>
+                    {LEVEL_LABEL[lv]} · {counts[lv]} 段对话
+                  </Text>
+                  <Text className='lvopt__d'>{LEVEL_DESC[lv]}</Text>
+                </View>
+              ))}
+              <Text className='lv__tip'>
+                觉得太简单就往上调一档,一直答不上来就往下调。练英语最怕的是卡在
+                「听不懂又不敢说」那一档上。
+              </Text>
+            </View>
+          ) : null}
+
+          {tab === 'dialog' && progress.total > 0 ? (
+            <View className='lv__prog'>
+              <View className='lv__track'>
+                <View
+                  className='lv__fill'
+                  style={{ width: `${Math.round((progress.practiced / progress.total) * 100)}%` }}
+                />
+              </View>
+              <Text className='lv__pn'>
+                这一档练过 {progress.practiced}/{progress.total} 段
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
 

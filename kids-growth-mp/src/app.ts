@@ -14,6 +14,8 @@ function App({ children }: PropsWithChildren) {
     try {
       sanitizeData(getCurrentChildId())
       sanitizeRecords()
+      // 注:口语练习记录的体检放在口语页里做(见 pages/talk)。
+      // 放这儿会把整份对话内容拖进公共包,每次冷启动都要多解析几十 KB。
     } catch {
       /* 修不了就算了,不能让体检本身挡住启动 */
     }

@@ -250,6 +250,105 @@ function run() {
   ok(poly.isPolyphone('长') === true, '「长」应判为多音字')
   ok(poly.isPolyphone('我') === false, '「我」不该判为多音字')
 
+
+  // ---- 英语口语:难度分档 / 内容质量 / 打分 / 练习记录 ----
+  reset()
+  study.getCurrentChildId()
+  const score = L('core/score.js')
+  const talkStore = L('store/talk.js')
+
+  // 缩读还原:剧本写 I am fine,孩子说 I'm fine,必须算完全对
+  eq(score.normalizeForCompare("I'm fine"), score.normalizeForCompare('I am fine'), '缩读应还原成完整形式')
+  eq(score.normalizeForCompare("it's a cat"), score.normalizeForCompare('it is a cat'), "it's 应还原成 it is")
+  eq(score.normalizeForCompare("I can't swim"), score.normalizeForCompare('I cannot swim'), "can't 应还原成 cannot")
+  eq(score.normalizeForCompare("let's go"), score.normalizeForCompare('let us go'), "let's 应还原成 let us")
+  eq(score.normalizeForCompare("we don't know"), score.normalizeForCompare('we do not know'), "don't 应还原成 do not")
+  eq(score.scorePronunciation("I'm fine, thank you", 'I am fine, thank you').stars, 3, '说缩读形式应拿满星')
+
+  // 多个正确答案:任意一个说对都该满星
+  const alts = ['I am good', 'Very well']
+  eq(score.scorePronunciation('I am good', 'I am fine', alts).stars, 3, '说 alts 里的答案应拿满星')
+  eq(score.scorePronunciation('Very well', 'I am fine', alts).stars, 3, '说另一个 alt 也应拿满星')
+  eq(score.scorePronunciation('I am fine', 'I am fine', alts).stars, 3, '说标准答案当然满星')
+  eq(score.scorePronunciation('', 'I am fine', alts).stars, 0, '没听清应是 0 星')
+  ok(score.scorePronunciation('banana apple', 'I am fine', alts).stars <= 1, '完全不沾边应低星')
+
+  // 难度分档
+  const counts = talk.dialogCounts()
+  for (const lv of ['easy', 'medium', 'hard']) {
+    ok(counts[lv] > 0, `难度档 ${lv} 应有对话`)
+    ok(talk.dialogsByLevel(lv).every((d) => d.level === lv), `dialogsByLevel(${lv}) 不能混进别档`)
+    ok(talk.retellByLevel(lv).length > 0, `难度档 ${lv} 应有复述句`)
+    ok(talk.cartoonsByLevel(lv).length > 0, `难度档 ${lv} 应有动画(挑战档回落到进阶档)`)
+    ok(talk.LEVEL_LABEL[lv] && talk.LEVEL_DESC[lv], `难度档 ${lv} 应有中文标签和说明`)
+  }
+  // 三档加起来必须正好是全部,不能有对话漏在档外
+  eq(counts.easy + counts.medium + counts.hard, talk.DIALOGS.length, '三档之和应等于对话总数')
+  eq(talk.defaultLevelFor('toddler'), 'easy', '幼儿默认入门档')
+  eq(talk.defaultLevelFor('primary'), 'medium', '小学默认进阶档')
+
+  // 难度越高,句子应该越长 —— 否则「分档」只是个标签
+  const avgLen = (lv) => {
+    const ds = talk.dialogsByLevel(lv)
+    let n = 0
+    let total = 0
+    for (const d of ds) for (const t of d.turns) { total += t.expect.split(' ').length; n++ }
+    return total / n
+  }
+  ok(avgLen('easy') < avgLen('medium'), '进阶档答句应比入门档长')
+  ok(avgLen('medium') < avgLen('hard'), '挑战档答句应比进阶档长')
+
+  // 内容质量:每段对话的字段都得齐,alts 不能和标准答案重复
+  const seenKeys = new Set()
+  for (const d of talk.DIALOGS) {
+    ok(!seenKeys.has(d.key), `对话 key 不能重复:${d.key}`)
+    seenKeys.add(d.key)
+    ok(d.title && d.icon, `对话 ${d.key} 应有标题和图标`)
+    ok(['easy', 'medium', 'hard'].indexOf(d.level) >= 0, `对话 ${d.key} 的难度档不合法`)
+    ok(d.turns.length >= 4, `对话 ${d.key} 至少 4 轮`)
+    for (const t of d.turns) {
+      ok(t.bot && t.botZh && t.expect && t.expectZh, `对话 ${d.key} 每轮四个字段都要有`)
+      // 英文字段里混进中文是最常见的手滑
+      ok(!/[一-龥]/.test(t.bot), `对话 ${d.key} 的 bot 不该含中文:${t.bot}`)
+      ok(!/[一-龥]/.test(t.expect), `对话 ${d.key} 的 expect 不该含中文:${t.expect}`)
+      ok(/[一-龥]/.test(t.botZh) && /[一-龥]/.test(t.expectZh), `对话 ${d.key} 的中文字段应是中文`)
+      if (t.alts) {
+        for (const a of t.alts) {
+          ok(!/[一-龥]/.test(a), `对话 ${d.key} 的 alts 不该含中文:${a}`)
+          ok(
+            score.normalizeForCompare(a) !== score.normalizeForCompare(t.expect),
+            `对话 ${d.key} 的 alts 不该和标准答案重复:${a}`,
+          )
+        }
+        eq(t.alts.length, new Set(t.alts).size, `对话 ${d.key} 的 alts 内部不能重复`)
+      }
+    }
+  }
+
+  // 练习记录
+  eq(talkStore.getLevelChoice(), 'auto', '难度默认跟年龄走')
+  talkStore.setLevelChoice('hard')
+  eq(talkStore.getLevelChoice(), 'hard', '难度选择应能存住')
+  db.writeObject('talkLevel', '乱七八糟')
+  eq(talkStore.getLevelChoice(), 'auto', '非法难度值应回落到 auto')
+
+  ok(talkStore.getRecord('greeting') === undefined, '没练过应查不到记录')
+  talkStore.noteFinished('greeting', 2)
+  eq(talkStore.getRecord('greeting').times, 1, '练完一遍应记 1 次')
+  eq(talkStore.getRecord('greeting').bestStars, 2, '应记下最好星级')
+  talkStore.noteFinished('greeting', 1)
+  eq(talkStore.getRecord('greeting').times, 2, '再练一遍次数应累加')
+  eq(talkStore.getRecord('greeting').bestStars, 2, '最好成绩只升不降,状态差的一次不该覆盖')
+  talkStore.noteFinished('greeting', 3)
+  eq(talkStore.getRecord('greeting').bestStars, 3, '拿到更高星应刷新最好成绩')
+  eq(talkStore.levelProgress(['greeting', 'zoo']).practiced, 1, '进度应只数练过的')
+  eq(talkStore.levelProgress(['greeting', 'zoo']).total, 2, '进度分母应是这一档的总数')
+  // 内容改版后的孤儿键要清掉
+  talkStore.noteFinished('已删掉的场景', 3)
+  talkStore.sanitizeTalk(talk.DIALOGS.map((d) => d.key))
+  ok(talkStore.getRecord('已删掉的场景') === undefined, '孤儿练习记录应被清掉')
+  ok(talkStore.getRecord('greeting') !== undefined, '体检不该误删有效记录')
+
   // ---- 自定义词本 + 批量导入 + 每日目标 ----
   // 家长手上的词表格式五花八门,解析器得全都认,否则「导入不进去」会直接劝退
   const parsed = study.parseWordList(

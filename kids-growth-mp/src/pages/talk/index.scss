@@ -29,6 +29,11 @@
 
 /* ---- 列表 ---- */
 .list { display: flex; flex-direction: column; }
+/* 练过的对话左边加一条绿色标记,一眼看出「这段我练过」 */
+.item--done {
+  border-left: 8px solid #34d399;
+}
+
 .item {
   display: flex;
   align-items: center;
@@ -39,7 +44,7 @@
 
   &__e { font-size: 46px; margin-right: 20px; }
   &__meta { flex: 1; }
-  &__t { flex: 1; font-size: 30px; color: #374151; font-weight: bold; }
+  &__t { display: block; font-size: 30px; color: #374151; font-weight: bold; }
   &__sub { display: block; font-size: 22px; color: #9ca3af; }
   &__n { font-size: 22px; color: #9ca3af; }
 }
@@ -247,4 +252,130 @@
   justify-content: center;
 
   &__t { font-size: 30px; color: #fff; font-weight: bold; }
+}
+
+/*
+ * 难度选择条。
+ * 放在标签栏下面、内容列表上面 —— 换档是「开始练之前」的决定,
+ * 埋进设置页孩子永远找不到。
+ */
+.lv {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  padding: 22px;
+  margin-bottom: 20px;
+
+  &__hd {
+    display: flex;
+    align-items: center;
+  }
+
+  &__meta { flex: 1; }
+
+  &__t {
+    display: block;
+    font-size: 28px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__d {
+    display: block;
+    font-size: 22px;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+
+  &__a {
+    font-size: 24px;
+    color: #0ea5e9;
+    background: rgba(14, 165, 233, 0.12);
+    padding: 12px 24px;
+    border-radius: 999px;
+  }
+
+  &__opts {
+    margin-top: 18px;
+  }
+
+  &__tip {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+    line-height: 1.7;
+    margin-top: 14px;
+  }
+
+  &__prog {
+    margin-top: 18px;
+  }
+
+  &__track {
+    height: 16px;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.12);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #7dd3fc, #0ea5e9);
+  }
+
+  &__pn {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+    margin-top: 8px;
+    text-align: center;
+  }
+}
+
+.lvopt {
+  border-radius: 20px;
+  background: #f5fbff;
+  border: 2px solid #dbeafe;
+  padding: 20px;
+  margin-bottom: 12px;
+  transition: transform 0.09s ease, filter 0.09s ease;
+
+  &:active {
+    transform: scale(0.97);
+    filter: brightness(0.96);
+  }
+
+  &--on {
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    border-color: transparent;
+  }
+
+  &__t {
+    display: block;
+    font-size: 27px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__d {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+
+  &--on &__t { color: #fff; }
+  &--on &__d { color: rgba(255, 255, 255, 0.9); }
+}
+
+/* 「这样说也对」:告诉孩子答案不止一个 */
+.alts {
+  display: block;
+  font-size: 22px;
+  color: #059669;
+  background: rgba(52, 211, 153, 0.12);
+  border-radius: 16px;
+  padding: 14px 18px;
+  line-height: 1.6;
+  margin-bottom: 14px;
 }
