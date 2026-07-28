@@ -215,15 +215,19 @@ export function syncDeckContent(childId: string, builtinKey: string): void {
  */
 export function sanitizeData(childId: string): void {
   const KNOWN: CardItemType[] = ['word', 'poem', 'hanzi', 'wrong', 'pic', 'fact']
+
+  // ---- 第一步:卡组本身 ----
   const decks = readTable<LearnDeck>(KEYS.decks)
-  const good: LearnDeck[] = []
-  const dropped = new Set<string>()
+  const goodDecks: LearnDeck[] = []
+  const deckIds = new Set<string>()
+  let changed = false
   for (const d of decks) {
-    if (!d || !d.id || !KNOWN.includes(d.itemType)) {
-      if (d && d.id) dropped.add(d.id)
+    if (!d || !d.id || !KNOWN.includes(d.itemType) || deckIds.has(d.id)) {
+      changed = true
       continue
     }
-    good.push({
+    deckIds.add(d.id)
+    goodDecks.push({
       ...d,
       childId: d.childId ?? childId,
       name: d.name || '未命名卡组',
@@ -232,17 +236,51 @@ export function sanitizeData(childId: string): void {
       createdAt: d.createdAt || Date.now(),
     })
   }
-  if (dropped.size === 0 && good.length === decks.length) return
 
-  writeTable(KEYS.decks, good)
-  writeTable(
-    KEYS.cards,
-    readTable<LearnCard>(KEYS.cards).filter((c) => c && c.id && !dropped.has(c.deckId)),
-  )
-  writeTable(
-    KEYS.states,
-    readTable<StudyState>(KEYS.states).filter((s) => s && s.id && !dropped.has(s.deckId)),
-  )
+  // ---- 第二步:卡片 ----
+  // 会话页拿到一张 front 为空的卡就会渲染出空节点,再往下算选项时又会取到
+  // undefined —— 这正是「返回一次或清一次数据才好」的那类偶发报错。
+  // 孤儿卡(所属卡组已经不在了)、重复 id 一并清掉。
+  const cards = readTable<LearnCard>(KEYS.cards)
+  const goodCards: LearnCard[] = []
+  const cardIds = new Set<string>()
+  for (const c of cards) {
+    if (!c || !c.id || !c.deckId || cardIds.has(c.id) || !deckIds.has(c.deckId)) {
+      changed = true
+      continue
+    }
+    if (typeof c.front !== 'string' || c.front.length === 0) {
+      changed = true
+      continue
+    }
+    cardIds.add(c.id)
+    // back 允许为空(看图卡等),但必须是字符串,否则渲染时会炸
+    goodCards.push(typeof c.back === 'string' ? c : { ...c, back: '' })
+  }
+
+  // ---- 第三步:SRS 状态 ----
+  // 指向已删卡片的状态会让「待学数」虚高:首页显示有 20 张要学,
+  // 进去却只有 3 张,或者干脆取不到卡片而报错。
+  const states = readTable<StudyState>(KEYS.states)
+  const goodStates: StudyState[] = []
+  const stateIds = new Set<string>()
+  for (const s of states) {
+    if (!s || !s.id || stateIds.has(s.id)) {
+      changed = true
+      continue
+    }
+    if (!deckIds.has(s.deckId) || !cardIds.has(s.cardId)) {
+      changed = true
+      continue
+    }
+    stateIds.add(s.id)
+    goodStates.push(s)
+  }
+
+  if (!changed) return
+  writeTable(KEYS.decks, goodDecks)
+  writeTable(KEYS.cards, goodCards)
+  writeTable(KEYS.states, goodStates)
 }
 
 /** 当前学段(幼儿/小学/初中):决定首页展示与「内容库」里能选哪些包 */

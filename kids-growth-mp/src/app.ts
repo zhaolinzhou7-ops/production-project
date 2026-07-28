@@ -2,10 +2,19 @@ import { PropsWithChildren } from 'react'
 import { useLaunch, useError, useDidHide } from '@tarojs/taro'
 import { initCloud, pullFromCloud } from './cloud/sync'
 import { writeObject, flushNow } from './store/db'
+import { sanitizeData, getCurrentChildId } from './store/study'
 import './app.scss'
 
 function App({ children }: PropsWithChildren) {
   useLaunch(() => {
+    // 每次启动先把本地数据体检一遍:早期版本写进去的残缺记录、孤儿卡片、
+    // 指向已删卡片的复习状态,都会在页面上表现为莫名其妙的报错。
+    // 以前得靠用户自己「清空本地数据」才好 —— 现在开机就静默修掉。
+    try {
+      sanitizeData(getCurrentChildId())
+    } catch {
+      /* 修不了就算了,不能让体检本身挡住启动 */
+    }
     // 启动时若已配置云开发,静默拉取云端进度(云端较新时才覆盖本地)
     if (initCloud()) {
       void pullFromCloud()

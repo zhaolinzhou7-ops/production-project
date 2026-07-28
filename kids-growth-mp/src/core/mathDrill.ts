@@ -1,7 +1,21 @@
 import type { AgeStage } from '../types'
 
 /** 口算题型 */
-export type MathKind = 'add' | 'sub' | 'mul' | 'div' | 'mulTable' | 'mixed'
+export type MathKind =
+  // 幼儿档(大班 / 幼小衔接):从「数得清」到「算得出」,一小步一小步来
+  | 'count10'
+  | 'add10'
+  | 'sub10'
+  | 'makeTen'
+  | 'compare'
+  | 'add20'
+  // 小学及以上
+  | 'add'
+  | 'sub'
+  | 'mul'
+  | 'div'
+  | 'mulTable'
+  | 'mixed'
 
 export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
@@ -16,7 +30,20 @@ export interface MathKindDef {
   desc: string
 }
 
+/**
+ * 题型清单。
+ *
+ * 幼儿档是按大班/幼小衔接的实际进度切的 —— 5-6 岁不该一上来就做抽象算式:
+ * 先「数得清」(数一数),再 10 以内加、减分开练熟,然后凑十,最后才是进位加。
+ * 每一档都窄到孩子能连着做对,做对本身就是继续的动力。
+ */
 export const MATH_KINDS: MathKindDef[] = [
+  { kind: 'count10', label: '数一数', icon: '🔢', desc: '数图形有几个(10 以内)' },
+  { kind: 'add10', label: '10 以内加法', icon: '➕', desc: '和不超过 10' },
+  { kind: 'sub10', label: '10 以内减法', icon: '➖', desc: '10 以内,不出现负数' },
+  { kind: 'makeTen', label: '凑十', icon: '🔟', desc: '几加几等于 10' },
+  { kind: 'compare', label: '比大小', icon: '⚖️', desc: '哪个多、哪个少' },
+  { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' },
   { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' },
   { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' },
   { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' },
@@ -27,6 +54,18 @@ export const MATH_KINDS: MathKindDef[] = [
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
   return MATH_KINDS.find((k) => k.kind === kind)
+}
+
+const TODDLER_KINDS: MathKind[] = ['count10', 'add10', 'sub10', 'makeTen', 'compare', 'add20']
+
+/**
+ * 按学段给题型。
+ * 幼儿看到的是「数一数 / 10 以内加 / 10 以内减 / 凑十 / 比大小 / 进位加」,
+ * 不会看到乘除 —— 摆在那里只会让孩子挫败。
+ */
+export function mathKindsFor(stage: AgeStage): MathKindDef[] {
+  if (stage === 'toddler') return MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
+  return MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind))
 }
 
 function randInt(min: number, max: number): number {
@@ -43,6 +82,53 @@ function addSubMax(stage: AgeStage): number {
   if (stage === 'primary') return 100
   return 1000
 }
+
+// ---------------- 幼儿档 ----------------
+
+/** 数一数:用图形代替抽象数字,5-6 岁最先要过的一关 */
+function genCount10(): MathProblem {
+  const shapes = ['🍎', '⭐', '🐟', '🌸', '🚗', '🐤', '🍬', '🎈']
+  const n = randInt(2, 10)
+  const emoji = pick(shapes)
+  return { text: `${emoji.repeat(n)}\n一共有几个?`, answer: n }
+}
+
+/** 10 以内加法:和不超过 10,先把「不进位」练熟 */
+function genAdd10(): MathProblem {
+  const a = randInt(1, 8)
+  const b = randInt(1, 9 - a + 1)
+  return { text: `${a} + ${b} =`, answer: a + b }
+}
+
+/** 10 以内减法:结果不为负 */
+function genSub10(): MathProblem {
+  const a = randInt(2, 10)
+  const b = randInt(1, a)
+  return { text: `${a} - ${b} =`, answer: a - b }
+}
+
+/** 凑十:进位加法的地基,单独练熟收益最大 */
+function genMakeTen(): MathProblem {
+  const a = randInt(1, 9)
+  return { text: `${a} + ( ) = 10`, answer: 10 - a }
+}
+
+/** 比大小:答 1 表示前面大,答 2 表示后面大 —— 题干里写清楚怎么答 */
+function genCompare(): MathProblem {
+  let a = randInt(1, 20)
+  let b = randInt(1, 20)
+  if (a === b) b = a + 1
+  return { text: `${a} 和 ${b}\n哪个大?大的那个是几?`, answer: Math.max(a, b) }
+}
+
+/** 20 以内进位加:幼小衔接的重点题型 */
+function genAdd20(): MathProblem {
+  const a = randInt(5, 9)
+  const b = randInt(11 - a, 9)
+  return { text: `${a} + ${b} =`, answer: a + b }
+}
+
+// ---------------- 小学及以上 ----------------
 
 function genAdd(stage: AgeStage): MathProblem {
   const max = addSubMax(stage)
@@ -88,6 +174,18 @@ function genDiv(stage: AgeStage): MathProblem {
 /** 生成一道题(mixed 时随机选四则之一) */
 export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
   switch (kind) {
+    case 'count10':
+      return genCount10()
+    case 'add10':
+      return genAdd10()
+    case 'sub10':
+      return genSub10()
+    case 'makeTen':
+      return genMakeTen()
+    case 'compare':
+      return genCompare()
+    case 'add20':
+      return genAdd20()
     case 'add':
       return genAdd(stage)
     case 'sub':
@@ -99,7 +197,12 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
     case 'div':
       return genDiv(stage)
     case 'mixed':
-      return generateProblem(pick(['add', 'sub', 'mul', 'div'] as MathKind[]), stage)
+      return generateProblem(
+        stage === 'toddler'
+          ? pick(['count10', 'add10', 'sub10', 'makeTen', 'compare'] as MathKind[])
+          : pick(['add', 'sub', 'mul', 'div'] as MathKind[]),
+        stage,
+      )
   }
 }
 

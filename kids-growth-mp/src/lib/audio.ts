@@ -25,13 +25,21 @@ export interface AudioSource {
 
 const enc = encodeURIComponent
 
-/** 百度语音公开接口:per=4 是童声「度丫丫」,对小朋友最友好 */
+/**
+ * 百度语音公开接口。
+ *
+ * 参数是踩过坑的:
+ * - 原来带 `aue=6`(输出 wav)。公开接口的 wav 码率低、底噪明显 —— 用户反馈的
+ *   「有杂音、不清晰」多半来自这里。去掉后走默认 mp3,干净得多。
+ * - `vol` 原来给到 9(最大),容易削顶失真,回到 5。
+ * - `spd=4` 比正常语速稍慢半档,小朋友听得清。
+ */
 const baidu = (lan: 'zh' | 'en', per: number, id: string, label: string): AudioSource => ({
   id,
   label,
   maxLen: 300,
   url: (t) =>
-    `https://tts.baidu.com/text2audio?lan=${lan}&text=${enc(t)}&spd=4&pit=5&vol=9&per=${per}&cuid=kidsgrowth&ctp=1&idx=1&aue=6`,
+    `https://tts.baidu.com/text2audio?lan=${lan}&text=${enc(t)}&spd=4&pit=5&vol=5&per=${per}&cuid=kidsgrowth&ctp=1&idx=1`,
 })
 
 /**
@@ -47,9 +55,13 @@ export interface VoiceOption {
 }
 
 export const ZH_VOICES: VoiceOption[] = [
-  { id: 'baidu-zh-child', label: '童声 · 度丫丫', desc: '活泼的小朋友声音,幼儿最容易接受' },
-  { id: 'baidu-zh-female', label: '女声 · 度小美', desc: '温和清晰,读古诗、句子更耐听' },
-  { id: 'baidu-zh-male', label: '男声 · 度小宇', desc: '沉稳,适合大一点的孩子' },
+  { id: 'baidu-zh-child', label: '童声 · 度丫丫', desc: '活泼的小朋友声音' },
+  { id: 'baidu-zh-female', label: '女声 · 度小美', desc: '温和清晰,读古诗更耐听' },
+  { id: 'baidu-zh-male', label: '男声 · 度小宇', desc: '沉稳' },
+  { id: 'baidu-zh-yao', label: '磁性 · 度逍遥', desc: '语气舒缓' },
+  // 有道走的是完全不同的合成引擎,音质路子和百度不一样 —— 百度那几个如果
+  // 听起来差不多,这个多半能听出明显区别。
+  { id: 'youdao-zh-le', label: '有道 · 中文', desc: '另一套引擎,和上面几个音质不同' },
 ]
 
 export const EN_VOICES: VoiceOption[] = [
@@ -73,6 +85,7 @@ export const ZH_SOURCES: AudioSource[] = [
   baidu('zh', 4, 'baidu-zh-child', '百度·童声(度丫丫)'),
   baidu('zh', 0, 'baidu-zh-female', '百度·女声(度小美)'),
   baidu('zh', 1, 'baidu-zh-male', '百度·男声(度小宇)'),
+  baidu('zh', 3, 'baidu-zh-yao', '百度·度逍遥'),
   {
     id: 'baidu-zh-plain',
     label: '百度·简版(参数最少)',
@@ -208,6 +221,18 @@ function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): Audio
   // 先按「上次真出过声的」排,再让家长选的音色盖在最前面 —— 选择优先于历史。
   front(readObject<string>(`${prefKey}|${bucket}`, ''))
   front(getVoice(prefKey === PREF_KEY_ZH ? 'zh' : 'en'))
+
+  /*
+   * 英语要按「单词 / 整句」分流,这是「有些句子系统不读」的根因:
+   * 有道 dictvoice 是**词典**发音 —— 单词是真人录音、质量最好,
+   * 但整句它经常直接没有音频。所以整句一律先走百度的合成引擎(任意句子都能读),
+   * 单词才优先有道真人。
+   */
+  if (prefKey === PREF_KEY_EN && bucket === 'long') {
+    front('youdao-en-us')
+    front('baidu-en-plain')
+    front('baidu-en-child')
+  }
   return use
 }
 
@@ -220,6 +245,74 @@ function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): Audio
  */
 export function zhChunks(text: string): string[] {
   return text.split(/[，,。.！!？?、;；:：\s\n]+/).filter(Boolean)
+}
+
+/**
+ * 轻微震动。
+ * 点了发音按钮却要等半秒才出声时,孩子不知道自己点上没有 ——
+ * 触觉反馈比视觉更快到达,这一下能消掉大半「没反应」的感觉。
+ */
+function buzz(): void {
+  try {
+    Taro.vibrateShort({ type: 'light' })
+  } catch {
+    /* 忽略:部分设备不支持 */
+  }
+}
+
+// ---------------------------------------------------------------- 本地缓存
+
+/**
+ * 音频本地缓存:URL → 本机临时文件路径。
+ *
+ * 「点了要等一下才响」的根子是**每次都从网络现取**。这里把取回来的音频落到
+ * 本机临时文件,同一句第二次播就是读本地文件 —— 基本是瞬间出声。
+ * 配合预取(见 prefetchAudio),孩子第一次点某句时往往也已经缓存好了。
+ *
+ * 只在内存里记映射:微信的临时文件本来就是按需清理的,不必自己管配额。
+ */
+const fileCache = new Map<string, string>()
+/** 正在下载中的 URL,避免同一句被重复下载 */
+const downloading = new Set<string>()
+
+function cachedFile(url: string): string | undefined {
+  return fileCache.get(url)
+}
+
+/** 下载并缓存,完成后回调本地路径。失败就回调 undefined(上层退回直接播 URL)。 */
+function fetchToCache(url: string, done?: (path?: string) => void): void {
+  const hit = fileCache.get(url)
+  if (hit) {
+    done?.(hit)
+    return
+  }
+  if (downloading.has(url)) {
+    done?.(undefined)
+    return
+  }
+  downloading.add(url)
+  try {
+    Taro.downloadFile({
+      url,
+      success: (res) => {
+        downloading.delete(url)
+        // statusCode 不是 200 的多半是返回了错误页,别当音频缓存
+        if (res.statusCode === 200 && res.tempFilePath) {
+          fileCache.set(url, res.tempFilePath)
+          done?.(res.tempFilePath)
+        } else {
+          done?.(undefined)
+        }
+      },
+      fail: () => {
+        downloading.delete(url)
+        done?.(undefined)
+      },
+    })
+  } catch {
+    downloading.delete(url)
+    done?.(undefined)
+  }
 }
 
 // ---------------------------------------------------------------- 播放
@@ -340,8 +433,12 @@ function playSequence(
   }
 
   try {
-    a.src = s.url(text)
+    const url = s.url(text)
+    // 有缓存就直接放本地文件(秒响);没有就放网络地址,同时后台缓存下来供下次用
+    const local = cachedFile(url)
+    a.src = local ?? url
     a.play()
+    if (!local) fetchToCache(url)
   } catch {
     next()
     return
@@ -401,37 +498,20 @@ export function playEnglishSlow(text: string, rate = 0.75): void {
 export function prefetchAudio(text: string, lang: 'zh' | 'en'): void {
   const t = text.trim()
   if (!t) return
-  let a: Taro.InnerAudioContext
-  try {
-    a = Taro.createInnerAudioContext()
-    a.volume = 0
-  } catch {
-    return
-  }
-  const done = () => dispose(a)
-  try {
-    a.onCanplay(done)
-    a.onError(done)
-    const bucket = bucketOf(t, lang)
-    const list = lang === 'zh' ? ordered(ZH_SOURCES, PREF_KEY_ZH, bucket) : ordered(EN_SOURCES, PREF_KEY_EN, bucket)
-    if (!list[0] || t.length > list[0].maxLen) {
-      dispose(a)
-      return
-    }
-    a.src = list[0].url(t)
-    a.play()
-  } catch {
-    dispose(a)
-    return
-  }
-  // 兜底清理:预取失败也不能把上下文泄漏掉
-  setTimeout(done, 8000)
+  const bucket = bucketOf(t, lang)
+  const list =
+    lang === 'zh' ? ordered(ZH_SOURCES, PREF_KEY_ZH, bucket) : ordered(EN_SOURCES, PREF_KEY_EN, bucket)
+  const first = list[0]
+  if (!first || t.length > first.maxLen) return
+  // 直接下到本地文件缓存,不占播放通道、不出声
+  fetchToCache(first.url(t))
 }
 
 /** 播放单词的真人发音(英语) */
 export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
   if (!t) return
+  buzz()
   token += 1
   const bucket = bucketOf(t, 'en')
   const list = ordered(EN_SOURCES, PREF_KEY_EN, bucket)
@@ -477,6 +557,7 @@ async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> 
 export async function playText(text: string, lang: SpeechLang): Promise<void> {
   const t = text.trim()
   if (!t) return
+  buzz()
   if (isSpeechAvailable()) {
     if (await playPluginText(t, lang)) return
   }

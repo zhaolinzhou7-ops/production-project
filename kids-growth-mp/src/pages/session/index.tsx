@@ -20,6 +20,7 @@ import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
+import PolyphoneNote from '../../components/PolyphoneNote'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
@@ -480,6 +481,8 @@ function Session() {
                 <View>
                   <Text className='card__back card__back--hz'>{current.card.phonetic}</Text>
                   {(current.card.extra as { word?: string } | undefined)?.word ? <Text className='card__extra'>组词:{(current.card.extra as { word?: string }).word}</Text> : null}
+                  {/* 多音字:卡片只带一个读音,其它读音在这里补齐,每个都能点着听 */}
+                  <PolyphoneNote ch={current.card.front} />
                 </View>
               ) : (
                 <Text className='card__back'>{current.card.back}</Text>
@@ -513,6 +516,7 @@ function Session() {
               )
             })}
           </View>
+          {isHanzi && picked !== null ? <PolyphoneNote ch={current.card.front} /> : null}
         </View>
       )}
 
@@ -618,7 +622,19 @@ function Session() {
           <View className='row row--wrap'>
             <View
               className='chip chip--main'
-              onClick={() => void playText(poemLines.join('，'), 'zh_CN')}
+              onClick={() =>
+                void playText(
+                  // 标题和作者也要念出来 —— 孩子背诗本来就该连题目作者一起记
+                  [
+                    current.card.front,
+                    poemMeta?.dynasty ? `${poemMeta.dynasty}·${poemMeta.author}` : poemMeta?.author,
+                    ...poemLines,
+                  ]
+                    .filter(Boolean)
+                    .join('，'),
+                  'zh_CN',
+                )
+              }
             >
               <Text className='chip__t'>🔊 朗读整首</Text>
             </View>
@@ -660,6 +676,8 @@ function Session() {
               )
             })}
           </View>
+          {/* 选完才提示多音字 —— 提前显示等于把答案摆在题面上 */}
+          {picked !== null ? <PolyphoneNote ch={current.card.front} /> : null}
         </View>
       )}
 

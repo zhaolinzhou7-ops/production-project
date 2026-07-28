@@ -194,6 +194,62 @@ function run() {
   const afterIds = study.getDeckCards(deckId).map((c) => c.id)
   eq(afterIds, beforeIds, '内容同步后卡片 id 必须保持不变(否则复习进度会丢)')
 
+  // ---- 坏数据体检:装好的数据不能被误伤,脏数据必须被清掉 ----
+  // 先确认「干净数据跑一遍体检不掉东西」—— 体检误删比不体检更糟。
+  const cleanDecks = db.readTable('decks').length
+  const cleanCards = db.readTable('cards').length
+  const cleanStates = db.readTable('states').length
+  study.sanitizeData(childId)
+  eq(db.readTable('decks').length, cleanDecks, '体检不该动正常卡组')
+  eq(db.readTable('cards').length, cleanCards, '体检不该动正常卡片')
+  eq(db.readTable('states').length, cleanStates, '体检不该动正常复习状态')
+
+  // 再塞进四类脏数据,每一类都得被摘干净
+  const cards = db.readTable('cards')
+  const states = db.readTable('states')
+  db.writeTable('decks', [...db.readTable('decks'), { id: 'bad-deck', itemType: 'nope' }])
+  db.writeTable('cards', [
+    ...cards,
+    { id: 'orphan', deckId: 'deck-gone', front: '孤', back: '儿' }, // 卡组已不存在
+    { id: 'noface', deckId, back: '没有正面' }, // front 缺失
+    { ...cards[0] }, // id 重复
+  ])
+  db.writeTable('states', [
+    ...states,
+    { id: 'st-orphan', deckId, cardId: 'card-gone', status: 'new', due: '2020-01-01' },
+  ])
+  study.sanitizeData(childId)
+  const ids = db.readTable('cards').map((c) => c.id)
+  ok(!ids.includes('orphan'), '体检应清掉孤儿卡片')
+  ok(!ids.includes('noface'), '体检应清掉 front 缺失的卡片')
+  eq(ids.length, new Set(ids).size, '体检后卡片 id 不能有重复')
+  ok(
+    !db.readTable('decks').some((d) => d.id === 'bad-deck'),
+    '体检应清掉 itemType 非法的卡组',
+  )
+  ok(
+    !db.readTable('states').some((s) => s.id === 'st-orphan'),
+    '体检应清掉指向已删卡片的复习状态',
+  )
+  eq(db.readTable('cards').length, cleanCards, '体检后正常卡片应一张不少')
+
+  // ---- 多音字表 ----
+  const poly = L('core/polyphone.js')
+  for (const [ch, list] of Object.entries(poly.POLYPHONES)) {
+    // 表是手写的,最容易混进来的就是空条目和非汉字的键
+    ok(ch.length === 1 && /[一-龥]/.test(ch), `多音字表的键必须是单个汉字,发现「${ch}」`)
+    ok(Array.isArray(list) && list.length >= 2, `多音字「${ch}」至少要有两个读音`)
+    ok(
+      list.every((r) => r && r.py && r.word),
+      `多音字「${ch}」每个读音都要有拼音和组词`,
+    )
+    eq(list.map((r) => r.py).length, new Set(list.map((r) => r.py)).size, `多音字「${ch}」读音不能重复`)
+  }
+  ok(poly.polyphoneOf('行').length === 2, '「行」应查到两个读音')
+  eq(poly.polyphoneOf('我'), [], '非多音字应返回空数组')
+  ok(poly.isPolyphone('长') === true, '「长」应判为多音字')
+  ok(poly.isPolyphone('我') === false, '「我」不该判为多音字')
+
   // ---- SRS ----
   const init = srs.initialSrs()
   eq(init.status, 'new', '新卡状态应为 new')

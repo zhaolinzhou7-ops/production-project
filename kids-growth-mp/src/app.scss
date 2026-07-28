@@ -8,3 +8,64 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 }
+
+/*
+ * 全局按钮质感与点击反馈。
+ *
+ * 小朋友对「我到底点上没有」特别敏感 —— 没有即时反馈就会反复戳,
+ * 反而以为程序坏了。这里统一给所有可点元素三样东西:
+ * 1. 更大的触控面积(手指不是鼠标,44px 是最低线,这里给到 88rpx 以上);
+ * 2. 阴影 + 渐变,让它看起来「是个可以按下去的东西」;
+ * 3. **按下态**:立刻缩小并压暗,松手弹回 —— 手感的关键就在这一下。
+ */
+.tap,
+.btn,
+.chip,
+.tool,
+.mode,
+.entry,
+.next,
+.opt,
+.picopt {
+  transition: transform 0.09s ease, filter 0.09s ease, box-shadow 0.09s ease;
+}
+
+.btn:active,
+.chip:active,
+.tool:active,
+.mode:active,
+.entry:active,
+.next:active,
+.opt:active,
+.picopt:active,
+.tap:active {
+  transform: scale(0.94);
+  filter: brightness(0.93);
+}
+
+/* 主要操作按钮:更大、更有分量 */
+.btn {
+  min-height: 96rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+/* 次要操作(听/慢速/录音这类小按钮)也要够大 */
+.chip,
+.tool {
+  min-height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+/* 选项卡片:选项是孩子点得最多的东西,给足高度 */
+.opt {
+  min-height: 96rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 入口大卡片 */
+.entry {
+  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.1);
+}

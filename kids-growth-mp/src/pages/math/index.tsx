@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useUnload } from '@tarojs/taro'
-import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../../core/mathDrill'
-import { getCurrentChildId, finishDrill, addStudyTime } from '../../store/study'
+import { mathKindsFor, generateDrill, type MathKind, type MathProblem } from '../../core/mathDrill'
+import { getCurrentChildId, finishDrill, addStudyTime, getStage } from '../../store/study'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import CorrectBurst from '../../components/CorrectBurst'
 import type { StickerDef } from '../../core/stickers'
@@ -15,7 +15,8 @@ const COUNTS = [10, 20, 30]
 
 function MathPage() {
   const [screen, setScreen] = useState<Screen>('config')
-  const [kind, setKind] = useState<MathKind>('add')
+  // 初始题型跟着学段走 —— 幼儿档不该默认落在「加法(100 以内)」上
+  const [kind, setKind] = useState<MathKind>(mathKindsFor(getStage())[0].kind)
   const [count, setCount] = useState(20)
   const [problems, setProblems] = useState<MathProblem[]>([])
   const [idx, setIdx] = useState(0)
@@ -34,7 +35,7 @@ function MathPage() {
   useUnload(() => {})
 
   const start = () => {
-    setProblems(generateDrill(kind, count, 'primary'))
+    setProblems(generateDrill(kind, count, getStage()))
     setIdx(0)
     setCorrect(0)
     setInput('')
@@ -97,7 +98,7 @@ function MathPage() {
       <View className='math'>
         <Text className='math__h'>选择题型</Text>
         <View className='kinds'>
-          {MATH_KINDS.map((k) => (
+          {mathKindsFor(getStage()).map((k) => (
             <View key={k.kind} className={kind === k.kind ? 'kind kind--on' : 'kind'} onClick={() => setKind(k.kind)}>
               <Text className='kind__icon'>{k.icon}</Text>
               <Text className='kind__lab'>{k.label}</Text>

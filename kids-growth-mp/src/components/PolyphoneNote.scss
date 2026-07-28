@@ -1,0 +1,57 @@
+/* 多音字提示条:放在认字卡「看读音」之后,不抢主内容的视线 */
+.poly {
+  margin-top: 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 24rpx;
+  background: #fff7ed;
+  border: 2rpx solid #fed7aa;
+
+  &__hd {
+    display: block;
+    font-size: 28rpx;
+    font-weight: bold;
+    color: #c2410c;
+    margin-bottom: 14rpx;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    min-height: 84rpx;
+    padding: 0 20rpx;
+    margin-bottom: 12rpx;
+    border-radius: 18rpx;
+    background: #fff;
+    box-shadow: 0 2rpx 6rpx rgba(194, 65, 12, 0.08);
+
+    &:active {
+      transform: scale(0.96);
+      filter: brightness(0.95);
+    }
+  }
+
+  &__py {
+    font-size: 34rpx;
+    font-weight: bold;
+    color: #ea580c;
+    min-width: 130rpx;
+  }
+
+  &__w {
+    flex: 1;
+    font-size: 28rpx;
+    color: #57534e;
+  }
+
+  &__spk {
+    font-size: 34rpx;
+    margin-left: 12rpx;
+  }
+
+  &__tip {
+    display: block;
+    font-size: 22rpx;
+    color: #a8a29e;
+    text-align: center;
+  }
+}
