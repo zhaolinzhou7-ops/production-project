@@ -1,0 +1,63 @@
+@use '../../styles/record.scss' as *;
+
+.an {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__hero {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    border-radius: 28px;
+    padding: 32px 30px;
+    margin-bottom: 22px;
+  }
+
+  &__title {
+    display: block;
+    font-size: 38px;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  &__sub {
+    display: block;
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.92);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+}
+
+/* 品格画像:横条越长表示这类时刻记得越多 */
+.tr {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+
+  &__n {
+    width: 120px;
+    font-size: 25px;
+    color: #374151;
+  }
+
+  &__track {
+    flex: 1;
+    height: 26px;
+    border-radius: 999px;
+    background: #fff7f0;
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #fcd34d, #f59e0b);
+  }
+
+  &__c {
+    width: 56px;
+    text-align: right;
+    font-size: 23px;
+    color: #9ca3af;
+  }
+}

@@ -1,0 +1,465 @@
+/*
+ * 成长档案几个页面共用的一套样式。
+ *
+ * 视觉上向网页版看齐:米色底 + 白色圆角卡片 + 粉色主色,
+ * 卡片之间留足空隙,家长在手机上单手滑动时不容易点错。
+ */
+
+.card {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 28px;
+  padding: 26px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 16px rgba(249, 73, 122, 0.06);
+
+  &__hd {
+    display: block;
+    font-size: 27px;
+    font-weight: bold;
+    color: #f9497a;
+    margin-bottom: 18px;
+  }
+}
+
+/* ---- 表单 ---- */
+.fl {
+  display: block;
+  font-size: 24px;
+  color: #6b7280;
+  margin: 16px 0 8px;
+}
+
+.fi {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 84px;
+  line-height: 84px;
+  padding: 0 22px;
+  border-radius: 18px;
+  background: #fff7f0;
+  border: 2px solid #ffe0e6;
+  font-size: 27px;
+  color: #374151;
+
+  &--pick {
+    display: flex;
+    align-items: center;
+  }
+
+  &__v {
+    font-size: 27px;
+    color: #374151;
+  }
+}
+
+.ta {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 150px;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: #fff7f0;
+  border: 2px solid #ffe0e6;
+  font-size: 27px;
+  color: #374151;
+}
+
+.segs {
+  display: flex;
+  gap: 14px;
+}
+
+.seg {
+  flex: 1;
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: #fff7f0;
+  border: 2px solid #ffe0e6;
+  transition: transform 0.09s ease, filter 0.09s ease;
+
+  &--on {
+    background: linear-gradient(135deg, #ff8fa3, #f9497a);
+    border-color: transparent;
+  }
+
+  &:active {
+    transform: scale(0.95);
+    filter: brightness(0.94);
+  }
+
+  &__t {
+    font-size: 26px;
+    color: #6b7280;
+    font-weight: bold;
+  }
+
+  &--on &__t {
+    color: #fff;
+  }
+}
+
+/* 可多选的小标签(品格维度、科目) */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tag {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-radius: 999px;
+  background: #fff7f0;
+  border: 2px solid #ffe0e6;
+  transition: transform 0.09s ease;
+
+  &--on {
+    background: linear-gradient(135deg, #ff8fa3, #f9497a);
+    border-color: transparent;
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &__t {
+    font-size: 25px;
+    color: #6b7280;
+  }
+
+  &--on &__t {
+    color: #fff;
+    font-weight: bold;
+  }
+}
+
+/* ---- 大入口 ---- */
+.big {
+  display: flex;
+  align-items: center;
+  padding: 22px;
+  border-radius: 22px;
+  background: #fff7f0;
+  margin-bottom: 14px;
+
+  &__e {
+    font-size: 50px;
+    margin-right: 20px;
+  }
+  &__m {
+    flex: 1;
+  }
+  &__t {
+    display: block;
+    font-size: 28px;
+    font-weight: bold;
+    color: #374151;
+  }
+  &__d {
+    display: block;
+    font-size: 22px;
+    color: #9ca3af;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  &__a {
+    font-size: 40px;
+    color: #d1d5db;
+    margin-left: 10px;
+  }
+}
+
+/* ---- 九宫格小入口 ---- */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.tile {
+  width: calc((100% - 28px) / 3);
+  box-sizing: border-box;
+  padding: 22px 8px;
+  border-radius: 22px;
+  background: #fff7f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  &__e {
+    font-size: 44px;
+  }
+  &__t {
+    font-size: 22px;
+    color: #374151;
+    margin-top: 8px;
+    text-align: center;
+  }
+  &__n {
+    font-size: 20px;
+    color: #9ca3af;
+    margin-top: 4px;
+  }
+}
+
+/* ---- 列表条目 ---- */
+.row {
+  display: flex;
+  align-items: flex-start;
+  padding: 20px 0;
+  border-bottom: 2px solid #f5f0eb;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &__m {
+    flex: 1;
+  }
+  &__d {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+  }
+  &__t {
+    display: block;
+    font-size: 27px;
+    color: #374151;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  &__x {
+    display: block;
+    font-size: 22px;
+    color: #9ca3af;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+  &__del {
+    font-size: 24px;
+    color: #d1d5db;
+    padding: 8px 14px;
+  }
+}
+
+/* ---- 时间线 ---- */
+.tl {
+  display: flex;
+  align-items: flex-start;
+  padding-bottom: 22px;
+
+  &__dot {
+    width: 68px;
+    height: 68px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 18px;
+    flex-shrink: 0;
+    background: #ffe0e6;
+
+    &--growth {
+      background: #d1fae5;
+    }
+    &--exam {
+      background: #dbeafe;
+    }
+    &--anecdote {
+      background: #fef3c7;
+    }
+    &--record {
+      background: #ede9fe;
+    }
+  }
+
+  &__e {
+    font-size: 34px;
+  }
+  &__m {
+    flex: 1;
+  }
+  &__d {
+    display: block;
+    font-size: 20px;
+    color: #9ca3af;
+  }
+  &__t {
+    display: block;
+    font-size: 26px;
+    font-weight: bold;
+    color: #374151;
+    margin-top: 2px;
+  }
+  &__x {
+    display: block;
+    font-size: 22px;
+    color: #6b7280;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+}
+
+/* ---- 折线图(纯 View 拼,小程序里不用图表库) ---- */
+.chart {
+  position: relative;
+  height: 300px;
+  margin: 10px 0 6px;
+  background: linear-gradient(180deg, #fff7f0, #fff);
+  border-radius: 20px;
+  overflow: hidden;
+
+  &__band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: rgba(52, 211, 153, 0.12);
+  }
+
+  &__dot {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    border-radius: 999px;
+    background: #f9497a;
+    box-shadow: 0 0 0 4px rgba(249, 73, 122, 0.18);
+  }
+
+  &__ax {
+    position: absolute;
+    left: 12px;
+    font-size: 19px;
+    color: #b8b0aa;
+  }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+
+  &__i {
+    display: flex;
+    align-items: center;
+  }
+  &__s {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    margin-right: 8px;
+  }
+  &__t {
+    font-size: 21px;
+    color: #9ca3af;
+  }
+}
+
+/* ---- 通用小件 ---- */
+.hint {
+  display: block;
+  font-size: 21px;
+  color: #9ca3af;
+  line-height: 1.7;
+  margin-top: 16px;
+}
+
+.warn {
+  display: block;
+  font-size: 21px;
+  color: #b45309;
+  background: #fffbeb;
+  border-radius: 16px;
+  padding: 16px 18px;
+  line-height: 1.6;
+  margin-top: 16px;
+}
+
+.empty {
+  display: block;
+  font-size: 24px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 34px 20px;
+  line-height: 1.7;
+}
+
+.foot {
+  display: block;
+  font-size: 20px;
+  color: #b8b0aa;
+  line-height: 1.7;
+  text-align: center;
+  padding: 10px 20px 40px;
+}
+
+.save {
+  min-height: 96px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8fa3, #f9497a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+  box-shadow: 0 4px 12px rgba(249, 73, 122, 0.25);
+  transition: transform 0.09s ease, filter 0.09s ease;
+
+  &:active {
+    transform: scale(0.96);
+    filter: brightness(0.93);
+  }
+
+  &__t {
+    font-size: 29px;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  &--ghost {
+    background: #fff;
+    border: 2px solid #ffd6de;
+    box-shadow: none;
+  }
+
+  &--ghost &__t {
+    color: #f9497a;
+  }
+}
+
+.stat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+
+  &__i {
+    flex: 1;
+    min-width: 30%;
+    background: #fff7f0;
+    border-radius: 20px;
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  &__n {
+    font-size: 40px;
+    font-weight: bold;
+    color: #f9497a;
+    line-height: 1.2;
+  }
+  &__l {
+    font-size: 21px;
+    color: #9ca3af;
+    margin-top: 6px;
+    text-align: center;
+  }
+}

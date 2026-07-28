@@ -1,0 +1,125 @@
+@use '../../styles/record.scss' as *;
+
+.ex {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &__hero {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    border-radius: 28px;
+    padding: 32px 30px;
+    margin-bottom: 22px;
+  }
+
+  &__title {
+    display: block;
+    font-size: 38px;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  &__sub {
+    display: block;
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+}
+
+.sub {
+  padding: 20px 0;
+  border-bottom: 2px solid #f5f0eb;
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+
+  &__hd {
+    display: flex;
+    align-items: baseline;
+  }
+
+  &__n {
+    font-size: 28px;
+    font-weight: bold;
+    color: #374151;
+    flex: 1;
+  }
+
+  &__r {
+    font-size: 32px;
+    font-weight: bold;
+    color: #3b82f6;
+  }
+
+  &__d {
+    font-size: 22px;
+    margin-left: 12px;
+
+    &--up {
+      color: #10b981;
+    }
+    &--down {
+      color: #f97316;
+    }
+  }
+
+  &__x {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+    margin-top: 8px;
+  }
+}
+
+/* 得分率柱图 */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  height: 180px;
+  margin-top: 14px;
+  padding: 0 4px;
+  background: linear-gradient(180deg, #f8fafc, #fff);
+  border-radius: 16px;
+
+  &__c {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0 4px;
+  }
+
+  &__b {
+    width: 100%;
+    max-width: 40px;
+    border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, #93c5fd, #3b82f6);
+  }
+
+  &__v {
+    font-size: 18px;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+}
+
+.sc {
+  background: #fffdf9;
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.pair {
+  display: flex;
+  gap: 14px;
+
+  &__i {
+    flex: 1;
+  }
+}

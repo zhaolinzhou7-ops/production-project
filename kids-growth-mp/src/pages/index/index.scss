@@ -283,6 +283,10 @@
   background: linear-gradient(135deg, #a78bfa, #8b5cf6);
 }
 
+.entry--archive {
+  background: linear-gradient(135deg, #6ee7b7, #10b981);
+}
+
 .entry--fun {
   background: linear-gradient(135deg, #f472b6, #ec4899);
 }
@@ -381,4 +385,54 @@
   margin-bottom: 20px;
 
   &__t { font-size: 24px; color: #be123c; line-height: 1.5; }
+}
+
+/* 今日目标进度条:给孩子一个今天够得到的终点 */
+.dg {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 14px rgba(249, 73, 122, 0.06);
+
+  &__hd {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+
+  &__t {
+    flex: 1;
+    font-size: 26px;
+    color: #6b7280;
+  }
+
+  &__n {
+    font-size: 30px;
+    font-weight: bold;
+    color: #f9497a;
+  }
+
+  &__track {
+    height: 24px;
+    border-radius: 999px;
+    background: rgba(249, 73, 122, 0.1);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ffb26b, #f9497a);
+    transition: width 0.3s ease;
+  }
+
+  &__done {
+    display: block;
+    font-size: 24px;
+    color: #10b981;
+    font-weight: bold;
+    margin-top: 12px;
+    text-align: center;
+  }
 }

@@ -1,5 +1,6 @@
 import Taro from '@tarojs/taro'
 import { KEYS, readTable, writeTable, readObject, writeObject } from '../store/db'
+import { RECORD_KEYS } from '../store/records'
 import { CLOUD_ENV, SNAPSHOT_COLLECTION } from './config'
 
 // 微信云开发「云同步」:把学习数据打成一个快照文档,按 openid 归属(云端默认「仅创建者可读写」)。
@@ -43,6 +44,13 @@ interface Snapshot {
   states: unknown[]
   sessions: unknown[]
   drills: unknown[]
+  /** 成长档案:身高体重/通用记录/成绩/事例。学习进度丢了还能重学,这些丢了就真没了 */
+  profile?: unknown
+  growthRecords?: unknown[]
+  logRecords?: unknown[]
+  exams?: unknown[]
+  examScores?: unknown[]
+  anecdotes?: unknown[]
 }
 
 function buildSnapshot(): Snapshot {
@@ -56,6 +64,12 @@ function buildSnapshot(): Snapshot {
     states: readTable(KEYS.states),
     sessions: readTable(KEYS.sessions),
     drills: readTable(KEYS.drills),
+    profile: readObject(RECORD_KEYS.profile, null),
+    growthRecords: readTable(RECORD_KEYS.growth),
+    logRecords: readTable(RECORD_KEYS.records),
+    exams: readTable(RECORD_KEYS.exams),
+    examScores: readTable(RECORD_KEYS.scores),
+    anecdotes: readTable(RECORD_KEYS.anecdotes),
   }
 }
 
@@ -68,6 +82,13 @@ function applySnapshot(s: Snapshot): void {
   writeTable(KEYS.states, s.states || [])
   writeTable(KEYS.sessions, s.sessions || [])
   writeTable(KEYS.drills, s.drills || [])
+  // 档案是旧快照里没有的字段,拉到老快照时不要把本地已有的档案清空
+  if (s.profile) writeObject(RECORD_KEYS.profile, s.profile)
+  if (s.growthRecords) writeTable(RECORD_KEYS.growth, s.growthRecords)
+  if (s.logRecords) writeTable(RECORD_KEYS.records, s.logRecords)
+  if (s.exams) writeTable(RECORD_KEYS.exams, s.exams)
+  if (s.examScores) writeTable(RECORD_KEYS.scores, s.examScores)
+  if (s.anecdotes) writeTable(RECORD_KEYS.anecdotes, s.anecdotes)
 }
 
 export type SyncResult = 'ok' | 'nocloud' | 'empty' | 'skip' | 'error'

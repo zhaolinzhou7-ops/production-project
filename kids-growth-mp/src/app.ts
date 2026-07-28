@@ -3,6 +3,7 @@ import { useLaunch, useError, useDidHide } from '@tarojs/taro'
 import { initCloud, pullFromCloud } from './cloud/sync'
 import { writeObject, flushNow } from './store/db'
 import { sanitizeData, getCurrentChildId } from './store/study'
+import { sanitizeRecords } from './store/records'
 import './app.scss'
 
 function App({ children }: PropsWithChildren) {
@@ -12,6 +13,7 @@ function App({ children }: PropsWithChildren) {
     // 以前得靠用户自己「清空本地数据」才好 —— 现在开机就静默修掉。
     try {
       sanitizeData(getCurrentChildId())
+      sanitizeRecords()
     } catch {
       /* 修不了就算了,不能让体检本身挡住启动 */
     }

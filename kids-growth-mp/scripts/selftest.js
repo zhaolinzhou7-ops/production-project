@@ -250,6 +250,182 @@ function run() {
   ok(poly.isPolyphone('长') === true, '「长」应判为多音字')
   ok(poly.isPolyphone('我') === false, '「我」不该判为多音字')
 
+  // ---- 自定义词本 + 批量导入 + 每日目标 ----
+  // 家长手上的词表格式五花八门,解析器得全都认,否则「导入不进去」会直接劝退
+  const parsed = study.parseWordList(
+    [
+      'apple 苹果',
+      'banana\t香蕉',
+      'cat,猫',
+      'dog，狗',
+      'egg: 鸡蛋',
+      'fish - 鱼',
+      'ice cream 冰淇淋',
+      'APPLE 重复的应跳过',
+      '没有英文的一行',
+      '',
+      '   ',
+    ].join('\n'),
+  )
+  const gotWords = parsed.map((p) => p.w.toLowerCase())
+  eq(gotWords, ['apple', 'banana', 'cat', 'dog', 'egg', 'fish', 'ice cream'], '各种分隔符都要认得出来')
+  eq(parsed[0].tr, '苹果', '中文释义应正确解析')
+  eq(parsed[6].w, 'ice cream', '带空格的词组应完整保留')
+  eq(study.parseWordList('').length, 0, '空文本应解析出 0 个词')
+  eq(study.parseWordList('全是中文\n没有英文').length, 0, '没有英文的文本应解析出 0 个词')
+
+  const myDeckId = study.createCustomDeck(childId, '三年级上册')
+  eq(study.listCustomDecks(childId).length, 1, '应能列出自建词本')
+  eq(study.addWordsToDeck(childId, myDeckId, parsed), 7, '首次导入应新增 7 个词')
+  eq(study.addWordsToDeck(childId, myDeckId, parsed), 0, '重复导入同一批词不应新增')
+  eq(study.getDeckCards(myDeckId).length, 7, '词本里应有 7 张卡')
+  ok(study.getSessionCards(childId, myDeckId, 5).length === 5, '自建词本应能出题(说明 SRS 状态建好了)')
+  study.deleteCustomDeck(myDeckId)
+  eq(study.listCustomDecks(childId).length, 0, '删词本后列表应为空')
+  eq(study.getDeckCards(myDeckId).length, 0, '删词本应连卡片一起删')
+
+  // 每日目标:边界要夹住,不能被设成 0 或天文数字
+  eq(study.getDailyGoal(), 20, '每日目标默认应是 20')
+  study.setDailyGoal(35)
+  eq(study.getDailyGoal(), 35, '每日目标应能改')
+  study.setDailyGoal(0)
+  eq(study.getDailyGoal(), 5, '目标设成 0 应被夹到下限 5')
+  study.setDailyGoal(99999)
+  eq(study.getDailyGoal(), 200, '目标设过大应被夹到上限 200')
+  study.setDailyGoal(20)
+  ok(typeof study.todayAnswered(childId) === 'number', '今日题数应能算出来')
+
+  // ---- 成长档案:记录/成绩/事例/生长曲线/年度报告 ----
+  reset()
+  const rec = L('store/records.js')
+  const arch = L('store/archive.js')
+  const gp = L('core/growthPercentile.js')
+  const rm = L('core/recordModules.js')
+  const cid3 = study.getCurrentChildId()
+
+  rec.saveProfile({ name: '小朋友', gender: 'male', birthdate: '2019-05-20' })
+  eq(rec.getProfile().birthdate, '2019-05-20', '档案资料应能存取')
+  // 存坏数据也不能把页面搞崩 —— getProfile 要能兜住
+  db.writeObject('childProfile', { name: 123, gender: 'x' })
+  eq(rec.getProfile().gender, 'male', '性别非法时应回落到默认值')
+  ok(rec.getProfile().name === '', '名字非字符串时应回落成空串')
+  rec.saveProfile({ name: '小朋友', gender: 'male', birthdate: '2019-05-20' })
+
+  // 生长百分位:P50 附近的值应落在 40–60,极端值应落在两头
+  const std = gp.interpolateStandard('height', 'male', 72)
+  ok(std && std.p50 > 0, '身高标准表应能插值出 P50')
+  const mid = gp.percentileRankFor('height', 'male', 72, std.p50)
+  ok(mid !== null && mid > 40 && mid < 60, `P50 的值应算出约 50 百分位,实际 ${mid}`)
+  const low = gp.percentileRankFor('height', 'male', 72, std.p3)
+  ok(low !== null && low < 10, `P3 的值应算出很低的百分位,实际 ${low}`)
+  const high = gp.percentileRankFor('height', 'male', 72, std.p97)
+  ok(high !== null && high > 90, `P97 的值应算出很高的百分位,实际 ${high}`)
+  eq(gp.bmiOf(100, 16), 16, 'BMI 计算应为 体重 ÷ 身高(米)²')
+  eq(gp.ageMonthsAt('2019-05-20', '2020-05-19'), 11, '生日没到的当月不算满一岁')
+  eq(gp.ageMonthsAt('2019-05-20', '2020-05-20'), 12, '生日当天应满 12 个月')
+  eq(gp.classifyBmi(-3), 'thin', 'z<-2 应判为偏瘦')
+  eq(gp.classifyBmi(0), 'normal', 'z=0 应判为正常')
+  eq(gp.classifyBmi(3), 'obese', 'z>2 应判为肥胖')
+
+  rec.addGrowth(cid3, { date: '2025-01-10', heightCm: 108, weightKg: 18 })
+  rec.addGrowth(cid3, { date: '2025-07-10', heightCm: 112, weightKg: 19.5 })
+  const gRows = rec.listGrowth(cid3)
+  eq(gRows.length, 2, '应能列出两条发育记录')
+  eq(gRows[0].date, '2025-07-10', '列表应按日期倒序')
+
+  // 通用记录:配置驱动的校验必须真的拦住缺必填项的输入
+  ok(rec.validateRecord('dental', {}).length > 0, '牙齿记录缺必填项应被拦下')
+  eq(rec.validateRecord('dental', { event: '换牙' }), '', '必填项填了就应通过')
+  ok(rec.validateRecord('vision', {}).length > 0, '视力记录一项不填应被拦下')
+  eq(rec.validateRecord('vision', { leftDegree: 100 }), '', '视力记录填一项就应通过')
+  rec.addRecord(cid3, 'reading', '2025-03-01', { title: '夏洛的网', rating: 5 })
+  rec.addRecord(cid3, 'award', '2025-04-02', { contest: '绘画大赛', prize: '一等奖', scope: '市级' })
+  rec.addRecord(cid3, 'grading', '2025-05-03', { project: '钢琴', level: '三级', result: '通过' })
+  eq(rec.listRecords(cid3, 'reading').length, 1, '应能按模块列出记录')
+  eq(rec.countRecordsByModule(cid3).award, 1, '应能按模块统计条数')
+  // 每个模块的摘要都不能返回空串(列表上会变成空白行)
+  for (const def of rm.RECORD_MODULES) {
+    ok(typeof def.summarize({}) === 'string' && def.summarize({}).length > 0, `${def.module} 空字段也要有摘要`)
+    ok(def.fields.length > 0, `${def.module} 至少要有一个字段`)
+  }
+
+  // 成绩:趋势必须按得分率算,否则 48/50 会被判成不如 92/100
+  rec.addExam(cid3, { date: '2025-03-10', examType: '单元测' }, [{ subject: '数学', score: 92, fullScore: 100 }])
+  rec.addExam(cid3, { date: '2025-04-10', examType: '单元测' }, [{ subject: '数学', score: 48, fullScore: 50 }])
+  const tr = rec.subjectTrends(cid3).find((t) => t.subject === '数学')
+  ok(tr && tr.points.length === 2, '数学应有两次成绩')
+  eq(tr.points[0].rate, 92, '92/100 的得分率应是 92')
+  eq(tr.points[1].rate, 96, '48/50 的得分率应是 96(不能按原始分比)')
+  ok(tr.delta > 0, '得分率上升时 delta 应为正')
+  // 删考试要连分数一起删,不能留孤儿
+  const exList = rec.listExams(cid3)
+  rec.removeExam(exList[0].exam.id)
+  eq(rec.listExams(cid3).length, 1, '删考试后列表应少一条')
+  ok(
+    rec.subjectTrends(cid3).every((t) => t.points.length === 1),
+    '删考试应连它的各科分数一起删掉',
+  )
+
+  // 事例与品格画像
+  rec.addAnecdote(cid3, { date: '2025-02-01', kind: 'shine', content: '扶起摔倒的妹妹', traits: ['同理心', '勇气'] })
+  rec.addAnecdote(cid3, { date: '2025-02-08', kind: 'shine', content: '主动收玩具', traits: ['责任', '同理心'] })
+  const tp = rec.traitProfile(cid3)
+  eq(tp[0].trait, '同理心', '出现两次的品格应排第一')
+  eq(tp[0].count, 2, '同理心应统计到 2 次')
+
+  // 时间线:各来源都要进去,且按日期倒序
+  const tl = arch.buildTimeline(cid3)
+  ok(tl.length >= 7, `时间线应汇集各类记录,实际 ${tl.length} 条`)
+  for (let i = 1; i < tl.length; i++) {
+    ok(tl[i - 1].date >= tl[i].date, '时间线必须按日期倒序')
+  }
+  ok(
+    tl.every((it) => it.title && it.detail),
+    '时间线每条都要有标题和详情',
+  )
+
+  // 年度报告
+  const rep = arch.buildAnnualReport(cid3, 2025)
+  ok(rep.hasData, '2025 年有记录,报告应判定有数据')
+  eq(rep.heightGain, 4, '身高应算出长了 4 厘米')
+  eq(rep.booksRead, 1, '应统计到读完 1 本书')
+  eq(rep.shineCount, 2, '应统计到 2 个闪光时刻')
+  ok(rep.awards.length === 1 && rep.gradings.length === 1, '获奖与考级应各统计到 1 条')
+  ok(rep.summary.length > 10, '年度总结不能是空话')
+  ok(rep.summary.indexOf('undefined') < 0 && rep.summary.indexOf('NaN') < 0, '年度总结里不能漏出 undefined/NaN')
+  const blank = arch.buildAnnualReport(cid3, 1999)
+  ok(!blank.hasData, '没有记录的年份应判定无数据')
+  ok(blank.summary.length > 0, '无数据年份也要给一句话,不能空白')
+  ok(arch.availableYears(cid3).indexOf(2025) >= 0, '有记录的年份应出现在年份列表里')
+
+  // 备份往返:导出再导入,记录数不能变(靠 id 去重),清空后能全恢复
+  const backup = rec.exportArchive()
+  const beforeCount = rec.listGrowth(cid3).length + rec.listAnecdotes(cid3).length
+  const reimport = rec.importArchive(backup)
+  ok(reimport.ok && reimport.added === 0, '重复导入同一份备份不应产生重复记录')
+  eq(rec.listGrowth(cid3).length + rec.listAnecdotes(cid3).length, beforeCount, '重复导入后条数应不变')
+  reset()
+  study.getCurrentChildId()
+  const restored = rec.importArchive(backup)
+  ok(restored.ok && restored.added > 0, '清空后导入应恢复出记录')
+  eq(rec.getProfile().birthdate, '2019-05-20', '恢复后资料也应回来')
+  ok(!rec.importArchive('这不是备份').ok, '乱七八糟的文本应被拒绝而不是崩掉')
+  ok(!rec.importArchive('{"v":99}').ok, '版本对不上的备份应被拒绝')
+
+  // 档案体检:脏数据要清掉,好数据不能误伤
+  const goodGrowth = db.readTable('growthRecords').length
+  db.writeTable('growthRecords', [
+    ...db.readTable('growthRecords'),
+    { id: '', date: '2025-01-01' }, // 缺 id
+    { id: 'x' }, // 缺日期
+  ])
+  rec.sanitizeRecords()
+  ok(
+    db.readTable('growthRecords').every((r) => r.id && r.date),
+    '档案体检应清掉缺 id 或缺日期的记录',
+  )
+  eq(db.readTable('growthRecords').length, goodGrowth, '档案体检不该误伤正常记录')
+
   // ---- SRS ----
   const init = srs.initialSrs()
   eq(init.status, 'new', '新卡状态应为 new')

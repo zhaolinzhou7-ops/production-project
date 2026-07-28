@@ -14,6 +14,8 @@ import {
   getStage,
   syncDeckContent,
   sanitizeData,
+  getDailyGoal,
+  todayAnswered,
 } from '../../store/study'
 import { readObject, writeObject, clearAll } from '../../store/db'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
@@ -65,6 +67,9 @@ function Index() {
   const [rows, setRows] = useState<DeckRow[]>([])
   const [xp, setXp] = useState(0)
   const [streak, setStreak] = useState(0)
+  /** 今日目标:已做题数 / 目标题数 */
+  const [todayN, setTodayN] = useState(0)
+  const [goalN, setGoalN] = useState(20)
   const [minutes, setMinutes] = useState(0)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -145,6 +150,8 @@ function Index() {
       setLevel(levelOf(points.xp))
       setLimitMin(readObject<number>('dailyMinuteLimit', DAILY_LIMIT_MIN))
       setStreak(getStudyStreak())
+      setGoalN(getDailyGoal())
+      setTodayN(todayAnswered(childId))
       setMinutes(getTodayStudyMinutes())
       setChallenge(getChallenge())
       ensureHabits()
@@ -248,6 +255,26 @@ function Index() {
             {isCloudConfigured() ? '☁️ 同步' : '☁️'}
           </Text>
         </View>
+      </View>
+
+      {/*
+        今日目标进度条。孩子对「还差几题」远比对「累计多少题」有感觉,
+        这条进度条就是给他一个今天能够到的终点。
+      */}
+      <View className='dg'>
+        <View className='dg__hd'>
+          <Text className='dg__t'>今日目标</Text>
+          <Text className='dg__n'>
+            {todayN} / {goalN} 题
+          </Text>
+        </View>
+        <View className='dg__track'>
+          <View
+            className='dg__fill'
+            style={{ width: `${Math.min(100, Math.round((todayN / Math.max(1, goalN)) * 100))}%` }}
+          />
+        </View>
+        {todayN >= goalN ? <Text className='dg__done'>🎉 今天的目标达成啦!</Text> : null}
       </View>
 
       {err ? (
@@ -363,6 +390,10 @@ function Index() {
       </View>
 
       <View className='entries'>
+        <View className='entry entry--archive' onClick={() => openPage('/pages/archive/index')}>
+          <Text className='entry__icon'>🌱</Text>
+          <Text className='entry__t'>成长档案</Text>
+        </View>
         <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
           <Text className='entry__icon'>📚</Text>
           <Text className='entry__t'>内容库</Text>

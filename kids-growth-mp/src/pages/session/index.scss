@@ -552,3 +552,60 @@
   padding: 40px 0;
   line-height: 1.6;
 }
+
+/*
+ * 点选字母拼写(低龄档)。
+ * 字母块给到 96px 见方 —— 小手指点得准,才不会因为误触而气馁。
+ */
+.sp {
+  &__slots {
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff7f0;
+    border-radius: 20px;
+    margin-bottom: 18px;
+    padding: 0 20px;
+  }
+
+  &__word {
+    font-size: 52px;
+    font-weight: bold;
+    color: #f9497a;
+    letter-spacing: 6px;
+    word-break: break-all;
+  }
+
+  &__keys {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  &__k {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff, #fff2f5);
+    border: 2px solid #ffd6de;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(249, 73, 122, 0.12);
+    transition: transform 0.09s ease, filter 0.09s ease;
+
+    &:active {
+      transform: scale(0.9);
+      filter: brightness(0.94);
+    }
+  }
+
+  &__kt {
+    font-size: 44px;
+    font-weight: bold;
+    color: #374151;
+  }
+}

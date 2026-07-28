@@ -585,3 +585,149 @@ export function getStudyStreak(): number {
   const dates = new Set<string>([...sessions.map((s) => s.date), ...drills.map((d) => d.date)])
   return computeStreak(dates, todayISO())
 }
+
+// ---------------------------------------------------------------- 自定义词本
+
+/**
+ * 建一个自己的词本(学校发的单词表、这周要默写的词……)。
+ * source 标成 'custom',内容包同步时不会碰它。
+ */
+export function createCustomDeck(childId: string, name: string): string {
+  const deckId = newId()
+  const deck: LearnDeck = {
+    id: deckId,
+    childId,
+    subject: '英语',
+    name: name || '我的词本',
+    icon: '📗',
+    source: 'custom',
+    itemType: 'word',
+    createdAt: Date.now(),
+  }
+  writeTable(KEYS.decks, [...readTable<LearnDeck>(KEYS.decks), deck])
+  return deckId
+}
+
+export interface ParsedWord {
+  w: string
+  tr: string
+}
+
+/**
+ * 解析批量粘贴的单词表。
+ *
+ * 家长手上的词表格式五花八门:空格分隔、Tab、中英文逗号、破折号……
+ * 与其要求他们改格式,不如全都认。每行一个词,分隔符之前是英文、之后是中文。
+ */
+export function parseWordList(text: string): ParsedWord[] {
+  const out: ParsedWord[] = []
+  const seen = new Set<string>()
+  for (const rawLine of String(text || '').split('\n')) {
+    const line = rawLine.trim()
+    if (line.length === 0) continue
+
+    let w = ''
+    let tr = ''
+    // 首选:从**第一个汉字**处切开。这比按分隔符切可靠得多 ——
+    // 「ice cream 冰淇淋」按空格切会切成「ice」,按汉字切才是完整词组。
+    const cjk = line.search(/[一-龥]/)
+    if (cjk > 0) {
+      w = line.slice(0, cjk).replace(/[\s\t,，:：\-—]+$/, '').trim()
+      tr = line.slice(cjk).trim()
+    } else if (cjk < 0) {
+      // 整行没有汉字(释义也是英文):退回按显式分隔符切
+      const m = line.match(/^([A-Za-z][A-Za-z\s'-]*?)\s*[\t,，:：\-—]+\s*(.+)$/)
+      if (m) {
+        w = m[1].trim()
+        tr = m[2].trim()
+      }
+    }
+    // cjk === 0 表示整行以汉字开头,没有英文可取,直接跳过
+    if (!w || !tr) continue
+    if (!/^[A-Za-z]/.test(w)) continue
+    const key = w.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ w, tr })
+  }
+  return out
+}
+
+/** 把解析好的单词加进某个词本(自动建 SRS 初始状态)。返回真正新增的条数。 */
+export function addWordsToDeck(childId: string, deckId: string, words: ParsedWord[]): number {
+  const cards = readTable<LearnCard>(KEYS.cards)
+  const states = readTable<StudyState>(KEYS.states)
+  const have = new Set(
+    cards.filter((c) => c.deckId === deckId).map((c) => c.front.toLowerCase()),
+  )
+  let order = cards.filter((c) => c.deckId === deckId).length
+  const init = initialSrs()
+  let added = 0
+  for (const { w, tr } of words) {
+    if (have.has(w.toLowerCase())) continue
+    have.add(w.toLowerCase())
+    const card: LearnCard = {
+      id: newId(),
+      deckId,
+      front: w,
+      back: tr,
+      audioText: w,
+      order: order++,
+    }
+    cards.push(card)
+    states.push({ id: newId(), childId, cardId: card.id, deckId, ...init })
+    added++
+  }
+  if (added > 0) {
+    writeTable(KEYS.cards, cards)
+    writeTable(KEYS.states, states)
+  }
+  return added
+}
+
+/** 删掉一个自定义词本(连卡片和复习状态一起) */
+export function deleteCustomDeck(deckId: string): void {
+  writeTable(
+    KEYS.decks,
+    readTable<LearnDeck>(KEYS.decks).filter((d) => d.id !== deckId),
+  )
+  writeTable(
+    KEYS.cards,
+    readTable<LearnCard>(KEYS.cards).filter((c) => c.deckId !== deckId),
+  )
+  writeTable(
+    KEYS.states,
+    readTable<StudyState>(KEYS.states).filter((s) => s.deckId !== deckId),
+  )
+}
+
+export function listCustomDecks(childId: string): LearnDeck[] {
+  return readTable<LearnDeck>(KEYS.decks).filter(
+    (d) => d && d.childId === childId && d.source === 'custom',
+  )
+}
+
+// ---------------------------------------------------------------- 每日目标
+
+/** 每天想练多少题。默认 20 —— 幼儿园孩子的注意力大约就是这个量。 */
+export function getDailyGoal(): number {
+  const n = readObject<number>('dailyGoal', 20)
+  return typeof n === 'number' && n > 0 ? n : 20
+}
+
+export function setDailyGoal(n: number): void {
+  writeObject('dailyGoal', Math.max(5, Math.min(200, Math.round(n))))
+}
+
+/** 今天已经练了多少题(练习组 + 口算都算) */
+export function todayAnswered(childId: string): number {
+  const today = todayISO()
+  let n = 0
+  for (const s of readTable<{ childId: string; date: string; total: number }>(KEYS.sessions)) {
+    if (s && s.childId === childId && s.date === today) n += s.total || 0
+  }
+  for (const d of readTable<{ childId: string; date: string; total: number }>(KEYS.drills)) {
+    if (d && d.childId === childId && d.date === today) n += d.total || 0
+  }
+  return n
+}

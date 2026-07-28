@@ -1,7 +1,18 @@
 import { useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { getCurrentChildId } from '../../store/study'
+import {
+  getCurrentChildId,
+  getDailyGoal,
+  setDailyGoal,
+  todayAnswered,
+  listCustomDecks,
+  createCustomDeck,
+  deleteCustomDeck,
+  parseWordList,
+  addWordsToDeck,
+} from '../../store/study'
+import type { LearnDeck } from '../../types'
 import { getStats, weakCards, earnedAchievements, type LearningStats } from '../../store/progress'
 import { ACHIEVEMENTS } from '../../core/achievements'
 import { readObject, writeObject } from '../../store/db'
@@ -79,6 +90,93 @@ function Parent() {
     playWordAudio('apple')
   }
 
+  /** 每日目标与自定义词本 */
+  const [goal, setGoal] = useState(20)
+  const [doneToday, setDoneToday] = useState(0)
+  const [myDecks, setMyDecks] = useState<LearnDeck[]>([])
+
+  const loadExtras = () => {
+    const cid = getCurrentChildId()
+    setGoal(getDailyGoal())
+    setDoneToday(todayAnswered(cid))
+    setMyDecks(listCustomDecks(cid))
+  }
+
+  const bumpGoal = (delta: number) => {
+    const next = Math.max(5, Math.min(200, goal + delta))
+    setDailyGoal(next)
+    setGoal(next)
+  }
+
+  /** 新建词本,然后立刻让家长粘贴单词 */
+  const newDeck = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(Taro.showModal as any)({
+      title: '新建词本',
+      editable: true,
+      placeholderText: '给词本起个名,如「三年级上册」',
+      success: (res: { confirm: boolean; content?: string }) => {
+        if (!res.confirm) return
+        const name = (res.content || '').trim()
+        if (!name) {
+          Taro.showToast({ title: '得起个名字', icon: 'none' })
+          return
+        }
+        const id = createCustomDeck(getCurrentChildId(), name)
+        loadExtras()
+        importWords(id, name)
+      },
+    })
+  }
+
+  /**
+   * 批量导入单词。
+   * 走剪贴板而不是让家长在小小的输入框里敲 —— 词表通常是从电脑或
+   * 微信消息里复制来的,粘一下就完事,比逐个录入现实得多。
+   */
+  const importWords = (deckId: string, name: string) => {
+    Taro.showModal({
+      title: `给「${name}」导入单词`,
+      content: '先在别处复制好词表(每行一个,如「apple 苹果」),然后点确定,我从剪贴板读进来。',
+      success: (r) => {
+        if (!r.confirm) return
+        Taro.getClipboardData({
+          success: (res) => {
+            const parsed = parseWordList(res.data || '')
+            if (parsed.length === 0) {
+              Taro.showModal({
+                title: '没读出单词',
+                content: '格式是每行一个词,英文和中文之间用空格、逗号或制表符隔开,比如「apple 苹果」。',
+                showCancel: false,
+              })
+              return
+            }
+            const added = addWordsToDeck(getCurrentChildId(), deckId, parsed)
+            loadExtras()
+            Taro.showModal({
+              title: '导入完成',
+              content: `认出 ${parsed.length} 个词,新增 ${added} 个${added < parsed.length ? '(重复的已跳过)' : ''}。`,
+              showCancel: false,
+            })
+          },
+          fail: () => Taro.showToast({ title: '读不到剪贴板', icon: 'none' }),
+        })
+      },
+    })
+  }
+
+  const dropDeck = (d: LearnDeck) => {
+    Taro.showModal({
+      title: `删掉「${d.name}」?`,
+      content: '这个词本里的单词和复习进度都会一起删掉。',
+      success: (r) => {
+        if (!r.confirm) return
+        deleteCustomDeck(d.id)
+        loadExtras()
+      },
+    })
+  }
+
   /** 把学习进度导成一段文本,家长可以复制走存着(不上云也能防丢) */
   const exportData = () => {
     const w = buildWeekly(getCurrentChildId())
@@ -120,7 +218,10 @@ function Parent() {
   }
 
   useDidShow(() => {
-    if (unlocked) load()
+    if (unlocked) {
+      load()
+      loadExtras()
+    }
   })
 
   const tryUnlock = () => {
@@ -131,6 +232,7 @@ function Parent() {
     }
     setUnlocked(true)
     load()
+    loadExtras()
   }
 
   const changePin = () => {
@@ -420,6 +522,56 @@ function Parent() {
             <Text className='vrow__pick'>{v.id === enVoice ? '✓ 在用' : '试听'}</Text>
           </View>
         ))}
+      </View>
+
+      <View className='sec'>
+        <Text className='sec__t'>每日目标</Text>
+        <Text className='goal__n'>
+          今天 {doneToday} / {goal} 题
+        </Text>
+        <View className='goal__track'>
+          <View
+            className='goal__fill'
+            style={{ width: `${Math.min(100, Math.round((doneToday / goal) * 100))}%` }}
+          />
+        </View>
+        <View className='goal__btns'>
+          <View className='goal__b' onClick={() => bumpGoal(-5)}>
+            <Text className='goal__bt'>− 5</Text>
+          </View>
+          <View className='goal__b' onClick={() => bumpGoal(5)}>
+            <Text className='goal__bt'>+ 5</Text>
+          </View>
+        </View>
+        <Text className='sec__h'>
+          目标是给孩子看的一个进度条,不是硬指标。五六岁的孩子一次专注大约 15–20 题,
+          定太高只会让人怕打开。
+        </Text>
+      </View>
+
+      <View className='sec'>
+        <Text className='sec__t'>我的词本</Text>
+        {myDecks.length === 0 ? (
+          <Text className='sec__h'>
+            还没有自己的词本。学校发的单词表、这周要默写的词,建一个词本粘进来就能练。
+          </Text>
+        ) : null}
+        {myDecks.map((d) => (
+          <View className='lrow' key={d.id}>
+            <Text className='lrow__t'>
+              {d.icon} {d.name}
+            </Text>
+            <Text className='lrow__a' onClick={() => importWords(d.id, d.name)}>
+              导入
+            </Text>
+            <Text className='lrow__a' onClick={() => dropDeck(d)}>
+              删除
+            </Text>
+          </View>
+        ))}
+        <View className='lrow' onClick={newDeck}>
+          <Text className='lrow__t'>+ 新建词本并导入单词</Text>
+        </View>
       </View>
 
       <View className='sec'>

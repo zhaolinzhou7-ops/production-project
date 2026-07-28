@@ -139,7 +139,9 @@
 .lrow {
   padding: 22px 0;
   border-bottom: 1px solid #f1f1f4;
-  &__t { font-size: 28px; color: #374151; }
+  display: flex;
+  align-items: center;
+  &__t { flex: 1; font-size: 28px; color: #374151; }
 }
 
 /* 本周小结 */
@@ -218,4 +220,65 @@
     border-radius: 999px;
   }
   &--on .vrow__pick { color: #059669; background: rgba(52, 211, 153, 0.2); }
+}
+
+/* 每日目标:一条进度条比一个数字更能让孩子有感觉 */
+.goal {
+  &__n {
+    display: block;
+    font-size: 34px;
+    font-weight: bold;
+    color: #f9497a;
+    margin-bottom: 12px;
+  }
+
+  &__track {
+    height: 26px;
+    border-radius: 999px;
+    background: rgba(249, 73, 122, 0.12);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff8fa3, #f9497a);
+  }
+
+  &__btns {
+    display: flex;
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  &__b {
+    flex: 1;
+    min-height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #ffd6de;
+    transition: transform 0.09s ease, filter 0.09s ease;
+
+    &:active {
+      transform: scale(0.95);
+      filter: brightness(0.94);
+    }
+  }
+
+  &__bt {
+    font-size: 28px;
+    font-weight: bold;
+    color: #f9497a;
+  }
+}
+
+/* 词本行右侧的小操作 */
+.lrow__a {
+  font-size: 24px;
+  color: #f9497a;
+  padding: 10px 16px;
+  margin-left: 8px;
 }

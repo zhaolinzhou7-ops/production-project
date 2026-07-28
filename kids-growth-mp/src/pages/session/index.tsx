@@ -10,6 +10,7 @@ import {
   finishSession,
   addStudyTime,
   autoAddErrorCard,
+  getStage,
   type DueCard,
 } from '../../store/study'
 import { noteSessionEnd, claimNewAchievements } from '../../store/progress'
@@ -80,6 +81,12 @@ function Session() {
 
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
+  /**
+   * 低龄档拼写用点选字母而不是键盘。
+   * 幼儿园和小学低年级的孩子还不会打字,给键盘等于把「会不会拼」
+   * 变成「会不会打字」——门槛完全跑偏了。
+   */
+  const useLetters = mode === 'spell' && getStage() === 'toddler'
   const isWord = itemType === 'word'
   const isPic = itemType === 'pic'
   const isFact = itemType === 'fact'
@@ -235,6 +242,25 @@ function Session() {
     const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, 3)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
+
+  /**
+   * 拼写题的字母块:目标单词的字母 + 几个干扰字母,打乱顺序。
+   * 只在低龄档用(见下面 useLetters 的说明)。
+   */
+  const letterPool = useMemo(() => {
+    if (!current || mode !== 'spell') return []
+    const word = current.card.front.toLowerCase().replace(/[^a-z]/g, '')
+    const letters = word.split('')
+    // 干扰字母控制在 3 个以内:太多就成了大海捞针,反而打击信心
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('')
+    const extras: string[] = []
+    while (extras.length < Math.min(3, Math.max(1, 8 - letters.length))) {
+      const c = alphabet[Math.floor(Math.random() * alphabet.length)]
+      if (letters.indexOf(c) < 0 && extras.indexOf(c) < 0) extras.push(c)
+    }
+    return shuffle([...letters, ...extras])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, mode, idx])
 
   /** 常识问答「选一选」:选项是其它题的答案 */
   const quizOptions = useMemo(() => {
@@ -533,7 +559,40 @@ function Session() {
             </View>
           ) : (
             <View className='card__form'>
-              <Input className='inp' value={spellInput} onInput={(e) => setSpellInput(e.detail.value)} placeholder='输入英文' />
+              {/*
+                低龄档不给键盘,给字母块。
+                五六岁的孩子还不会用拼音键盘,一上来就要打字,拼写这一关
+                考的就变成「会不会打字」而不是「会不会拼」—— 直接把人劝退。
+                点选字母就没有这个门槛,还顺带认了字母。
+              */}
+              {useLetters ? (
+                <View className='sp'>
+                  <View className='sp__slots'>
+                    <Text className='sp__word'>{spellInput || '　'}</Text>
+                  </View>
+                  <View className='sp__keys'>
+                    {letterPool.map((ch, i) => (
+                      <View
+                        key={`${ch}-${i}`}
+                        className='sp__k'
+                        onClick={() => setSpellInput(spellInput + ch)}
+                      >
+                        <Text className='sp__kt'>{ch}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View className='row'>
+                    <View className='btn btn--gray' onClick={() => setSpellInput(spellInput.slice(0, -1))}>
+                      <Text className='btn__t'>⌫ 删一个</Text>
+                    </View>
+                    <View className='btn btn--gray' onClick={() => setSpellInput('')}>
+                      <Text className='btn__t'>重来</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <Input className='inp' value={spellInput} onInput={(e) => setSpellInput(e.detail.value)} placeholder='输入英文' />
+              )}
               <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>检查</Text></View>
             </View>
           )}
