@@ -258,6 +258,62 @@ function run() {
 
 
 
+
+  // ---- 习惯 ↔ 积分:这条链子断过,必须验 ----
+  reset()
+  study.getCurrentChildId()
+  habits.ensureHabits()
+  const hlist = habits.listHabits()
+  ok(hlist.length > 0, '应装上默认习惯')
+  // 每条都要有分类和分值 —— 页面上要显示,缺了就是空白
+  for (const h of hlist) {
+    ok(typeof h.points === 'number' && h.points > 0, `习惯「${h.name}」应有正的分值`)
+    ok(['生活', '学习', '运动', '品德', '家务'].indexOf(h.category) >= 0, `习惯「${h.name}」应有合法分类`)
+  }
+  eq(habits.todayHabitPoints(), 0, '还没打卡时今日习惯分应为 0')
+  const h1 = hlist[0]
+  const xp0 = study.getPoints().xp
+  habits.toggleHabit(h1.id)
+  eq(habits.todayHabitPoints(), h1.points, '打卡后今日习惯分应等于该条分值')
+  eq(study.getPoints().xp, xp0 + h1.points, '打卡应真的加到成长值上')
+  habits.toggleHabit(h1.id)
+  eq(habits.todayHabitPoints(), 0, '取消打卡后今日习惯分应归零')
+  eq(study.getPoints().xp, xp0, '取消打卡应把分退回去(否则反复勾就能刷分)')
+
+  // 分类统计
+  const byCat = habits.todayByCategory()
+  ok(byCat.length > 0, '应能按分类统计')
+  eq(
+    byCat.reduce((n, c) => n + c.total, 0),
+    hlist.length,
+    '各分类的总数加起来应等于习惯总数',
+  )
+  habits.toggleHabit(h1.id)
+  const catOf = byCat.find((c) => c.category === h1.category)
+  ok(catOf, '打卡的那条应能在分类统计里找到')
+  ok(
+    habits.todayByCategory().find((c) => c.category === h1.category).done >= 1,
+    '打卡后对应分类的完成数应 +1',
+  )
+
+  // 周任务:小学及以上应该有
+  const hab = L('core/habits.js')
+  for (const st of ['primary', 'junior', 'senior']) {
+    ok(
+      hab.HABIT_TEMPLATES[st].some((t) => t.weekly),
+      `学段 ${st} 应有周任务(整理错题、周复盘这类)`,
+    )
+  }
+  for (const st of ['toddler', 'primary', 'junior', 'senior']) {
+    for (const t of hab.HABIT_TEMPLATES[st]) {
+      ok(t.category && hab.CATEGORY_COLOR[t.category], `模板 ${t.key} 的分类应有配色`)
+      ok(t.points > 0, `模板 ${t.key} 分值应为正`)
+      ok(['morning', 'noon', 'evening'].indexOf(t.period) >= 0, `模板 ${t.key} 时段应合法`)
+    }
+    const ks = hab.HABIT_TEMPLATES[st].map((t) => t.key)
+    eq(ks.length, new Set(ks).size, `学段 ${st} 的习惯 key 不能重复`)
+  }
+
   // ---- 自由对话引擎 ----
   const chat = L('core/chatEngine.js')
 

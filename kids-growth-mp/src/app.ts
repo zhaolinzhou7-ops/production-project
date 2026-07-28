@@ -5,6 +5,7 @@ import { flushNow } from './store/db'
 import { noteError } from './lib/errlog'
 import { sanitizeData, getCurrentChildId } from './store/study'
 import { sanitizeRecords } from './store/records'
+import { resetDeadOnLaunch } from './lib/audio'
 import './app.scss'
 
 function App({ children }: PropsWithChildren) {
@@ -15,6 +16,9 @@ function App({ children }: PropsWithChildren) {
     try {
       sanitizeData(getCurrentChildId())
       sanitizeRecords()
+      // 音源的「不通」标记每次冷启动清零 —— 上次在地铁里连不上,
+      // 不代表这次在家连着 wifi 也连不上(见 lib/audio.ts 的说明)
+      resetDeadOnLaunch()
       // 注:口语练习记录的体检放在口语页里做(见 pages/talk)。
       // 放这儿会把整份对话内容拖进公共包,每次冷启动都要多解析几十 KB。
     } catch {

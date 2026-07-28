@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { View, Text, Input } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import {
   dialogsByLevel,
@@ -101,6 +101,8 @@ function Talk() {
   const [chatListening, setChatListening] = useState(false)
   const [chatHint, setChatHint] = useState('')
   const [chatZh, setChatZh] = useState(false)
+  /** 打字输入的内容 —— 没有语音识别时,这是主要的说话方式 */
+  const [chatTyped, setChatTyped] = useState('')
 
   // 选中的条目(null = 显示列表)
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -300,10 +302,6 @@ function Talk() {
   }
 
   const chatSpeak = () => {
-    if (!isSpeechAvailable()) {
-      setChatHint('这台设备没有语音识别,可以点下面的句子直接说给我听')
-      return
-    }
     if (chatListening) {
       stopRecognize()
       return
@@ -330,7 +328,9 @@ function Talk() {
           <Text className='chatstart__t'>和小机器人聊天</Text>
           <Text className='chatstart__d'>
             这里没有标准答案,也不打分 —— 想说什么就说什么。
-            不知道说什么的时候,点下面给出的句子照着说就行。
+            {isSpeechAvailable()
+              ? '可以直接说,也可以点现成的句子。'
+              : '这台设备用不了语音识别,所以是点句子或打字来说 —— 机器人照样会回应你。'}
           </Text>
           <View className='next' onClick={startChat}>
             <Text className='next__t'>开始聊天</Text>
@@ -363,9 +363,44 @@ function Talk() {
 
         {chatHint ? <Text className='msg'>{chatHint}</Text> : null}
 
-        <View className='mic2' onClick={chatSpeak}>
-          <Text className='mic2__t'>{chatListening ? '✅ 说完了' : '🎤 按住说英语'}</Text>
-        </View>
+        {/*
+          说话方式。
+          语音识别要靠「微信同声传译」插件,而这个小程序没装(装不上,已放弃)——
+          所以麦克风按钮**只在真的可用时才出现**。
+          不可用时给输入框,家长可以帮着打字,孩子照样能跟机器人来回聊。
+          原先无论如何都画一个「🎤 按住说英语」,点了却毫无反应,
+          还写着「按住」但其实是点击 —— 三重误导,必须改掉。
+        */}
+        {isSpeechAvailable() ? (
+          <View className='mic2' onClick={chatSpeak}>
+            <Text className='mic2__t'>{chatListening ? '✅ 说完了' : '🎤 点一下说英语'}</Text>
+          </View>
+        ) : null}
+
+        {!isSpeechAvailable() ? (
+          <View className='typebar'>
+            <Input
+              className='typebar__in'
+              value={chatTyped}
+              placeholder='打字告诉它你想说什么'
+              confirmType='send'
+              onInput={(e) => setChatTyped(e.detail.value)}
+              onConfirm={() => {
+                onChildSaid(chatTyped)
+                setChatTyped('')
+              }}
+            />
+            <View
+              className='typebar__go'
+              onClick={() => {
+                onChildSaid(chatTyped)
+                setChatTyped('')
+              }}
+            >
+              <Text className='typebar__got'>说</Text>
+            </View>
+          </View>
+        ) : null}
 
         {/*
           「可以这样说」的脚手架。

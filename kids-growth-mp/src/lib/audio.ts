@@ -177,8 +177,31 @@ function deadKey(id: string, bucket: LenBucket): string {
   return `${id}|${bucket}`
 }
 
-function deadSet(): Record<string, boolean> {
-  return readObject<Record<string, boolean>>(DEAD_KEY, {})
+/**
+ * 「不通」的音源标记 —— 存的是**打标时间**,不是 true。
+ *
+ * 这是一个严重的设计错误,用户实际踩到了:原先标记一旦写下就**永不过期**。
+ * 一次网络抖动(切 wifi、地铁里、家里路由重启)会让几家连着失败两次,
+ * 于是被永久拉黑;等网络恢复了,程序也再不会去试它们。
+ * 最后只剩一两家还「活着」,不管家长选哪个音色都用不上 ——
+ * 用户看到的就是「选哪个都是同一个声音,而且都是百度翻译」。
+ *
+ * 现在标记 30 分钟后自动失效,重新给每家一次机会。
+ * 代价只是偶尔多等一次超时,比永久哑掉划算得多。
+ */
+const DEAD_TTL = 30 * 60 * 1000
+
+function deadSet(): Record<string, number> {
+  const raw = readObject<Record<string, number | boolean>>(DEAD_KEY, {})
+  const now = Date.now()
+  const out: Record<string, number> = {}
+  for (const k of Object.keys(raw)) {
+    const v = raw[k]
+    // 老版本存的是 true,没有时间信息 —— 一律当成已过期,给它们一次重生机会
+    if (typeof v !== 'number') continue
+    if (now - v < DEAD_TTL) out[k] = v
+  }
+  return out
 }
 
 /**
@@ -197,7 +220,7 @@ function noteFail(id: string, bucket: LenBucket): void {
   if (n < FAIL_LIMIT) return
   const dead = deadSet()
   if (dead[k]) return
-  dead[k] = true
+  dead[k] = Date.now()
   writeObject(DEAD_KEY, dead)
 }
 
@@ -213,14 +236,33 @@ function noteOk(id: string, bucket: LenBucket): void {
 export function markDead(id: string, bucket: LenBucket, isDead: boolean): void {
   const dead = deadSet()
   const k = deadKey(id, bucket)
-  if (isDead) dead[k] = true
+  if (isDead) dead[k] = Date.now()
   else delete dead[k]
   writeObject(DEAD_KEY, dead)
 }
 
+/**
+ * 启动时把「不通」标记全清掉。
+ *
+ * 上一次用的时候网络什么样,和这一次没有关系 —— 可能上次在地铁里,
+ * 这次在家连着 wifi。每次冷启动重新给所有音源一次机会。
+ */
+export function resetDeadOnLaunch(): void {
+  writeObject(DEAD_KEY, {})
+}
+
 function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): AudioSource[] {
   const dead = deadSet()
-  const alive = list.filter((s) => !dead[deadKey(s.id, bucket)])
+  const chosen = getVoice(prefKey === PREF_KEY_ZH ? 'zh' : 'en')
+  /*
+   * 家长明确选过的音色**永远不被「不通」过滤掉**。
+   *
+   * 原先只要它被标记过一次,就直接从候选里消失,选择静默失效 ——
+   * 用户的感受是「选了没反应」,比默认排序糟糕得多。
+   * 现在始终把它留在名单里、排在最前:真连不上就往下走,
+   * 但至少每次都试一下。
+   */
+  const alive = list.filter((s) => s.id === chosen || !dead[deadKey(s.id, bucket)])
   let use = alive.length > 0 ? alive : list
 
   const front = (id: string) => {
@@ -230,7 +272,7 @@ function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): Audio
 
   // 先按「上次真出过声的」排,再让家长选的音色盖在最前面 —— 选择优先于历史。
   front(readObject<string>(`${prefKey}|${bucket}`, ''))
-  front(getVoice(prefKey === PREF_KEY_ZH ? 'zh' : 'en'))
+  front(chosen)
 
   /*
    * 英语要按「单词 / 整句」分流,这是「有些句子系统不读」的根因:
@@ -240,7 +282,7 @@ function ordered(list: AudioSource[], prefKey: string, bucket: LenBucket): Audio
    */
   // 同样只在**家长没挑过音色**时才强行改序 —— 挑了就得听他的,
   // 否则「选了没反应」比默认排序差得多(中文那个 bug 就是这么来的)。
-  if (prefKey === PREF_KEY_EN && bucket === 'long' && !getVoice('en')) {
+  if (prefKey === PREF_KEY_EN && bucket === 'long' && !chosen) {
     front('youdao-en-us')
     front('baidu-en-plain')
     front('baidu-en-child')
@@ -531,7 +573,12 @@ export function playWordAudio(word: string, accent: Accent = 2): void {
   // 指定英音时把英音提到最前
   const arranged =
     accent === 1 ? [...list].sort((a, b) => (a.id === 'youdao-en-uk' ? -1 : b.id === 'youdao-en-uk' ? 1 : 0)) : list
-  playSequence(t, arranged, PREF_KEY_EN, 0, token, bucket)
+  const my = token
+  playSequence(t, arranged, PREF_KEY_EN, 0, my, bucket, () => {
+    // 整句全挂时逐词读,别静默 ——「点了听也没用」就是这么来的
+    const words = t.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
+    if (words.length > 1) void playChunks(words, my, 'en')
+  })
 }
 
 /** 用「微信同声传译」插件合成音朗读(后台添加了插件才有) */

@@ -3,6 +3,7 @@ import { todayISO, addDays } from '../core/dateUtils'
 import { computeStreak } from '../core/streak'
 import { defaultHabitsFor, type HabitPeriod, type HabitTemplate } from '../core/habits'
 import { getStage, adjustPoints } from './study'
+import type { HabitCategory } from '../core/habits'
 
 // 习惯清单与打卡记录。
 // habits:   家长配置的习惯清单(从模板初始化,可增删)
@@ -18,6 +19,10 @@ export interface Habit {
   emoji: string
   period: HabitPeriod
   points: number
+  /** 哪方面的成长(生活/学习/运动/品德/家务) */
+  category?: HabitCategory
+  /** 周任务:一周做一次就算 */
+  weekly?: boolean
 }
 
 type HabitLog = Record<string, string[]>
@@ -37,7 +42,15 @@ export function ensureHabits(): Habit[] {
 }
 
 function toHabit(t: HabitTemplate): Habit {
-  return { id: t.key, name: t.name, emoji: t.emoji, period: t.period, points: t.points }
+  return {
+    id: t.key,
+    name: t.name,
+    emoji: t.emoji,
+    period: t.period,
+    points: t.points,
+    category: t.category,
+    weekly: t.weekly,
+  }
 }
 
 export function listHabits(): Habit[] {
@@ -149,4 +162,36 @@ export function allDoneStreak(): number {
     if (habits.every((h) => ids.includes(h.id))) full.add(d)
   }
   return computeStreak(full, todayISO())
+}
+
+/**
+ * 今天靠打卡拿到了多少分。
+ *
+ * 之前习惯确实在加分,但**页面上一个字都没提** ——
+ * 孩子勾完只看到一个对勾,完全不知道这跟他的成长值有关系。
+ * 「打卡 → 加分 → 升级 → 换奖励」这条链子,少了第一环的可见性就断了。
+ */
+export function todayHabitPoints(): number {
+  const done = doneToday()
+  const all = listHabits()
+  let n = 0
+  for (const id of done) {
+    const h = all.find((x) => x.id === id)
+    if (h) n += h.points
+  }
+  return n
+}
+
+/** 按分类统计今天完成情况 —— 家长能一眼看出「这周全是学习,一条运动都没有」 */
+export function todayByCategory(): Array<{ category: HabitCategory; done: number; total: number }> {
+  const done = new Set(doneToday())
+  const map = new Map<HabitCategory, { done: number; total: number }>()
+  for (const h of listHabits()) {
+    const c = (h.category ?? '生活') as HabitCategory
+    const cur = map.get(c) ?? { done: 0, total: 0 }
+    cur.total += 1
+    if (done.has(h.id)) cur.done += 1
+    map.set(c, cur)
+  }
+  return [...map.entries()].map(([category, v]) => ({ category, ...v }))
 }

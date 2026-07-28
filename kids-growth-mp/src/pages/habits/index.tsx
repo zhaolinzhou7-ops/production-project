@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { PERIODS, habitCheer, templatesFor, type HabitPeriod } from '../../core/habits'
+import {
+  PERIODS,
+  habitCheer,
+  templatesFor,
+  CATEGORY_COLOR,
+  type HabitPeriod,
+  type HabitCategory,
+} from '../../core/habits'
+import { getPoints } from '../../store/study'
+import { levelOf } from '../../core/levels'
 import {
   ensureHabits,
   listHabits,
@@ -10,6 +19,8 @@ import {
   habitStreak,
   weekGrid,
   allDoneStreak,
+  todayHabitPoints,
+  todayByCategory,
   addHabitFromTemplate,
   addCustomHabit,
   removeHabit,
@@ -26,12 +37,21 @@ function Habits() {
   const [fullStreak, setFullStreak] = useState(0)
   const [burst, setBurst] = useState(0)
   const [manage, setManage] = useState(false)
+  /** 今天靠打卡拿了多少分 + 当前等级 —— 让「打卡 → 加分 → 升级」这条链子看得见 */
+  const [habitPts, setHabitPts] = useState(0)
+  const [xp, setXp] = useState(0)
+  const [cats, setCats] = useState<Array<{ category: HabitCategory; done: number; total: number }>>([])
+  /** 刚勾上时飘一个「+5」,让加分这件事被看见 */
+  const [gained, setGained] = useState(0)
 
   const refresh = () => {
     ensureHabits()
     setHabits(listHabits())
     setDone(doneToday())
     setFullStreak(allDoneStreak())
+    setHabitPts(todayHabitPoints())
+    setXp(getPoints().xp)
+    setCats(todayByCategory())
   }
 
   useDidShow(refresh)
@@ -41,6 +61,9 @@ function Habits() {
     const nowDone = toggleHabit(h.id)
     if (nowDone) {
       setBurst((b) => b + 1)
+      // 飘一个「+5」:孩子得看见分是怎么来的,否则打卡就只是个对勾
+      setGained(h.points)
+      setTimeout(() => setGained(0), 1400)
       try {
         Taro.vibrateShort({ type: 'light' })
       } catch {
@@ -108,6 +131,7 @@ function Habits() {
   return (
     <View className='hb'>
       {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
+      {gained > 0 ? <Text className='gain'>+{gained} 分</Text> : null}
 
       <View className='hb__hero'>
         <View className='ring'>
@@ -117,6 +141,10 @@ function Habits() {
         </View>
         <View className='hb__meta'>
           <Text className='hb__cheer'>{habitCheer(doneCount, total)}</Text>
+          <Text className='hb__pts'>
+            今天打卡拿到 {habitPts} 分 · 总成长值 {xp}({levelOf(xp).cur.emoji}{' '}
+            {levelOf(xp).cur.name})
+          </Text>
           <View className='hb__track'>
             <View className='hb__fill' style={{ width: `${pct}%` }} />
           </View>
@@ -145,7 +173,21 @@ function Habits() {
                 >
                   <Text className='hrow__e'>{h.emoji}</Text>
                   <View className='hrow__meta'>
-                    <Text className='hrow__n'>{h.name}</Text>
+                    <Text className='hrow__n'>
+                      {h.name}
+                      {h.weekly ? ' · 每周一次' : ''}
+                    </Text>
+                    <View className='hrow__tags'>
+                      {h.category ? (
+                        <Text
+                          className='hrow__cat'
+                          style={{ background: CATEGORY_COLOR[h.category] }}
+                        >
+                          {h.category}
+                        </Text>
+                      ) : null}
+                      <Text className='hrow__pt'>+{h.points} 分</Text>
+                    </View>
                     <View className='hrow__week'>
                       {week.map((d) => (
                         <View key={d.date} className={d.done ? 'dot dot--on' : 'dot'} />
@@ -176,6 +218,28 @@ function Habits() {
           </View>
         )
       })}
+
+      {cats.length > 0 ? (
+        <View className='catbar'>
+          <Text className='catbar__t'>今天各方面</Text>
+          <View className='catbar__row'>
+            {cats.map((c) => (
+              <View className='catchip' key={c.category}>
+                <View
+                  className='catchip__dot'
+                  style={{ background: CATEGORY_COLOR[c.category] }}
+                />
+                <Text className='catchip__t'>
+                  {c.category} {c.done}/{c.total}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Text className='catbar__h'>
+            生活、学习、运动、品德、家务 —— 五样都沾一点比某一样做到满分更要紧。
+          </Text>
+        </View>
+      ) : null}
 
       <View className='hb__acts'>
         <Text className='hb__btn' onClick={addFromTemplate}>

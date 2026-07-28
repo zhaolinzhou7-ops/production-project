@@ -472,3 +472,45 @@
   line-height: 1.8;
   margin-top: 18px;
 }
+
+/* 打字说话:没有语音识别时的主要输入方式 */
+.typebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 18px;
+
+  &__in {
+    flex: 1;
+    min-height: 100px;
+    box-sizing: border-box;
+    padding: 0 24px;
+    border-radius: 999px;
+    background: #f0f9ff;
+    border: 2px solid #bae6fd;
+    font-size: 28px;
+    color: #0c4a6e;
+  }
+
+  &__go {
+    width: 110px;
+    min-height: 100px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.09s ease, filter 0.09s ease;
+
+    &:active {
+      transform: scale(0.94);
+      filter: brightness(0.93);
+    }
+  }
+
+  &__got {
+    font-size: 30px;
+    color: #fff;
+    font-weight: bold;
+  }
+}

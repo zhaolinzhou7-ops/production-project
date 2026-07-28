@@ -19,72 +19,103 @@ export const PERIODS: Array<{ key: HabitPeriod; label: string; emoji: string }> 
   { key: 'evening', label: '晚上', emoji: '🌙' },
 ]
 
+/**
+ * 习惯分类(与网页版一致)。
+ *
+ * 时段回答「什么时候做」,分类回答「这是哪方面的成长」——
+ * 两者都需要:家长看分类能发现「这周全是学习,一条运动都没有」,
+ * 孩子看时段才知道现在该做什么。
+ */
+export type HabitCategory = '生活' | '学习' | '运动' | '品德' | '家务'
+
+export const CATEGORY_COLOR: Record<HabitCategory, string> = {
+  生活: '#38bdf8',
+  学习: '#a78bfa',
+  运动: '#34d399',
+  品德: '#fb7185',
+  家务: '#fbbf24',
+}
+
 export interface HabitTemplate {
   key: string
   name: string
   emoji: string
   period: HabitPeriod
   points: number
+  /** 哪方面的成长 */
+  category: HabitCategory
+  /**
+   * 周任务:一周做一次就算(整理错题、周复盘这类)。
+   * 天天要求做反而会让它变成负担,最后一条也不做。
+   */
+  weekly?: boolean
   /** 是否为该学段默认开启(其余的家长可自行添加) */
   default?: boolean
 }
 
 export const HABIT_TEMPLATES: Record<AgeStage, HabitTemplate[]> = {
   toddler: [
-    { key: 't-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', points: 5, default: true },
-    { key: 't-dress', name: '自己穿衣穿鞋', emoji: '👕', period: 'morning', points: 5, default: true },
-    { key: 't-eat', name: '自己吃饭', emoji: '🍚', period: 'noon', points: 5, default: true },
-    { key: 't-toilet', name: '自己上厕所', emoji: '🚽', period: 'noon', points: 5 },
-    { key: 't-nap', name: '按时午睡', emoji: '😴', period: 'noon', points: 5 },
-    { key: 't-outdoor', name: '出去玩一会儿', emoji: '🌳', period: 'noon', points: 5, default: true },
-    { key: 't-toys', name: '收好玩具', emoji: '🧸', period: 'evening', points: 5, default: true },
-    { key: 't-read', name: '听爸爸妈妈讲故事', emoji: '📖', period: 'evening', points: 5, default: true },
-    { key: 't-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', points: 5, default: true },
-    { key: 't-polite', name: '说请、谢谢、对不起', emoji: '💗', period: 'noon', points: 5 },
-    { key: 't-share', name: '和小朋友好好玩', emoji: '🤝', period: 'noon', points: 5 },
-    { key: 't-sleep', name: '按时上床睡觉', emoji: '🛏️', period: 'evening', points: 5, default: true },
+    { key: 't-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 't-dress', name: '自己穿衣穿鞋', emoji: '👕', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 't-eat', name: '自己吃饭', emoji: '🍚', period: 'noon', category: '生活', points: 5, default: true },
+    { key: 't-toilet', name: '自己上厕所', emoji: '🚽', period: 'noon', category: '生活', points: 5 },
+    { key: 't-nap', name: '按时午睡', emoji: '😴', period: 'noon', category: '生活', points: 5 },
+    { key: 't-outdoor', name: '出去玩一会儿', emoji: '🌳', period: 'noon', category: '运动', points: 5, default: true },
+    { key: 't-toys', name: '收好玩具', emoji: '🧸', period: 'evening', category: '家务', points: 5, default: true },
+    { key: 't-read', name: '听爸爸妈妈讲故事', emoji: '📖', period: 'evening', category: '生活', points: 5, default: true },
+    { key: 't-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', category: '生活', points: 5, default: true },
+    { key: 't-polite', name: '说请、谢谢、对不起', emoji: '💗', period: 'noon', category: '品德', points: 5 },
+    { key: 't-share', name: '和小朋友好好玩', emoji: '🤝', period: 'noon', category: '品德', points: 5 },
+    { key: 't-sleep', name: '按时上床睡觉', emoji: '🛏️', period: 'evening', category: '生活', points: 5, default: true },
   ],
   primary: [
-    { key: 'p-wake', name: '按时起床', emoji: '⏰', period: 'morning', points: 5, default: true },
-    { key: 'p-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', points: 5, default: true },
-    { key: 'p-bag', name: '整理书包', emoji: '🎒', period: 'morning', points: 5 },
-    { key: 'p-eat', name: '好好吃饭不挑食', emoji: '🍚', period: 'noon', points: 5 },
-    { key: 'p-homework', name: '完成作业', emoji: '✏️', period: 'noon', points: 10, default: true },
-    { key: 'p-read', name: '阅读 20 分钟', emoji: '📖', period: 'evening', points: 10, default: true },
-    { key: 'p-sport', name: '运动 30 分钟', emoji: '⚽', period: 'noon', points: 10, default: true },
-    { key: 'p-practice', name: '练琴 / 练字', emoji: '🎹', period: 'evening', points: 10 },
-    { key: 'p-chore', name: '帮忙做家务', emoji: '🧺', period: 'evening', points: 5 },
-    { key: 'p-room', name: '整理房间', emoji: '🧹', period: 'evening', points: 5 },
-    { key: 'p-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', points: 5, default: true },
-    { key: 'p-sleep', name: '按时睡觉', emoji: '🌙', period: 'evening', points: 5, default: true },
-    { key: 'p-polite', name: '礼貌待人', emoji: '🤝', period: 'noon', points: 5 },
-    { key: 'p-help', name: '帮助别人一次', emoji: '💗', period: 'noon', points: 5 },
+    { key: 'p-w-wrong', name: '整理一次错题本', emoji: '📒', period: 'evening', category: '学习', points: 15, weekly: true },
+    { key: 'p-w-plan', name: '周末做下周计划', emoji: '🗓️', period: 'evening', category: '学习', points: 15, weekly: true },
+    { key: 'p-w-clean', name: '周末大扫除帮忙', emoji: '🧹', period: 'noon', category: '家务', points: 15, weekly: true },
+    { key: 'p-wake', name: '按时起床', emoji: '⏰', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 'p-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 'p-bag', name: '整理书包', emoji: '🎒', period: 'morning', category: '生活', points: 5 },
+    { key: 'p-eat', name: '好好吃饭不挑食', emoji: '🍚', period: 'noon', category: '生活', points: 5 },
+    { key: 'p-homework', name: '完成作业', emoji: '✏️', period: 'noon', category: '学习', points: 10, default: true },
+    { key: 'p-read', name: '阅读 20 分钟', emoji: '📖', period: 'evening', category: '学习', points: 10, default: true },
+    { key: 'p-sport', name: '运动 30 分钟', emoji: '⚽', period: 'noon', category: '运动', points: 10, default: true },
+    { key: 'p-practice', name: '练琴 / 练字', emoji: '🎹', period: 'evening', category: '学习', points: 10 },
+    { key: 'p-chore', name: '帮忙做家务', emoji: '🧺', period: 'evening', category: '家务', points: 5 },
+    { key: 'p-room', name: '整理房间', emoji: '🧹', period: 'evening', category: '家务', points: 5 },
+    { key: 'p-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', category: '生活', points: 5, default: true },
+    { key: 'p-sleep', name: '按时睡觉', emoji: '🌙', period: 'evening', category: '生活', points: 5, default: true },
+    { key: 'p-polite', name: '礼貌待人', emoji: '🤝', period: 'noon', category: '品德', points: 5 },
+    { key: 'p-help', name: '帮助别人一次', emoji: '💗', period: 'noon', category: '品德', points: 5 },
   ],
   junior: [
-    { key: 'j-wake', name: '按时起床', emoji: '⏰', period: 'morning', points: 5, default: true },
-    { key: 'j-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', points: 5, default: true },
-    { key: 'j-plan', name: '列今天的计划', emoji: '🗓️', period: 'morning', points: 10, default: true },
-    { key: 'j-homework', name: '按计划完成作业', emoji: '✏️', period: 'noon', points: 15, default: true },
-    { key: 'j-preview', name: '预习明天的课', emoji: '📖', period: 'evening', points: 10 },
-    { key: 'j-wrongbook', name: '整理错题', emoji: '📒', period: 'evening', points: 10 },
-    { key: 'j-read', name: '课外阅读 30 分钟', emoji: '📚', period: 'evening', points: 10, default: true },
-    { key: 'j-sport', name: '运动 30 分钟', emoji: '🏃', period: 'noon', points: 10, default: true },
-    { key: 'j-screen', name: '控制手机时间', emoji: '📵', period: 'evening', points: 10, default: true },
-    { key: 'j-chore', name: '分担家务', emoji: '🧹', period: 'evening', points: 5 },
-    { key: 'j-talk', name: '和家人聊聊天', emoji: '💬', period: 'evening', points: 5 },
-    { key: 'j-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', points: 5, default: true },
-    { key: 'j-sleep', name: '11 点前睡觉', emoji: '🌙', period: 'evening', points: 10, default: true },
+    { key: 'j-w-wrong', name: '整理错题与知识点', emoji: '📒', period: 'evening', category: '学习', points: 15, weekly: true },
+    { key: 'j-w-review', name: '周复盘与下周规划', emoji: '🗓️', period: 'evening', category: '学习', points: 20, weekly: true },
+    { key: 'j-wake', name: '按时起床', emoji: '⏰', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 'j-brush-am', name: '早上刷牙', emoji: '🪥', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 'j-plan', name: '列今天的计划', emoji: '🗓️', period: 'morning', category: '学习', points: 10, default: true },
+    { key: 'j-homework', name: '按计划完成作业', emoji: '✏️', period: 'noon', category: '学习', points: 15, default: true },
+    { key: 'j-preview', name: '预习明天的课', emoji: '📖', period: 'evening', category: '学习', points: 10 },
+    { key: 'j-wrongbook', name: '整理错题', emoji: '📒', period: 'evening', category: '学习', points: 10 },
+    { key: 'j-read', name: '课外阅读 30 分钟', emoji: '📚', period: 'evening', category: '学习', points: 10, default: true },
+    { key: 'j-sport', name: '运动 30 分钟', emoji: '🏃', period: 'noon', category: '运动', points: 10, default: true },
+    { key: 'j-screen', name: '控制手机时间', emoji: '📵', period: 'evening', category: '生活', points: 10, default: true },
+    { key: 'j-chore', name: '分担家务', emoji: '🧹', period: 'evening', category: '家务', points: 5 },
+    { key: 'j-talk', name: '和家人聊聊天', emoji: '💬', period: 'evening', category: '品德', points: 5 },
+    { key: 'j-brush-pm', name: '晚上刷牙', emoji: '🪥', period: 'evening', category: '生活', points: 5, default: true },
+    { key: 'j-sleep', name: '11 点前睡觉', emoji: '🌙', period: 'evening', category: '生活', points: 10, default: true },
   ],
   senior: [
-    { key: 's-wake', name: '按时起床', emoji: '⏰', period: 'morning', points: 5, default: true },
-    { key: 's-plan', name: '当日学习计划', emoji: '🗓️', period: 'morning', points: 10, default: true },
-    { key: 's-task', name: '完成当日学习任务', emoji: '✏️', period: 'noon', points: 15, default: true },
-    { key: 's-drill', name: '自主刷题 / 复习', emoji: '📝', period: 'evening', points: 15, default: true },
-    { key: 's-wrongbook', name: '整理错题与知识点', emoji: '📒', period: 'evening', points: 10 },
-    { key: 's-sport', name: '锻炼 30 分钟', emoji: '🏃', period: 'noon', points: 10, default: true },
-    { key: 's-screen', name: '自我管理电子设备', emoji: '📵', period: 'evening', points: 10 },
-    { key: 's-home', name: '为家里做一件事', emoji: '🏠', period: 'evening', points: 5 },
-    { key: 's-sleep', name: '规律作息不熬夜', emoji: '🌙', period: 'evening', points: 10, default: true },
+    { key: 's-w-wrong', name: '整理错题与知识点', emoji: '📒', period: 'evening', category: '学习', points: 15, weekly: true },
+    { key: 's-w-review', name: '周复盘与下周规划', emoji: '🗓️', period: 'evening', category: '学习', points: 20, weekly: true },
+    { key: 's-wake', name: '按时起床', emoji: '⏰', period: 'morning', category: '生活', points: 5, default: true },
+    { key: 's-plan', name: '当日学习计划', emoji: '🗓️', period: 'morning', category: '学习', points: 10, default: true },
+    { key: 's-task', name: '完成当日学习任务', emoji: '✏️', period: 'noon', category: '学习', points: 15, default: true },
+    { key: 's-drill', name: '自主刷题 / 复习', emoji: '📝', period: 'evening', category: '学习', points: 15, default: true },
+    { key: 's-wrongbook', name: '整理错题与知识点', emoji: '📒', period: 'evening', category: '学习', points: 10 },
+    { key: 's-sport', name: '锻炼 30 分钟', emoji: '🏃', period: 'noon', category: '运动', points: 10, default: true },
+    { key: 's-screen', name: '自我管理电子设备', emoji: '📵', period: 'evening', category: '生活', points: 10 },
+    { key: 's-home', name: '为家里做一件事', emoji: '🏠', period: 'evening', category: '家务', points: 5 },
+    { key: 's-sleep', name: '规律作息不熬夜', emoji: '🌙', period: 'evening', category: '生活', points: 10, default: true },
   ],
 }
 

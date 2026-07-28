@@ -117,3 +117,104 @@
 
   &--on { background: #34d399; }
 }
+
+/* 打卡 → 加分 → 升级:这条链子必须看得见,否则打卡就只是个对勾 */
+.hb__pts {
+  display: block;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 8px 0 4px;
+  line-height: 1.5;
+}
+
+/* 勾上时飘出来的「+5 分」 */
+.gain {
+  position: fixed;
+  left: 50%;
+  top: 34%;
+  transform: translateX(-50%);
+  z-index: 999;
+  font-size: 56px;
+  font-weight: bold;
+  color: #f59e0b;
+  text-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  pointer-events: none;
+  animation: gain-float 1.4s ease-out forwards;
+}
+
+@keyframes gain-float {
+  0% { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0.7); }
+  25% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1.1); }
+  70% { opacity: 1; transform: translateX(-50%) translateY(-30px) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-70px) scale(0.9); }
+}
+
+.hrow__tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.hrow__cat {
+  font-size: 19px;
+  color: #fff;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
+.hrow__pt {
+  font-size: 20px;
+  color: #f59e0b;
+  font-weight: bold;
+}
+
+/* 五个方面的今日分布 —— 家长一眼看出「全是学习,一条运动都没有」 */
+.catbar {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  padding: 22px;
+  margin-bottom: 20px;
+
+  &__t {
+    display: block;
+    font-size: 26px;
+    font-weight: bold;
+    color: #374151;
+    margin-bottom: 14px;
+  }
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  &__h {
+    display: block;
+    font-size: 21px;
+    color: #9ca3af;
+    line-height: 1.7;
+    margin-top: 14px;
+  }
+}
+
+.catchip {
+  display: flex;
+  align-items: center;
+  background: #f8f8fa;
+  border-radius: 999px;
+  padding: 10px 20px;
+
+  &__dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    margin-right: 10px;
+  }
+
+  &__t {
+    font-size: 22px;
+    color: #374151;
+  }
+}
