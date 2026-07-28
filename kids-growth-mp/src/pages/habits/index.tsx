@@ -153,15 +153,23 @@ function Habits() {
                       {streak > 1 ? <Text className='hrow__s'>连续 {streak} 天</Text> : null}
                     </View>
                   </View>
+                  {/*
+                    ⚠️ 这两个必须写成**各自独立的「有/无」**,不能写成
+                    `manage ? <带onClick的Text> : <不带的Text>`。
+                    Taro 给带事件和不带事件的节点编的别名不同,同一个位置
+                    互换会让别名对不上,真机上报 componentsAlias[...]._num。
+                    拆成两个之后,各自只在「渲染/不渲染」之间切,就安全了。
+                  */}
                   {manage ? (
                     <Text className='hrow__del' onClick={() => askRemove(h)}>
                       删除
                     </Text>
-                  ) : (
+                  ) : null}
+                  {!manage ? (
                     <Text className={isDone ? 'hrow__ck hrow__ck--on' : 'hrow__ck'}>
                       {isDone ? '✓' : ''}
                     </Text>
-                  )}
+                  ) : null}
                 </View>
               )
             })}

@@ -12,12 +12,13 @@
   "scripts": {
     "build:weapp": "taro build --type weapp && node scripts/verify-bundle.js",
     "clean": "node scripts/clean.js",
-    "rebuild": "node scripts/clean.js && taro build --type weapp && node scripts/verify-bundle.js && node scripts/selftest.js",
+    "rebuild": "node scripts/clean.js && taro build --type weapp && node scripts/verify-bundle.js && node scripts/scan-render.js && node scripts/selftest.js",
     "build:si": "node scripts/build-si.js",
     "dev:weapp": "taro build --type weapp --watch",
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/verify-bundle.js",
-    "selftest": "node scripts/selftest.js"
+    "selftest": "node scripts/selftest.js",
+    "scan": "node scripts/scan-render.js"
   },
   "browserslist": [
     "ios >= 9",

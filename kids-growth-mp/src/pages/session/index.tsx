@@ -503,6 +503,8 @@ function Session() {
           <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
           {phase === 'reveal' ? (
             <View className='card__reveal'>
+              {/* ⚠️ 两个分支拆成各自独立的「有/无」,不能写成 A : B ——
+                  同一位置换节点类型(这里是 View ↔ Text)会报 _num。 */}
               {isHanzi ? (
                 <View>
                   <Text className='card__back card__back--hz'>{current.card.phonetic}</Text>
@@ -510,17 +512,19 @@ function Session() {
                   {/* 多音字:卡片只带一个读音,其它读音在这里补齐,每个都能点着听 */}
                   <PolyphoneNote ch={current.card.front} />
                 </View>
-              ) : (
-                <Text className='card__back'>{current.card.back}</Text>
-              )}
+              ) : null}
+              {!isHanzi ? <Text className='card__back'>{current.card.back}</Text> : null}
               <View className='row'>
                 <View className='btn btn--gray' onClick={() => advance(false)}><Text className='btn__t'>{isHanzi ? '不认识' : '没记住'}</Text></View>
                 <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>{isHanzi ? '认识' : '记住了'}</Text></View>
               </View>
             </View>
-          ) : (
+          ) : null}
+          {/* ⚠️ 拆成独立的「有/无」:上面那块没有 onClick,下面这个有,
+              写成 A : B 会让同一位置的节点类型互换,真机报 _num。 */}
+          {phase !== 'reveal' ? (
             <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>{isHanzi ? '看读音' : '看意思'}</Text></View>
-          )}
+          ) : null}
         </View>
       )}
 
@@ -804,9 +808,10 @@ function Session() {
                 <View className='btn btn--mint' onClick={() => advance(true)}><Text className='btn__t'>已掌握</Text></View>
               </View>
             </View>
-          ) : (
+          ) : null}
+          {phase !== 'reveal' ? (
             <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>看答案</Text></View>
-          )}
+          ) : null}
         </View>
       )}
 

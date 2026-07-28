@@ -233,11 +233,15 @@ function Growth() {
             <Text className='save__t'>取消</Text>
           </View>
         </View>
-      ) : (
+      ) : null}
+
+      {/* ⚠️ 拆成两个各自独立的「有/无」:同一位置在带 onClick 与不带的节点之间
+          互换,真机上会报 componentsAlias[...]._num(见 pages/habits 的注释)。*/}
+      {!adding ? (
         <View className='save' onClick={() => setAdding(true)}>
           <Text className='save__t'>+ 记一次身高体重</Text>
         </View>
-      )}
+      ) : null}
 
       <View className='card'>
         <Text className='card__hd'>全部记录({rows.length})</Text>
