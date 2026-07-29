@@ -609,3 +609,80 @@
     color: #374151;
   }
 }
+
+/*
+ * 宠物进食过程。
+ * 关键是那条会**滑动**的进度条 —— 静态数字对五六岁的孩子没有意义,
+ * 「条子当场长了一截」才是他能感知到的成长。
+ */
+.petbox {
+  background: linear-gradient(135deg, #fff1f6, #fff);
+  border: 2px solid #ffd6de;
+  border-radius: 24px;
+  padding: 22px;
+  margin: 18px 0;
+
+  &__row {
+    display: flex;
+    align-items: center;
+  }
+
+  &__e {
+    font-size: 76px;
+    margin-right: 20px;
+    transition: transform 0.4s ease;
+
+    /* 进化的那一下要够醒目 —— 这是整套养成里最值钱的一个瞬间 */
+    &--pop {
+      animation: pet-pop 0.9s ease-out;
+    }
+  }
+
+  @keyframes pet-pop {
+    0% { transform: scale(0.5) rotate(-12deg); }
+    45% { transform: scale(1.35) rotate(8deg); }
+    70% { transform: scale(0.95) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+
+  &__meta { flex: 1; }
+
+  &__t {
+    display: block;
+    font-size: 30px;
+    font-weight: bold;
+    color: #f9497a;
+  }
+
+  &__n {
+    display: block;
+    font-size: 23px;
+    color: #9ca3af;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  &__track {
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(249, 73, 122, 0.12);
+    overflow: hidden;
+    margin-top: 18px;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ffb26b, #f9497a);
+    /* 慢一点,让孩子看清它在长 */
+    transition: width 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  &__h {
+    display: block;
+    font-size: 21px;
+    color: #b8b0aa;
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+}

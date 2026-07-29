@@ -387,6 +387,50 @@ function run() {
   ok(avgTip('easy') < avgTip('hard'), '入门档的提示句应比挑战档短')
 
 
+
+  // ---- 宠物进食:孩子要看得见「喂了几口、还差多少」 ----
+  reset()
+  study.getCurrentChildId()
+  const pets = L('core/pets.js')
+  // 没选蛋时喂食不该崩,也不该凭空长
+  const noPet = fun.feedPetDetailed(5)
+  eq(noPet.ate, 0, '没选蛋时不该记进食')
+  eq(noPet.evolved, false, '没选蛋时不该进化')
+
+  fun.choosePet(pets.PET_LINES[0].key)
+  const pf1 = fun.feedPetDetailed(3)
+  eq(pf1.ate, 3, '喂几口就该记几口')
+  eq(pf1.before, 0, '喂之前应是 0 口')
+  eq(pf1.after, 3, '喂之后应是 3 口')
+  ok(pf1.toNext > 0, '还没满级时应给出「还差几口」')
+  ok(pf1.emojiBefore && pf1.emojiAfter, '进化动画要有前后两个样子')
+  ok(pf1.progress >= 0 && pf1.progress <= 1, '进度必须在 0–1 之间')
+  ok(pf1.progressBefore >= 0 && pf1.progressBefore <= 1, '起始进度也必须在 0–1 之间')
+  ok(pf1.progress > pf1.progressBefore, '喂过之后进度条必须往前走,否则孩子看不到变化')
+
+  // 一次喂到跨阶段:必须报进化,且进度条从 0 起画
+  const big = fun.feedPetDetailed(pets.FEED_THRESHOLDS[1] + 5)
+  ok(big.evolved, '喂过阈值应判定为进化')
+  ok(big.stageAfter > big.stageBefore, '进化后阶段序号应变大')
+  eq(big.progressBefore, 0, '刚变身应从新阶段的开头起画,而不是接着上一段')
+  ok(big.stageName.length > 0, '进化后应能说出新形态的名字')
+
+  // 进度与阈值必须自洽
+  eq(pets.stageProgress(0), 0, '刚出生进度应为 0')
+  ok(pets.stageProgress(pets.FEED_THRESHOLDS[1] - 1) > 0.5, '快到阈值时进度应过半')
+  eq(pets.stageProgress(pets.FEED_THRESHOLDS[pets.FEED_THRESHOLDS.length - 1]), 1, '满级进度应为 1')
+  eq(pets.toNextStage(pets.FEED_THRESHOLDS[pets.FEED_THRESHOLDS.length - 1]), 0, '满级后不该再有「还差几口」')
+  let prev = -1
+  for (const t of pets.FEED_THRESHOLDS) {
+    ok(t > prev, '进食阈值必须递增')
+    prev = t
+  }
+  // feedPet 的老接口要和新接口结论一致
+  reset()
+  study.getCurrentChildId()
+  fun.choosePet(pets.PET_LINES[0].key)
+  eq(fun.feedPet(pets.FEED_THRESHOLDS[1] + 1), true, '老的 feedPet 也应正确报告进化')
+
   // ---- 音色清单:必须真的能选到不同引擎 ----
   // 音色清单在 core/voices.ts(纯数据);音源表在 core/audioSources.ts
   const voices = L('core/voices.js')

@@ -246,6 +246,15 @@ function buzz(): void {
 const fileCache = new Map<string, string>()
 /** 正在下载中的 URL,避免同一句被重复下载 */
 const downloading = new Set<string>()
+/** 同一个 URL 上排队等下载结果的回调 */
+const waiting = new Map<string, Array<(path?: string) => void>>()
+
+function settle(url: string, path?: string): void {
+  downloading.delete(url)
+  const q = waiting.get(url)
+  waiting.delete(url)
+  if (q) for (const fn of q) fn(path)
+}
 
 function cachedFile(url: string): string | undefined {
   return fileCache.get(url)
@@ -259,7 +268,11 @@ function fetchToCache(url: string, done?: (path?: string) => void): void {
     return
   }
   if (downloading.has(url)) {
-    done?.(undefined)
+    // 已经在下了就排队等它 —— 原先直接回 undefined,上层会退回「流式播放」,
+    // 于是又变成「边下边播同一个地址」,正是「读一半」的成因之一。
+    const q = waiting.get(url) ?? []
+    if (done) q.push(done)
+    waiting.set(url, q)
     return
   }
   downloading.add(url)
@@ -267,23 +280,20 @@ function fetchToCache(url: string, done?: (path?: string) => void): void {
     Taro.downloadFile({
       url,
       success: (res) => {
-        downloading.delete(url)
         // statusCode 不是 200 的多半是返回了错误页,别当音频缓存
-        if (res.statusCode === 200 && res.tempFilePath) {
-          fileCache.set(url, res.tempFilePath)
-          done?.(res.tempFilePath)
-        } else {
-          done?.(undefined)
-        }
+        const okPath = res.statusCode === 200 && res.tempFilePath ? res.tempFilePath : undefined
+        if (okPath) fileCache.set(url, okPath)
+        done?.(okPath)
+        settle(url, okPath)
       },
       fail: () => {
-        downloading.delete(url)
         done?.(undefined)
+        settle(url, undefined)
       },
     })
   } catch {
-    downloading.delete(url)
     done?.(undefined)
+    settle(url, undefined)
   }
 }
 
@@ -407,11 +417,35 @@ function playSequence(
 
   try {
     const url = s.url(text)
-    // 有缓存就直接放本地文件(秒响);没有就放网络地址,同时后台缓存下来供下次用
     const local = cachedFile(url)
-    a.src = local ?? url
-    a.play()
-    if (!local) fetchToCache(url)
+    if (local) {
+      // 有缓存直接放本地文件 —— 秒响,而且不受网络影响
+      a.src = local
+      a.play()
+    } else {
+      /*
+       * 没缓存时**先下完再播**,不能边下边播。
+       *
+       * 原先是「a.src = 网络地址 立刻播」+「同时 downloadFile 同一个地址」。
+       * 真机上这两条流抢同一个连接,播放流被打断 —— 用户看到的就是
+       * 「有的单词只读一半」「口语句子读到一半就没了」。
+       * 先下到本地再播,整段音频已经在手上,不可能被网络中途掐断。
+       */
+      let launched = false
+      const launch = (src: string) => {
+        if (launched || my !== token) return
+        launched = true
+        try {
+          a.src = src
+          a.play()
+        } catch {
+          next()
+        }
+      }
+      fetchToCache(url, (path) => launch(path ?? url))
+      // 下载迟迟不回来就退回流式播,别让孩子干等(此时没有并发下载,不会互相打断)
+      setTimeout(() => launch(url), 2000)
+    }
   } catch {
     next()
     return

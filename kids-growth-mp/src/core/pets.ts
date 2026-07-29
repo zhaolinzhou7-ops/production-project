@@ -118,6 +118,21 @@ export function toNextStage(fed: number): number {
   return FEED_THRESHOLDS[s + 1] - fed
 }
 
+/**
+ * 当前阶段走了多少(0–1),用来画进度条。
+ *
+ * 只给「还差 N 口」这个数字不够 —— 5 岁的孩子对数字没概念,
+ * 但对「条子长了一截」有感觉。已满级固定返回 1。
+ */
+export function stageProgress(fed: number): number {
+  const s = stageOf(fed)
+  if (s >= FEED_THRESHOLDS.length - 1) return 1
+  const from = FEED_THRESHOLDS[s]
+  const to = FEED_THRESHOLDS[s + 1]
+  if (to <= from) return 1
+  return Math.max(0, Math.min(1, (fed - from) / (to - from)))
+}
+
 export function isFullyGrown(fed: number): boolean {
   return stageOf(fed) >= FEED_THRESHOLDS.length - 1
 }

@@ -22,7 +22,7 @@ import { startRecord, stopRecord, playFile } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import PolyphoneNote from '../../components/PolyphoneNote'
-import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
+import { awardSticker, feedPetDetailed, bumpChallenge, type FeedResult } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
 import { withGuard } from '../../components/Guard'
@@ -69,6 +69,10 @@ function Session() {
   const [burst, setBurst] = useState(0)
   const [gotSticker, setGotSticker] = useState<StickerDef | null>(null)
   const [evolved, setEvolved] = useState(false)
+  /** 这一组喂了几口、离下一次变身还差多少 —— 结算页动态展示 */
+  const [feed, setFeed] = useState<FeedResult | null>(null)
+  /** 进度条从「喂之前」滑到「喂之后」,滑动才有养成的感觉 */
+  const [feedAnim, setFeedAnim] = useState(false)
   const [challengeDone, setChallengeDone] = useState(false)
   const [newBadges, setNewBadges] = useState<string[]>([])
   const [leveledTo, setLeveledTo] = useState('')
@@ -311,7 +315,11 @@ function Session() {
     // 结算趣味化:掉贴纸、喂宠物、记每日挑战。任何一步出问题都不能挡住结算页。
     try {
       setGotSticker(awardSticker(finalCorrect, total) ?? null)
-      setEvolved(feedPet(finalCorrect))
+      const fed = feedPetDetailed(finalCorrect)
+      setFeed(fed)
+      setEvolved(fed.evolved)
+      // 先画在「喂之前」的位置,下一帧再滑到「喂之后」—— 让孩子看见它长了一截
+      setTimeout(() => setFeedAnim(true), 260)
       const chal = bumpChallenge()
       setChallengeDone(chal)
       // 升级判定要用「加分前后」的成长值对比
@@ -472,7 +480,37 @@ function Session() {
             <Text className='reward__line'>解锁新徽章!</Text>
           </View>
         ) : null}
-        {evolved ? <Text className='reward__line'>🎊 你的小宠物进化啦!</Text> : null}
+        {/*
+          宠物进食过程。
+          原先只有「进化了」这一个瞬间可见,中间那段「喂了几口、
+          离下一次变身还差多少」全是黑的 —— 而养成类最抓人的恰恰是这段
+          看得见的一点点靠近。现在每答对一题就是喂一口,进度条会当场滑一截。
+        */}
+        {feed && feed.ate > 0 ? (
+          <View className='petbox'>
+            <View className='petbox__row'>
+              <Text className={feed.evolved ? 'petbox__e petbox__e--pop' : 'petbox__e'}>
+                {feedAnim ? feed.emojiAfter : feed.emojiBefore}
+              </Text>
+              <View className='petbox__meta'>
+                <Text className='petbox__t'>
+                  {feed.evolved ? `变身成「${feed.stageName}」啦!` : `小家伙吃了 ${feed.ate} 口`}
+                </Text>
+                <Text className='petbox__n'>
+                  一共吃了 {feed.after} 口
+                  {feed.toNext > 0 ? ` · 再吃 ${feed.toNext} 口就变身` : ' · 已经长大啦'}
+                </Text>
+              </View>
+            </View>
+            <View className='petbox__track'>
+              <View
+                className='petbox__fill'
+                style={{ width: `${Math.round((feedAnim ? feed.progress : feed.progressBefore) * 100)}%` }}
+              />
+            </View>
+            <Text className='petbox__h'>每答对一题就喂它一口 —— 你学得越多,它长得越快。</Text>
+          </View>
+        ) : null}
         {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
         <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
       </View>
