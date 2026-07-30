@@ -356,11 +356,47 @@ export interface DueCard {
 }
 
 /** 取一个卡组今天要练的卡(到期优先,new 补足),limit 控制题量。 */
-export function getSessionCards(childId: string, deckId: string, limit = 12): DueCard[] {
+/**
+ * 取一组要练的卡。
+ *
+ * `freePractice = true` 时**忽略「到期」这件事**,从整个卡组里随机抽。
+ *
+ * 为什么必须有这个口子:间隔重复会把答对的卡排到几天甚至几周之后,
+ * 于是孩子今天想再练一遍,程序告诉他「今天学完了」——
+ * 这是把一个为「记得牢」设计的算法,当成了「不准多练」的门禁。
+ * 孩子主动想练的时候拦住他,是这套系统能犯的最糟糕的错误之一。
+ *
+ * 随便练的那一组照常给分、照常喂宠物,但**不动 SRS 的间隔**
+ * (见 finishSession 的 freePractice),否则反复刷会把复习节奏搅乱。
+ */
+export function getSessionCards(
+  childId: string,
+  deckId: string,
+  limit = 12,
+  freePractice = false,
+): DueCard[] {
   const today = todayISO()
   const states = readTable<StudyState>(KEYS.states).filter(
     (s) => s.childId === childId && s.deckId === deckId,
   )
+  if (freePractice) {
+    // 随机抽,每次进来题目不一样 —— 同一组反复做才不会腻
+    const pool = [...states]
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const t = pool[i]
+      pool[i] = pool[j]
+      pool[j] = t
+    }
+    const cardsById0 = new Map(readTable<LearnCard>(KEYS.cards).map((c) => [c.id, c]))
+    const out0: DueCard[] = []
+    for (const st of pool) {
+      const card = cardsById0.get(st.cardId)
+      if (card) out0.push({ card, state: st })
+      if (out0.length >= limit) break
+    }
+    return out0
+  }
   const due = states.filter((s) => isDue(s, today))
   due.sort((a, b) => {
     if (a.status === 'new' && b.status !== 'new') return 1
@@ -375,6 +411,11 @@ export function getSessionCards(childId: string, deckId: string, limit = 12): Du
     if (card) out.push({ card, state: s })
   }
   return out
+}
+
+/** 这个卡组一共有多少张卡 —— 首页「再练一遍」要显示总量 */
+export function countDeckCards(deckId: string): number {
+  return readTable<LearnCard>(KEYS.cards).filter((c) => c && c.deckId === deckId).length
 }
 
 /** 所有卡(用于会话中取干扰项 / 诗句池) */

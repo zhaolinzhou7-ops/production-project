@@ -41,8 +41,16 @@ export const ZH_VOICES: VoiceOption[] = [
   { id: 'baidu-zh-yao', label: '百度 · 度逍遥', desc: '同一引擎,可能和上面听不出区别' },
 ]
 
+/*
+ * 英语音色 —— 这里选的是**单词**用哪个声音。
+ *
+ * 整句永远走百度合成引擎,不受这个选择影响。原因是有道 dictvoice 是
+ * 词典:单词有真人录音(最自然),但整句它会当成词条去拼,
+ * 听着就是一个词一个词往外蹦,甚至干脆没有音频。
+ * 让「真人音」去读句子是用错了工具,所以这条分工写死在管线里。
+ */
 export const EN_VOICES: VoiceOption[] = [
-  { id: 'youdao-en-us', label: '美音 · 真人', desc: '有道真人录音,单词最自然' },
-  { id: 'youdao-en-uk', label: '英音 · 真人', desc: '英式发音' },
-  { id: 'baidu-en-child', label: '英语童声', desc: '合成音,句子更连贯' },
+  { id: 'youdao-en-us', label: '美音 · 真人', desc: '单词用真人录音,最自然' },
+  { id: 'youdao-en-uk', label: '英音 · 真人', desc: '英式发音,同样是真人录音' },
+  { id: 'baidu-en-child', label: '英语童声', desc: '合成音,单词也用合成引擎读' },
 ]

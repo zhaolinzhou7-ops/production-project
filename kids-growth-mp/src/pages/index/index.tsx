@@ -186,9 +186,9 @@ function Index() {
   // 只用 useDidShow:它首次显示时也会触发,再加 useEffect 等于每次进首页算两遍
   useDidShow(refresh)
 
-  const go = (deckId: string, mode: string) => {
+  const go = (deckId: string, mode: string, free = false) => {
     Taro.navigateTo({
-      url: `/pages/session/index?deckId=${deckId}&mode=${mode}`,
+      url: `/pages/session/index?deckId=${deckId}&mode=${mode}${free ? '&free=1' : ''}`,
       fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
     })
   }
@@ -485,6 +485,21 @@ function Index() {
                 <View key={m.mode} className='mode' onClick={() => go(deck.id, m.mode)}>
                   <Text className='mode__icon'>{m.icon}</Text>
                   <Text className='mode__label'>{m.label}</Text>
+                </View>
+              ))}
+            </View>
+            {/*
+              「再练一遍」—— 无论今天的复习清空没清空,想练随时能练。
+              间隔重复会把答对的卡排到几天之后,于是孩子今天还想练,
+              程序却说「已清空」把他挡在外面。那个算法是为「记得牢」设计的,
+              不是为「不准多练」设计的 —— 主动想练的时候拦住他,
+              是这套系统能犯的最糟糕的错误之一。
+              这一组照常给分、照常喂宠物,但不改动复习计划。
+            */}
+            <View className='again'>
+              {modes.slice(0, 2).map((m) => (
+                <View key={`again-${m.mode}`} className='again__b' onClick={() => go(deck.id, m.mode, true)}>
+                  <Text className='again__t'>🔄 再练一遍 · {m.label}</Text>
                 </View>
               ))}
             </View>

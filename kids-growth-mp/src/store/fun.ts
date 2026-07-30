@@ -38,22 +38,46 @@ export function resetStickers(): void {
 export interface PetState {
   /** 进化线 key;空 = 还没选蛋 */
   line: string
-  /** 累计喂食量(答对题数) */
+  /** 当前这只累计喂了几口(答对题数) */
   fed: number
+  /**
+   * 每只宠物各自的进度。
+   *
+   * 为什么要按只分开记:孩子想换一只养的时候,原先的做法是把 fed 归零 ——
+   * 辛辛苦苦喂到 40 口的小家伙,换一下就没了。五六岁的孩子只是好奇
+   * 「别的蛋会变成什么」,不该为这点好奇付出清零的代价。
+   * 分开记之后,换来换去都不丢,想回去接着养随时可以。
+   */
+  fedByLine: Record<string, number>
   /** 已经养大出师的宠物(养满后可以再养一只) */
   graduated: string[]
 }
 
-const EMPTY_PET: PetState = { line: '', fed: 0, graduated: [] }
+const EMPTY_PET: PetState = { line: '', fed: 0, fedByLine: {}, graduated: [] }
 
 export function getPet(): PetState {
   const p = readObject<PetState>(PET_KEY, EMPTY_PET)
-  return { line: p.line || '', fed: p.fed || 0, graduated: p.graduated || [] }
+  const byLine =
+    p && p.fedByLine && typeof p.fedByLine === 'object' ? p.fedByLine : {}
+  const line = p.line || ''
+  const fed = p.fed || 0
+  // 老版本没有 fedByLine —— 把当前这只的进度补录进去,不然一换就丢
+  if (line && byLine[line] === undefined) byLine[line] = fed
+  return { line, fed, fedByLine: byLine, graduated: p.graduated || [] }
 }
 
+/**
+ * 选一只来养 —— **随时可以换**,两边进度都不丢。
+ * 换回来的时候它还在你上次离开的地方。
+ */
 export function choosePet(line: string): void {
   const cur = getPet()
-  writeObject(PET_KEY, { ...cur, line, fed: 0 })
+  const byLine = { ...cur.fedByLine }
+  // 先把当前这只的进度存好
+  if (cur.line) byLine[cur.line] = cur.fed
+  const fed = byLine[line] ?? 0
+  byLine[line] = fed
+  writeObject(PET_KEY, { ...cur, line, fed, fedByLine: byLine })
 }
 
 /**
@@ -112,7 +136,11 @@ export function feedPetDetailed(n: number): FeedResult {
   if (!cur.line || n <= 0) return empty
 
   const after = before + n
-  writeObject(PET_KEY, { ...cur, fed: after })
+  writeObject(PET_KEY, {
+    ...cur,
+    fed: after,
+    fedByLine: { ...cur.fedByLine, [cur.line]: after },
+  })
   const stageAfter = stageOf(after)
   return {
     ate: n,
@@ -135,9 +163,12 @@ export function feedPetDetailed(n: number): FeedResult {
 export function graduatePet(): void {
   const cur = getPet()
   if (!cur.line || !isFullyGrown(cur.fed)) return
+  const byLine = { ...cur.fedByLine }
+  delete byLine[cur.line]
   writeObject(PET_KEY, {
     line: '',
     fed: 0,
+    fedByLine: byLine,
     graduated: [...cur.graduated, cur.line],
   })
 }

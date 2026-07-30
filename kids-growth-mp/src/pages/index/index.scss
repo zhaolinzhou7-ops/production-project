@@ -456,3 +456,35 @@
   padding: 18px;
   line-height: 1.8;
 }
+
+/* 「再练一遍」:随时能练,不受「今天已清空」限制 */
+.again {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+
+  &__b {
+    flex: 1;
+    min-width: 45%;
+    min-height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 18px;
+    background: rgba(52, 211, 153, 0.14);
+    border: 2px solid rgba(52, 211, 153, 0.3);
+    transition: transform 0.09s ease, filter 0.09s ease;
+
+    &:active {
+      transform: scale(0.96);
+      filter: brightness(0.95);
+    }
+  }
+
+  &__t {
+    font-size: 24px;
+    color: #059669;
+    font-weight: 500;
+  }
+}

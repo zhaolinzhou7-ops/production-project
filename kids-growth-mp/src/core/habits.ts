@@ -9,6 +9,11 @@ import type { AgeStage } from '../types'
  * - **默认只开少数几条**。同时养 10 个习惯必然失败;先稳住 4–6 条,
  *   成了再加 —— 所以模板里只有一部分标了 default。
  * - **只加分不扣分**。漏做一天不惩罚,第二天照样能开始。
+ * - 除了「几点睡、写作业」这类可核对的事,刻意放进一批**看不见的努力**:
+ *   举手回答了一次、错了以后又试了一次、做了件不太想做但该做的事、
+ *   不懂的地方问了出来。这类条目分值更高,因为它们才是真正难的部分 ——
+ *   只奖励「按时完成」会养出听话的孩子,奖励「敢试、敢问、敢承担」
+ *   才是我们真想要的。
  * - 习惯和学习**共用同一套成长值**:生活自理与学习同等重要,不分主次。
  */
 export type HabitPeriod = 'morning' | 'noon' | 'evening'
@@ -55,6 +60,11 @@ export interface HabitTemplate {
 
 export const HABIT_TEMPLATES: Record<AgeStage, HabitTemplate[]> = {
   toddler: [
+    { key: 't-brave', name: '今天做了件勇敢的事', emoji: '🦁', period: 'evening', category: '品德', points: 10 },
+    { key: 't-try', name: '自己先试了一次', emoji: '💪', period: 'noon', category: '品德', points: 10 },
+    { key: 't-sorry', name: '做错了会说对不起', emoji: '🙇', period: 'evening', category: '品德', points: 5 },
+    { key: 't-wait', name: '排队等一等没着急', emoji: '⏳', period: 'noon', category: '品德', points: 5 },
+    { key: 't-hug', name: '和家人抱一下', emoji: '🤗', period: 'evening', category: '品德', points: 5 },
     { key: 't-wash', name: '饭前洗手', emoji: '🧼', period: 'noon', category: '生活', points: 5 },
     { key: 't-water', name: '主动喝水', emoji: '🥤', period: 'noon', category: '生活', points: 5 },
     { key: 't-greet', name: '见到人主动打招呼', emoji: '👋', period: 'morning', category: '品德', points: 5 },
@@ -77,6 +87,12 @@ export const HABIT_TEMPLATES: Record<AgeStage, HabitTemplate[]> = {
     { key: 't-sleep', name: '按时上床睡觉', emoji: '🛏️', period: 'evening', category: '生活', points: 5, default: true },
   ],
   primary: [
+    { key: 'p-brave', name: '举手回答了一次', emoji: '🙋', period: 'noon', category: '品德', points: 10 },
+    { key: 'p-hard', name: '做了一件不太想做但该做的事', emoji: '💪', period: 'evening', category: '品德', points: 15 },
+    { key: 'p-ask', name: '不懂的地方问了出来', emoji: '❓', period: 'noon', category: '学习', points: 10 },
+    { key: 'p-again', name: '错了以后又试了一次', emoji: '🔁', period: 'evening', category: '品德', points: 10 },
+    { key: 'p-praise', name: '夸了别人一句', emoji: '👏', period: 'noon', category: '品德', points: 5 },
+    { key: 'p-own', name: '自己的事自己做完了', emoji: '✅', period: 'evening', category: '生活', points: 10 },
     { key: 'p-water', name: '喝够水', emoji: '🥤', period: 'noon', category: '生活', points: 5 },
     { key: 'p-eye', name: '用眼半小时休息一次', emoji: '👀', period: 'noon', category: '生活', points: 5 },
     { key: 'p-diary', name: '写一句今天的事', emoji: '✍️', period: 'evening', category: '学习', points: 10 },
@@ -105,6 +121,10 @@ export const HABIT_TEMPLATES: Record<AgeStage, HabitTemplate[]> = {
     { key: 'p-help', name: '帮助别人一次', emoji: '💗', period: 'noon', category: '品德', points: 5 },
   ],
   junior: [
+    { key: 'j-hard', name: '主动做了最难的那一项', emoji: '⛰️', period: 'evening', category: '学习', points: 15 },
+    { key: 'j-ask', name: '不懂就问,没糊过去', emoji: '❓', period: 'noon', category: '学习', points: 10 },
+    { key: 'j-focus', name: '有一段时间完全专注', emoji: '🎯', period: 'evening', category: '学习', points: 10 },
+    { key: 'j-own', name: '为自己的选择负了责', emoji: '🫡', period: 'evening', category: '品德', points: 10 },
     { key: 'j-water', name: '喝够水', emoji: '🥤', period: 'noon', category: '生活', points: 5 },
     { key: 'j-notes', name: '整理今天的笔记', emoji: '📓', period: 'evening', category: '学习', points: 10 },
     { key: 'j-english', name: '背 20 个单词', emoji: '🔤', period: 'noon', category: '学习', points: 10 },
@@ -127,6 +147,9 @@ export const HABIT_TEMPLATES: Record<AgeStage, HabitTemplate[]> = {
     { key: 'j-sleep', name: '11 点前睡觉', emoji: '🌙', period: 'evening', category: '生活', points: 10, default: true },
   ],
   senior: [
+    { key: 's-hard', name: '先做最难的那一项', emoji: '⛰️', period: 'noon', category: '学习', points: 15 },
+    { key: 's-focus', name: '有一段完全不碰手机的专注时间', emoji: '🎯', period: 'evening', category: '学习', points: 15 },
+    { key: 's-own', name: '为自己的选择负了责', emoji: '🫡', period: 'evening', category: '品德', points: 10 },
     { key: 's-water', name: '喝够水', emoji: '🥤', period: 'noon', category: '生活', points: 5 },
     { key: 's-notes', name: '整理今天的笔记', emoji: '📓', period: 'evening', category: '学习', points: 10 },
     { key: 's-read', name: '课外阅读 / 时事', emoji: '📰', period: 'evening', category: '学习', points: 10 },

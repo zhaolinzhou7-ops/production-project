@@ -44,6 +44,14 @@ function Session() {
   const router = useRouter()
   const deckId = router.params.deckId || ''
   const mode = (router.params.mode || 'recognize') as PracticeMode
+  /**
+   * 「再练一遍」模式:忽略「到期」,从整组里随机抽题。
+   *
+   * 孩子主动想练的时候,程序不该拿间隔重复算法当门禁把他拦住 ——
+   * 那是为「记得牢」设计的,不是为「不准多练」设计的。
+   * 这一组照常给分、照常喂宠物,但**不动 SRS 的间隔**,免得反复刷把复习节奏搅乱。
+   */
+  const freePractice = router.params.free === '1'
 
   const [childId, setChildId] = useState('')
   const [deck, setDeck] = useState<LearnDeck | null>(null)
@@ -114,7 +122,7 @@ function Session() {
   useEffect(() => {
     try {
       const cid = getCurrentChildId()
-      const list = getSessionCards(cid, deckId, 12)
+      const list = getSessionCards(cid, deckId, 12, freePractice)
       const d = getDeck(deckId) ?? null
       const all = getDeckCards(deckId)
       setChildId(cid)
@@ -356,7 +364,8 @@ function Session() {
 
   const advance = (wasCorrect: boolean) => {
     if (!current) return
-    applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
+    // 「再练一遍」不写 SRS —— 只是练手,不该改变复习计划
+    if (!freePractice) applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     if (wasCorrect) {
       setCombo((c) => {
         const n = c + 1

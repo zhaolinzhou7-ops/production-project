@@ -388,6 +388,68 @@ function run() {
 
 
 
+
+  // ---- 换宠物不能丢进度 / 随便练不能动复习计划 ----
+  reset()
+  const cid4 = study.getCurrentChildId()
+  const petsLib = L('core/pets.js')
+  const A = petsLib.PET_LINES[0].key
+  const B = petsLib.PET_LINES[1].key
+
+  fun.choosePet(A)
+  fun.feedPetDetailed(12)
+  eq(fun.getPet().fed, 12, 'A 应喂到 12 口')
+  // 换成 B:A 的进度必须留着
+  fun.choosePet(B)
+  eq(fun.getPet().line, B, '应切换到 B')
+  eq(fun.getPet().fed, 0, 'B 是新的,从 0 开始')
+  eq(fun.getPet().fedByLine[A], 12, '换走之后 A 的 12 口必须留着(原先会被清零)')
+  fun.feedPetDetailed(5)
+  eq(fun.getPet().fed, 5, 'B 应喂到 5 口')
+  // 换回 A:回到 12 口,不是 0 也不是 5
+  fun.choosePet(A)
+  eq(fun.getPet().fed, 12, '换回 A 应回到 12 口')
+  eq(fun.getPet().fedByLine[B], 5, 'B 的 5 口也要留着')
+  // 换成自己不该有副作用
+  fun.choosePet(A)
+  eq(fun.getPet().fed, 12, '换成当前这只不该改变进度')
+
+  // 老版本存档没有 fedByLine —— 读的时候要补上,不然一换就丢
+  reset()
+  study.getCurrentChildId()
+  db.writeObject('pet', { line: A, fed: 30, graduated: [] })
+  eq(fun.getPet().fedByLine[A], 30, '老存档的进度应被补录进 fedByLine')
+  fun.choosePet(B)
+  eq(fun.getPet().fedByLine[A], 30, '从老存档换走也不该丢进度')
+
+  // 随便练:忽略「到期」,而且不改 SRS
+  reset()
+  const cid5 = study.getCurrentChildId()
+  const dk = study.ensureBuiltinDeck(cid5, 'hanzi-toddler')
+  const total = study.countDeckCards(dk)
+  ok(total > 0, '应能数出卡组里有多少张卡')
+  // 把所有卡都推到很久以后 —— 模拟「今天已清空」
+  const st2 = db.readTable('states').map((x) =>
+    x.deckId === dk ? { ...x, status: 'review', due: '2099-01-01' } : x,
+  )
+  db.writeTable('states', st2)
+  eq(study.getSessionCards(cid5, dk, 12).length, 0, '全都没到期时正常模式应取不到题')
+  ok(
+    study.getSessionCards(cid5, dk, 12, true).length > 0,
+    '「再练一遍」必须还能取到题 —— 孩子主动想练时不该被算法拦住',
+  )
+  eq(study.getSessionCards(cid5, dk, 5, true).length, 5, '「再练一遍」应遵守题量上限')
+  // 随机抽:两次取到的顺序不应总是一样(小概率相同,取几次里至少一次不同)
+  let differed = false
+  const base = study.getSessionCards(cid5, dk, 8, true).map((c) => c.card.id).join()
+  for (let i = 0; i < 6; i++) {
+    if (study.getSessionCards(cid5, dk, 8, true).map((c) => c.card.id).join() !== base) {
+      differed = true
+      break
+    }
+  }
+  ok(differed, '「再练一遍」应随机抽题,否则反复做的是同一批')
+
   // ---- 宠物进食:孩子要看得见「喂了几口、还差多少」 ----
   reset()
   study.getCurrentChildId()

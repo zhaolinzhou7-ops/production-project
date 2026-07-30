@@ -183,3 +183,9 @@
     margin-top: 4px;
   }
 }
+
+/* 正在养的那一只标出来 —— 列表里一眼能认出「哪个是我的」 */
+.egg--on {
+  background: linear-gradient(135deg, #fff1f6, #ffe4ec);
+  border: 3px solid #f9497a;
+}
