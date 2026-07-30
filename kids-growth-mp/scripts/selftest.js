@@ -160,6 +160,46 @@ function run() {
     if (meta.itemType === 'word') ok(c.w && c.tr, `${meta.key} word 卡应有 w/tr`)
     if (meta.itemType === 'hanzi') ok(c.c && c.py, `${meta.key} hanzi 卡应有 c/py`)
     if (meta.itemType === 'poem') ok(c.title && Array.isArray(c.lines), `${meta.key} poem 卡应有 title/lines`)
+
+    // count 字段要跟实际条数对得上,不然「内容库」里显示的数量是假的
+    if (typeof pack.count === 'number') {
+      eq(pack.count, pack.cards.length, `内容包 ${meta.key} 的 count 应等于实际卡片数`)
+    }
+
+    /*
+      看图包的三条硬规矩 —— 每一条都对应一个真实踩过的坑:
+
+      1. emoji 不能重复:「听音选图」的选项就是 emoji,同一个包里两张卡用同一个
+         图案,屏幕上会并排出现两个一模一样的选项 —— 那道题**没有正确答案**。
+         (v36 之前真的有三处:腿/膝盖、椅子/桌子、公交车/校车。)
+      2. 中文、英文都不能重复:同一个词出现两遍,就是孩子说的「怎么又是这个」。
+      3. emoji 不能是「长得像图形但其实不是 emoji」的字符(比如 ▭ ⬡),
+         那类字符在很多手机上是一个空方框,孩子看到的是一道没有图的看图题。
+    */
+    if (meta.itemType === 'pic') {
+      const fronts = pack.cards.map((x) => x.front)
+      const ens = pack.cards.map((x) => String(x.en).toLowerCase())
+      const emos = pack.cards.map((x) => x.emoji)
+      eq(fronts.length, new Set(fronts).size, `${meta.key} 中文不能重复`)
+      eq(ens.length, new Set(ens).size, `${meta.key} 英文不能重复`)
+      eq(emos.length, new Set(emos).size, `${meta.key} emoji 不能重复(选图题会出现两个一样的选项)`)
+      const boxy = pack.cards.filter((x) =>
+        [...String(x.emoji)].some((ch) => {
+          const u = ch.codePointAt(0)
+          if (u >= 0x1f000) return false // 真 emoji 主区
+          if (u >= 0x2600 && u <= 0x27bf) return false // 杂项符号/装饰符号
+          if (u >= 0x2190 && u <= 0x21ff) return false // 箭头
+          // 2300–23FF 里只有这些是 emoji:⌚ ⌛ ⌨ ⏏ ⏩–⏳ ⏸–⏺
+          if ([0x231a, 0x231b, 0x2328, 0x23cf].includes(u)) return false
+          if ((u >= 0x23e9 && u <= 0x23f3) || (u >= 0x23f8 && u <= 0x23fa)) return false
+          // 2B00–2BFF 这一段里**只有这几个**是真 emoji,其余(如 ⬡ 六边形)是普通符号
+          if ([0x2b05, 0x2b06, 0x2b07, 0x2b1b, 0x2b1c, 0x2b50, 0x2b55].includes(u)) return false
+          // 变体选择符 / 零宽连接符 / 肤色 / 数字键帽的组成部分
+          return ![0xfe0f, 0x200d, 0x20e3, 0x3030].includes(u) && !(u >= 0x30 && u <= 0x39)
+        }),
+      )
+      eq(boxy.length, 0, `${meta.key} 不该有会显示成方框的非 emoji 字符`)
+    }
   }
   // 每个学段都得有默认包,否则首页会是空的
   for (const st of ['toddler', 'primary', 'junior']) {
@@ -475,6 +515,27 @@ function run() {
     }
   }
   ok(differed, '「再练一遍」应随机抽题,否则反复做的是同一批')
+
+  /*
+    「再练一遍」不能把刚做过的原样再端上来。
+
+    这是孩子真实反馈过的问题:内容包越小越明显 —— 一个 18 张卡的包每组抽 12 张,
+    纯随机的话连着两遍必然有一大半重样。所以要求:紧接着的下一遍必须优先上新卡。
+    用一个 40 张的包、每组 10 张来验:第二遍**一张都不该**是第一遍的。
+  */
+  reset()
+  const cid6 = study.getCurrentChildId()
+  const dk2 = study.ensureBuiltinDeck(cid6, 'enlight-sea')
+  const poolSize = study.countDeckCards(dk2)
+  ok(poolSize >= 30, '海洋包扩充后应有 30 张以上(池子太小,怎么抽都会重样)')
+  const fp1 = study.getSessionCards(cid6, dk2, 10, true).map((c) => c.card.id)
+  const fp2 = study.getSessionCards(cid6, dk2, 10, true).map((c) => c.card.id)
+  eq(fp1.length, 10, '第一遍应取满 10 张')
+  eq(fp2.length, 10, '第二遍应取满 10 张')
+  eq(fp1.filter((id) => fp2.includes(id)).length, 0, '紧接着的第二遍不该出现第一遍做过的卡')
+  // 池子比题量还小时也不能空手而归 —— 宁可重复,也不能没题做
+  const tiny = study.getSessionCards(cid6, dk2, poolSize + 20, true)
+  eq(tiny.length, poolSize, '要的比池子还多时,应把整池子都给出来而不是报空')
 
   // ---- 宠物进食:孩子要看得见「喂了几口、还差多少」 ----
   reset()

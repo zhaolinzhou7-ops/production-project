@@ -1,1 +1,250 @@
-{"key":"phonics-cvc","name":"自然拼读·三字母词","subject":"启蒙","itemType":"pic","source":"CVC 三字母单词按词族分组(-at/-an/-en/-ig/-og/-ug),自然拼读入门","count":27,"cards":[{"front":"猫","en":"cat","emoji":"🐱"},{"front":"帽子","en":"hat","emoji":"🎩"},{"front":"蝙蝠","en":"bat","emoji":"🦇"},{"front":"老鼠","en":"rat","emoji":"🐀"},{"front":"男人","en":"man","emoji":"👨"},{"front":"平底锅","en":"pan","emoji":"🍳"},{"front":"面包车","en":"van","emoji":"🚐"},{"front":"罐头","en":"can","emoji":"🥫"},{"front":"钢笔","en":"pen","emoji":"🖊️"},{"front":"母鸡","en":"hen","emoji":"🐔"},{"front":"十","en":"ten","emoji":"🔟"},{"front":"球网","en":"net","emoji":"🥅"},{"front":"飞机","en":"jet","emoji":"✈️"},{"front":"小猪","en":"pig","emoji":"🐷"},{"front":"别针","en":"pin","emoji":"📌"},{"front":"六","en":"six","emoji":"6️⃣"},{"front":"小狗","en":"dog","emoji":"🐶"},{"front":"木头","en":"log","emoji":"🪵"},{"front":"狐狸","en":"fox","emoji":"🦊"},{"front":"盒子","en":"box","emoji":"📦"},{"front":"小虫","en":"bug","emoji":"🐛"},{"front":"杯子","en":"mug","emoji":"☕"},{"front":"抱抱","en":"hug","emoji":"🤗"},{"front":"太阳","en":"sun","emoji":"☀️"},{"front":"跑","en":"run","emoji":"🏃"},{"front":"公交车","en":"bus","emoji":"🚌"},{"front":"水杯","en":"cup","emoji":"🥤"}]}
+{
+  "key": "phonics-cvc",
+  "name": "自然拼读·三字母词",
+  "subject": "启蒙",
+  "itemType": "pic",
+  "source": "CVC 三字母单词按词族分组(-at/-an/-en/-ig/-og/-ug),自然拼读入门",
+  "count": 48,
+  "cards": [
+    {
+      "front": "猫",
+      "en": "cat",
+      "emoji": "🐱"
+    },
+    {
+      "front": "帽子",
+      "en": "hat",
+      "emoji": "🎩"
+    },
+    {
+      "front": "蝙蝠",
+      "en": "bat",
+      "emoji": "🦇"
+    },
+    {
+      "front": "老鼠",
+      "en": "rat",
+      "emoji": "🐀"
+    },
+    {
+      "front": "男人",
+      "en": "man",
+      "emoji": "👨"
+    },
+    {
+      "front": "平底锅",
+      "en": "pan",
+      "emoji": "🍳"
+    },
+    {
+      "front": "面包车",
+      "en": "van",
+      "emoji": "🚐"
+    },
+    {
+      "front": "罐头",
+      "en": "can",
+      "emoji": "🥫"
+    },
+    {
+      "front": "钢笔",
+      "en": "pen",
+      "emoji": "🖊️"
+    },
+    {
+      "front": "母鸡",
+      "en": "hen",
+      "emoji": "🐔"
+    },
+    {
+      "front": "十",
+      "en": "ten",
+      "emoji": "🔟"
+    },
+    {
+      "front": "球网",
+      "en": "net",
+      "emoji": "🥅"
+    },
+    {
+      "front": "飞机",
+      "en": "jet",
+      "emoji": "✈️"
+    },
+    {
+      "front": "小猪",
+      "en": "pig",
+      "emoji": "🐷"
+    },
+    {
+      "front": "别针",
+      "en": "pin",
+      "emoji": "📌"
+    },
+    {
+      "front": "六",
+      "en": "six",
+      "emoji": "6️⃣"
+    },
+    {
+      "front": "小狗",
+      "en": "dog",
+      "emoji": "🐶"
+    },
+    {
+      "front": "木头",
+      "en": "log",
+      "emoji": "🪵"
+    },
+    {
+      "front": "狐狸",
+      "en": "fox",
+      "emoji": "🦊"
+    },
+    {
+      "front": "盒子",
+      "en": "box",
+      "emoji": "📦"
+    },
+    {
+      "front": "小虫",
+      "en": "bug",
+      "emoji": "🐛"
+    },
+    {
+      "front": "杯子",
+      "en": "mug",
+      "emoji": "☕"
+    },
+    {
+      "front": "抱抱",
+      "en": "hug",
+      "emoji": "🤗"
+    },
+    {
+      "front": "太阳",
+      "en": "sun",
+      "emoji": "☀️"
+    },
+    {
+      "front": "跑",
+      "en": "run",
+      "emoji": "🏃"
+    },
+    {
+      "front": "公交车",
+      "en": "bus",
+      "emoji": "🚌"
+    },
+    {
+      "front": "水杯",
+      "en": "cup",
+      "emoji": "🥤"
+    },
+    {
+      "front": "垫子",
+      "en": "mat",
+      "emoji": "🧘"
+    },
+    {
+      "front": "难过",
+      "en": "sad",
+      "emoji": "😢"
+    },
+    {
+      "front": "包",
+      "en": "bag",
+      "emoji": "👜"
+    },
+    {
+      "front": "标签",
+      "en": "tag",
+      "emoji": "🏷️"
+    },
+    {
+      "front": "地图",
+      "en": "map",
+      "emoji": "🗺️"
+    },
+    {
+      "front": "小睡",
+      "en": "nap",
+      "emoji": "💤"
+    },
+    {
+      "front": "床",
+      "en": "bed",
+      "emoji": "🛏️"
+    },
+    {
+      "front": "红色",
+      "en": "red",
+      "emoji": "🔴"
+    },
+    {
+      "front": "腿",
+      "en": "leg",
+      "emoji": "🦵"
+    },
+    {
+      "front": "蛋",
+      "en": "egg",
+      "emoji": "🥚"
+    },
+    {
+      "front": "嘴唇",
+      "en": "lip",
+      "emoji": "👄"
+    },
+    {
+      "front": "拉链",
+      "en": "zip",
+      "emoji": "🤐"
+    },
+    {
+      "front": "热",
+      "en": "hot",
+      "emoji": "🥵"
+    },
+    {
+      "front": "锅",
+      "en": "pot",
+      "emoji": "🍲"
+    },
+    {
+      "front": "拖把",
+      "en": "mop",
+      "emoji": "🧹"
+    },
+    {
+      "front": "切",
+      "en": "cut",
+      "emoji": "✂️"
+    },
+    {
+      "front": "坚果",
+      "en": "nut",
+      "emoji": "🥜"
+    },
+    {
+      "front": "果酱",
+      "en": "jam",
+      "emoji": "🍓"
+    },
+    {
+      "front": "火腿",
+      "en": "ham",
+      "emoji": "🍖"
+    },
+    {
+      "front": "蜘蛛网",
+      "en": "web",
+      "emoji": "🕸️"
+    },
+    {
+      "front": "爸爸",
+      "en": "dad",
+      "emoji": "👨‍👦"
+    }
+  ]
+}

@@ -94,6 +94,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-colors',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '认识颜色',
     subject: '启蒙',
     icon: '🎨',
@@ -104,6 +106,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-shapes',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '认识形状',
     subject: '启蒙',
     icon: '🔷',
@@ -113,6 +117,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-numbers',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '数一数',
     subject: '启蒙',
     icon: '🔢',
@@ -123,6 +129,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-body',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '身体部位',
     subject: '启蒙',
     icon: '🦶',
@@ -132,6 +140,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-transport',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '交通工具',
     subject: '启蒙',
     icon: '🚗',
@@ -150,6 +160,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-weather',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '看天气',
     subject: '启蒙',
     icon: '⛅',
@@ -159,6 +171,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-family',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '家人与职业',
     subject: '启蒙',
     icon: '👨‍👩‍👧',
@@ -168,6 +182,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-clothes',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '衣物穿戴',
     subject: '启蒙',
     icon: '👕',
@@ -177,6 +193,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-school',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '学校用品',
     subject: '启蒙',
     icon: '🎒',
@@ -186,6 +204,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-home',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '家里的东西',
     subject: '启蒙',
     icon: '🛋️',
@@ -195,6 +215,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-sports',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '运动与玩具',
     subject: '启蒙',
     icon: '⚽',
@@ -204,6 +226,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-sea',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '海洋与昆虫',
     subject: '启蒙',
     icon: '🐠',
@@ -213,6 +237,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-nature',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '植物与自然',
     subject: '启蒙',
     icon: '🌳',
@@ -222,6 +248,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'enlight-feelings',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '情绪与感受',
     subject: '启蒙',
     icon: '😊',
@@ -241,6 +269,8 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
   },
   {
     key: 'phonics-cvc',
+    // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
+    rev: 2,
     name: '自然拼读·三字母词',
     subject: '启蒙',
     icon: '🧩',

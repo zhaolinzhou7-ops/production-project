@@ -257,8 +257,12 @@ function Index() {
   return (
     <View className='home'>
       <View className='home__hero'>
-        {/* 版本号放在标题旁边:排查问题时不用往下滚就能确认跑的是不是新代码 */}
-        <Text className='home__title'>成长学习 🌱 {BUILD_TAG}</Text>
+        {/*
+          版本号只放在页面最下面。
+          标题是给孩子看的,「v35」对他没有任何意义,却占掉了一行里最显眼的位置;
+          排查问题时往下滚一屏就能看到,那点代价换孩子看到的是干净的标题,值。
+        */}
+        <Text className='home__title'>成长学习 🌱</Text>
         <View className='home__stat'>
           <Text className='home__xp'>成长值 {xp}</Text>
           {streak > 0 ? <Text className='home__streak'>🔥 {streak} 天</Text> : null}

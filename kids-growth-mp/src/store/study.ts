@@ -369,6 +369,37 @@ export interface DueCard {
  * 随便练的那一组照常给分、照常喂宠物,但**不动 SRS 的间隔**
  * (见 finishSession 的 freePractice),否则反复刷会把复习节奏搅乱。
  */
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = a[i]
+    a[i] = a[j]
+    a[j] = t
+  }
+  return a
+}
+
+/** 「再练一遍」最近出过的卡:按卡组记,用来让下一遍尽量换一批 */
+const practicedKey = (childId: string, deckId: string) => `recent:${childId}:${deckId}`
+
+function recentPracticed(childId: string, deckId: string): string[] {
+  const v = readObject<string[]>(practicedKey(childId, deckId), [])
+  return Array.isArray(v) ? v : []
+}
+
+/**
+ * 记下这一遍出过的卡。
+ *
+ * 只保留「不到池子一半」的量 —— 记太多的话,小卡组会把整池子都标成「出过」,
+ * 于是又退化成纯随机。留一半,既能避开刚做过的,又总有空间轮换。
+ */
+function rememberPracticed(childId: string, deckId: string, ids: string[], poolSize: number): void {
+  const cap = Math.max(0, Math.floor(poolSize / 2))
+  const merged = [...ids, ...recentPracticed(childId, deckId)].slice(0, cap)
+  writeObject(practicedKey(childId, deckId), merged)
+}
+
 export function getSessionCards(
   childId: string,
   deckId: string,
@@ -380,14 +411,18 @@ export function getSessionCards(
     (s) => s.childId === childId && s.deckId === deckId,
   )
   if (freePractice) {
-    // 随机抽,每次进来题目不一样 —— 同一组反复做才不会腻
-    const pool = [...states]
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      const t = pool[i]
-      pool[i] = pool[j]
-      pool[j] = t
-    }
+    /*
+      随机抽还不够 —— 只随机的话,「再练一遍」很容易又把刚做过的那几张端上来。
+      内容包越小越明显:一个只有 18 张卡的包,每组抽 12 张,
+      连着练两遍必然有一大半是重样的,孩子的原话就是「怎么又是这些」。
+      所以记住上一遍出过哪些卡,这一遍先从没出过的里面抽,
+      实在不够了才回头用旧的(而且旧的也要打乱,不能按原顺序端上来)。
+    */
+    const seen = new Set(recentPracticed(childId, deckId))
+    const fresh: StudyState[] = []
+    const used: StudyState[] = []
+    for (const s of states) (seen.has(s.cardId) ? used : fresh).push(s)
+    const pool = [...shuffle(fresh), ...shuffle(used)]
     const cardsById0 = new Map(readTable<LearnCard>(KEYS.cards).map((c) => [c.id, c]))
     const out0: DueCard[] = []
     for (const st of pool) {
@@ -395,6 +430,12 @@ export function getSessionCards(
       if (card) out0.push({ card, state: st })
       if (out0.length >= limit) break
     }
+    rememberPracticed(
+      childId,
+      deckId,
+      out0.map((d) => d.card.id),
+      states.length,
+    )
     return out0
   }
   const due = states.filter((s) => isDue(s, today))

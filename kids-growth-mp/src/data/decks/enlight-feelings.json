@@ -1,1 +1,160 @@
-{"key":"enlight-feelings","name":"情绪与感受","subject":"启蒙","itemType":"pic","source":"常识性看图词汇,配 emoji 大图","count":14,"cards":[{"front":"开心","en":"happy","emoji":"😄"},{"front":"难过","en":"sad","emoji":"😢"},{"front":"生气","en":"angry","emoji":"😠"},{"front":"害怕","en":"scared","emoji":"😨"},{"front":"惊讶","en":"surprised","emoji":"😲"},{"front":"困","en":"sleepy","emoji":"😴"},{"front":"饿","en":"hungry","emoji":"😋"},{"front":"渴","en":"thirsty","emoji":"🥤"},{"front":"热","en":"hot","emoji":"🥵"},{"front":"冷","en":"cold","emoji":"🥶"},{"front":"累","en":"tired","emoji":"😮‍💨"},{"front":"害羞","en":"shy","emoji":"😳"},{"front":"骄傲","en":"proud","emoji":"😌"},{"front":"爱","en":"love","emoji":"❤️"}]}
+{
+  "key": "enlight-feelings",
+  "name": "情绪与感受",
+  "subject": "启蒙",
+  "itemType": "pic",
+  "source": "常识性看图词汇,配 emoji 大图",
+  "count": 30,
+  "cards": [
+    {
+      "front": "开心",
+      "en": "happy",
+      "emoji": "😄"
+    },
+    {
+      "front": "难过",
+      "en": "sad",
+      "emoji": "😢"
+    },
+    {
+      "front": "生气",
+      "en": "angry",
+      "emoji": "😠"
+    },
+    {
+      "front": "害怕",
+      "en": "scared",
+      "emoji": "😨"
+    },
+    {
+      "front": "惊讶",
+      "en": "surprised",
+      "emoji": "😲"
+    },
+    {
+      "front": "困",
+      "en": "sleepy",
+      "emoji": "😴"
+    },
+    {
+      "front": "饿",
+      "en": "hungry",
+      "emoji": "😋"
+    },
+    {
+      "front": "渴",
+      "en": "thirsty",
+      "emoji": "🥤"
+    },
+    {
+      "front": "热",
+      "en": "hot",
+      "emoji": "🥵"
+    },
+    {
+      "front": "冷",
+      "en": "cold",
+      "emoji": "🥶"
+    },
+    {
+      "front": "累",
+      "en": "tired",
+      "emoji": "😮‍💨"
+    },
+    {
+      "front": "害羞",
+      "en": "shy",
+      "emoji": "😳"
+    },
+    {
+      "front": "骄傲",
+      "en": "proud",
+      "emoji": "😌"
+    },
+    {
+      "front": "爱",
+      "en": "love",
+      "emoji": "❤️"
+    },
+    {
+      "front": "兴奋",
+      "en": "excited",
+      "emoji": "🤩"
+    },
+    {
+      "front": "紧张",
+      "en": "nervous",
+      "emoji": "😰"
+    },
+    {
+      "front": "无聊",
+      "en": "bored",
+      "emoji": "😐"
+    },
+    {
+      "front": "好奇",
+      "en": "curious",
+      "emoji": "🤔"
+    },
+    {
+      "front": "孤单",
+      "en": "lonely",
+      "emoji": "🥺"
+    },
+    {
+      "front": "放松",
+      "en": "relaxed",
+      "emoji": "🧘"
+    },
+    {
+      "front": "失望",
+      "en": "disappointed",
+      "emoji": "😞"
+    },
+    {
+      "front": "感动",
+      "en": "touched",
+      "emoji": "🥹"
+    },
+    {
+      "front": "生病",
+      "en": "sick",
+      "emoji": "🤒"
+    },
+    {
+      "front": "受伤",
+      "en": "hurt",
+      "emoji": "🤕"
+    },
+    {
+      "front": "尴尬",
+      "en": "embarrassed",
+      "emoji": "😅"
+    },
+    {
+      "front": "安静",
+      "en": "quiet",
+      "emoji": "🤫"
+    },
+    {
+      "front": "大笑",
+      "en": "laughing",
+      "emoji": "😂"
+    },
+    {
+      "front": "哭",
+      "en": "crying",
+      "emoji": "😭"
+    },
+    {
+      "front": "勇敢",
+      "en": "brave",
+      "emoji": "💪"
+    },
+    {
+      "front": "感谢",
+      "en": "thankful",
+      "emoji": "🙏"
+    }
+  ]
+}
