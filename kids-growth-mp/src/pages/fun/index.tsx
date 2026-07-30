@@ -9,6 +9,7 @@ import {
   getPet,
   choosePet,
   graduatePet,
+  resetOnePet,
   resetPet,
   getChallenge,
   type PetState,
@@ -64,13 +65,32 @@ function Fun() {
     })
   }
 
-  const confirmReset = (what: 'pet' | 'stickers') => {
+  /*
+    重置分两档,而且必须在弹窗里说清楚各自要丢什么。
+
+    「这一只从头养」是孩子真正会想要的那个 —— 只把眼前这只清零。
+    「全部重置」会连别的蛋和养大过的一起抹掉,所以放小、放后面,
+    并且把要丢的东西一条条列出来:进度是他一题一题喂出来的,
+    不能让一次误触就没了。
+  */
+  const confirmReset = (what: 'one' | 'all' | 'stickers') => {
+    const lines = Object.keys(pet.fedByLine).filter((k) => (pet.fedByLine[k] ?? 0) > 0).length
+    const title = what === 'stickers' ? '清空贴纸册?' : what === 'one' ? '这一只从头养?' : '全部重置?'
+    let content = '这个操作不能撤销。'
+    if (what === 'one' && line) {
+      content = `${line.eggName}会回到蛋的样子(现在已喂 ${pet.fed} 口)。别的蛋的进度、养大过的都留着。`
+    } else if (what === 'all') {
+      content = `会清掉:${lines} 只蛋的全部进度${
+        pet.graduated.length > 0 ? `、养大过的 ${pet.graduated.length} 只` : ''
+      }。这个操作不能撤销 —— 只想重新养眼前这只的话,用上面那个按钮。`
+    }
     Taro.showModal({
-      title: what === 'pet' ? '重置宠物?' : '清空贴纸册?',
-      content: '这个操作不能撤销。',
+      title,
+      content,
       success: (res) => {
         if (!res.confirm) return
-        if (what === 'pet') resetPet()
+        if (what === 'one') resetOnePet()
+        else if (what === 'all') resetPet()
         else resetStickers()
         refresh()
       },
@@ -114,9 +134,11 @@ function Fun() {
                 让它出师,再养一只
               </Text>
             ) : null}
-            <Text className='pet__btn pet__btn--ghost' onClick={() => confirmReset('pet')}>
-              重置
-            </Text>
+            {pet.fed > 0 ? (
+              <Text className='pet__btn pet__btn--ghost' onClick={() => confirmReset('one')}>
+                🔄 这一只从头养
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -156,6 +178,11 @@ function Fun() {
             养大过:{pet.graduated.map((k) => getLine(k)?.stages.slice(-1)[0].emoji ?? '❓').join(' ')}
           </Text>
         ) : null}
+        {pet.line || pet.graduated.length > 0 ? (
+          <Text className='sec__danger' onClick={() => confirmReset('all')}>
+            全部重置(所有蛋一起清零)
+          </Text>
+        ) : null}
       </View>
 
       {/* 贴纸册 */}
@@ -175,7 +202,7 @@ function Fun() {
             )
           })}
         </View>
-        <Text className='pet__btn pet__btn--ghost' onClick={() => confirmReset('stickers')}>
+        <Text className='sec__danger' onClick={() => confirmReset('stickers')}>
           清空贴纸册
         </Text>
       </View>

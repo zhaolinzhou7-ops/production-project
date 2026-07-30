@@ -64,6 +64,19 @@
     line-height: 1.6;
     margin-bottom: 16px;
   }
+
+  /*
+    「清零」这类操作故意做小、做灰、放在最后 ——
+    能点到,但不会顺手点到。孩子喂出来的进度值得这点保护。
+  */
+  &__danger {
+    display: block;
+    margin-top: 20px;
+    text-align: center;
+    font-size: 21px;
+    color: #c8cbd0;
+    text-decoration: underline;
+  }
 }
 
 .pet {

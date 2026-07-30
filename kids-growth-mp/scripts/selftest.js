@@ -422,6 +422,32 @@ function run() {
   fun.choosePet(B)
   eq(fun.getPet().fedByLine[A], 30, '从老存档换走也不该丢进度')
 
+  // 「这一只从头养」只清眼前这只,别的蛋和养大过的都不能动
+  reset()
+  study.getCurrentChildId()
+  fun.choosePet(A)
+  fun.feedPetDetailed(20)
+  fun.choosePet(B)
+  fun.feedPetDetailed(7)
+  db.writeObject('pet', { ...fun.getPet(), graduated: ['x'] })
+  fun.resetOnePet()
+  eq(fun.getPet().line, B, '只重置这一只:不该把蛋也取消选中')
+  eq(fun.getPet().fed, 0, '只重置这一只:当前这只应回到 0 口')
+  eq(fun.getPet().fedByLine[B], 0, '只重置这一只:按只记的进度也要归零')
+  eq(fun.getPet().fedByLine[A], 20, '只重置这一只:别的蛋的进度不能动')
+  eq(fun.getPet().graduated.length, 1, '只重置这一只:养大过的记录不能动')
+  // 还没选蛋时调用不该炸,也不该凭空写出一只
+  reset()
+  study.getCurrentChildId()
+  fun.resetOnePet()
+  eq(fun.getPet().line, '', '没选蛋时重置这一只应无事发生')
+  // 全部重置才是真的全清
+  fun.choosePet(A)
+  fun.feedPetDetailed(9)
+  fun.resetPet()
+  eq(fun.getPet().line, '', '全部重置应清掉当前选择')
+  eq(Object.keys(fun.getPet().fedByLine).length, 0, '全部重置应清掉所有蛋的进度')
+
   // 随便练:忽略「到期」,而且不改 SRS
   reset()
   const cid5 = study.getCurrentChildId()

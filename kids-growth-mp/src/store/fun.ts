@@ -173,6 +173,25 @@ export function graduatePet(): void {
   })
 }
 
+/**
+ * 只把**当前这一只**从头养 —— 别的蛋的进度、养大过的都留着。
+ *
+ * v34 之后进度是按只分开记的,于是原来那个单独的「重置」变成了陷阱:
+ * 孩子想说的是「这只我想重新养」,按下去却把六颗蛋一起清了。
+ * 大多数时候他要的是这个轻量版,所以把它放在显眼位置,
+ * 「全部重置」留给家长,并在弹窗里把要丢的东西一条条说清楚。
+ */
+export function resetOnePet(): void {
+  const cur = getPet()
+  if (!cur.line) return
+  writeObject(PET_KEY, {
+    ...cur,
+    fed: 0,
+    fedByLine: { ...cur.fedByLine, [cur.line]: 0 },
+  })
+}
+
+/** 全部清零:所有蛋的进度 + 养大过的记录一起没。给家长用的那一档 */
 export function resetPet(): void {
   writeObject(PET_KEY, EMPTY_PET)
 }
