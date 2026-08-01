@@ -517,7 +517,28 @@ function run() {
     x.deckId === dk ? { ...x, status: 'review', due: '2099-01-01' } : x,
   )
   db.writeTable('states', st2)
-  eq(study.getSessionCards(cid5, dk, 12).length, 0, '全都没到期时正常模式应取不到题')
+  /*
+    每天保底:全都没到期时,今天还没练过这个卡组,就提前拿最快到期的补足 6 张。
+    孩子的原话是「第二天打开没有新题」—— 小卡组答对两次就排到 3 天后,
+    接下来几天全是「已清空」。「今天没你的题」是最能把孩子推走的一句话。
+  */
+  eq(study.getSessionCards(cid5, dk, 12).length, 6, '全都没到期时应保底给 6 张,而不是空手')
+  eq(study.countDueByDeck(cid5)[dk], 6, '首页显示的数字必须和真能做的题一致')
+
+  // 但今天正经练过之后就该是「已清空」—— 不能变成没有尽头的跑步机
+  db.writeTable('sessions', [
+    ...db.readTable('sessions'),
+    { id: 'x1', childId: cid5, deckId: dk, date: L('core/dateUtils.js').todayISO(), total: 6, correct: 6 },
+  ])
+  eq(study.getSessionCards(cid5, dk, 12).length, 0, '今天练过之后应显示已清空,孩子需要「做完了」这个时刻')
+  eq(study.countDueByDeck(cid5)[dk], 0, '练过之后首页也该显示已清空')
+
+  // 「再练一遍」不算正课 —— 一早点它不该把今天的保底顶掉
+  db.writeTable('sessions', [
+    { id: 'x2', childId: cid5, deckId: dk, date: L('core/dateUtils.js').todayISO(), total: 6, correct: 6, free: true },
+  ])
+  eq(study.getSessionCards(cid5, dk, 12).length, 6, '「再练一遍」不该顶掉今天的保底')
+  db.writeTable('sessions', [])
   ok(
     study.getSessionCards(cid5, dk, 12, true).length > 0,
     '「再练一遍」必须还能取到题 —— 孩子主动想练时不该被算法拦住',

@@ -319,7 +319,16 @@ function Session() {
   const finish = (finalCorrect: number, total: number) => {
     const durationSec = Math.round((Date.now() - startedAt) / 1000)
     addStudyTime(durationSec)
-    const res = finishSession({ childId, deckId, mode, total, correct: finalCorrect, durationSec })
+    const res = finishSession({
+      childId,
+      deckId,
+      mode,
+      total,
+      correct: finalCorrect,
+      durationSec,
+      // 「再练一遍」不算「今天这组练过了」—— 否则一早点它就会把今天的正课顶掉
+      free: freePractice,
+    })
     // 结算趣味化:掉贴纸、喂宠物、记每日挑战。任何一步出问题都不能挡住结算页。
     try {
       setGotSticker(awardSticker(finalCorrect, total) ?? null)

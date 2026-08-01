@@ -339,13 +339,72 @@ export function countDue(childId: string, deckId: string): number {
  * 首页原先对每个卡组各调一次 countDue —— 7 个卡组就把 1400 条状态扫 7 遍。
  * 这里改成扫一遍分桶,首页只调这一个。
  */
+/**
+ * 每个卡组**每天至少**能练到几张。
+ *
+ * 为什么要有这个保底:间隔重复答对一次排到明天、两次排到 3 天后、三次排到
+ * 8 天后……小卡组因此会出现「今天做完,接下来三四天打开全是已清空」。
+ * 对一个每天都想学的孩子来说,「今天没你的题」是最打击人的一句话 ——
+ * 他会以为这个 App today 没什么可做的,下次就不打开了。
+ *
+ * 所以:到期的不够时,用**最快要到期的**那些提前补上。提前复习不会破坏
+ * 记忆效果(顶多让间隔涨得慢一点),而「天天有题做」保住的是习惯本身。
+ * 卡组本身没那么多卡时,有几张给几张。
+ */
+const DAILY_FLOOR = 6
+
+/**
+ * 今天这个卡组实际能拿到的卡(到期的 + 不够时按最快到期补足)。
+ * countDueByDeck 与 getSessionCards 都走它,保证首页显示的数字
+ * 和真的点进去能做的题**永远一致** —— 否则会出现「写着待学 6,进去却没题」。
+ */
+/**
+ * 今天已经「正经练过」的卡组(不含「再练一遍」)。
+ *
+ * 保底只在**今天还没练过这个卡组**时生效 —— 否则会变成没有尽头的跑步机:
+ * 练完 6 张,它们排到明天,保底又补 6 张,永远练不完、也永远看不到「已清空」。
+ * 孩子需要那个「今天的做完了」的时刻。
+ */
+function practicedTodayDecks(childId: string, today: string): Set<string> {
+  const out = new Set<string>()
+  for (const s of readTable<{ childId: string; deckId: string; date: string; free?: boolean }>(
+    KEYS.sessions,
+  )) {
+    if (s && s.childId === childId && s.date === today && !s.free) out.add(s.deckId)
+  }
+  return out
+}
+
+function availableToday(states: StudyState[], today: string, limit: number, topUp = true): StudyState[] {
+  const due = states.filter((s) => isDue(s, today))
+  due.sort((a, b) => {
+    if (a.status === 'new' && b.status !== 'new') return 1
+    if (b.status === 'new' && a.status !== 'new') return -1
+    return a.due.localeCompare(b.due)
+  })
+  const floor = topUp ? Math.min(DAILY_FLOOR, states.length) : 0
+  if (due.length >= floor) return due.slice(0, limit)
+  // 还差多少,就从没到期的里面挑「最快要到期」的补上
+  const rest = states.filter((s) => !isDue(s, today)).sort((a, b) => a.due.localeCompare(b.due))
+  return [...due, ...rest.slice(0, floor - due.length)].slice(0, limit)
+}
+
 export function countDueByDeck(childId: string): Record<string, number> {
   const today = todayISO()
-  const out: Record<string, number> = {}
+  const byDeck: Record<string, StudyState[]> = {}
   for (const s of readTable<StudyState>(KEYS.states)) {
     if (s.childId !== childId) continue
-    if (!isDue(s, today)) continue
-    out[s.deckId] = (out[s.deckId] ?? 0) + 1
+    ;(byDeck[s.deckId] = byDeck[s.deckId] ?? []).push(s)
+  }
+  const done = practicedTodayDecks(childId, today)
+  const out: Record<string, number> = {}
+  for (const deckId of Object.keys(byDeck)) {
+    out[deckId] = availableToday(
+      byDeck[deckId],
+      today,
+      Number.MAX_SAFE_INTEGER,
+      !done.has(deckId),
+    ).length
   }
   return out
 }
@@ -438,13 +497,13 @@ export function getSessionCards(
     )
     return out0
   }
-  const due = states.filter((s) => isDue(s, today))
-  due.sort((a, b) => {
-    if (a.status === 'new' && b.status !== 'new') return 1
-    if (b.status === 'new' && a.status !== 'new') return -1
-    return a.due.localeCompare(b.due)
-  })
-  const chosen = due.slice(0, limit)
+  // 到期的优先;今天还没练过这个卡组、且不够 DAILY_FLOOR 张时,提前拿最快到期的补上
+  const chosen = availableToday(
+    states,
+    today,
+    limit,
+    !practicedTodayDecks(childId, today).has(deckId),
+  )
   const cardsById = new Map(readTable<LearnCard>(KEYS.cards).map((c) => [c.id, c]))
   const out: DueCard[] = []
   for (const s of chosen) {
@@ -494,12 +553,15 @@ export function finishSession(params: {
   total: number
   correct: number
   durationSec: number
+  /** 是否「再练一遍」。随便练不算「今天这个卡组已经练过了」,见 availableToday */
+  free?: boolean
 }): SessionResult {
-  const { childId, deckId, mode, total, correct, durationSec } = params
+  const { childId, deckId, mode, total, correct, durationSec, free } = params
   const points = correct * POINTS_PER_CORRECT
   const sessions = readTable(KEYS.sessions)
   sessions.push({
     id: newId(),
+    free: !!free,
     childId,
     deckId,
     mode,
