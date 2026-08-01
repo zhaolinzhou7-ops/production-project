@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { defaultPacksForStage } from '../../core/learningContent'
-import { modesFor } from '../../core/practiceModes'
+import { modesFor, repeatModesFor } from '../../core/practiceModes'
 import {
   getCurrentChildId,
   ensureBuiltinDeck,
@@ -501,7 +501,7 @@ function Index() {
               这一组照常给分、照常喂宠物,但不改动复习计划。
             */}
             <View className='again'>
-              {modes.slice(0, 2).map((m) => (
+              {repeatModesFor(deck.itemType, true).map((m) => (
                 <View key={`again-${m.mode}`} className='again__b' onClick={() => go(deck.id, m.mode, true)}>
                   <Text className='again__t'>🔄 再练一遍 · {m.label}</Text>
                 </View>

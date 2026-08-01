@@ -209,6 +209,24 @@ function run() {
   const keys = content.BUILTIN_PACKS.map((p) => p.key)
   eq(keys.length, new Set(keys).size, '内容包 key 不能重复')
 
+  // ---- 「再练一遍」放的是哪两个模式 ----
+  const pmod = L('core/practiceModes.js')
+  for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {
+    const r = pmod.repeatModesFor(t, true)
+    ok(r.length > 0 && r.length <= 2, `${t} 的「再练一遍」应有 1–2 个模式`)
+    for (const m of r) {
+      ok(
+        pmod.modesFor(t, true).some((x) => x.mode === m.mode),
+        `${t} 的「再练一遍」不该给出这种卡组不支持的模式`,
+      )
+    }
+  }
+  // 看图包必须是英语那两个 —— 中文的孩子本来就会说,要磨的是英语
+  const picRepeat = pmod.repeatModesFor('pic', true).map((m) => m.mode)
+  eq(picRepeat.includes('earTrain'), true, '看图包的「再练一遍」必须有磨耳朵')
+  eq(picRepeat.includes('listenPicEn'), true, '看图包的「再练一遍」必须有英语·听音选图')
+  eq(picRepeat.includes('picChoose'), false, '看图包的「再练一遍」不该占给中文的看图选一选')
+
   // ---- 口语内容 ----
   ok(talk.DIALOGS.length > 0, '应有情景对话')
   ok(talk.CARTOONS.length > 0, '应有动画短片')
