@@ -67,6 +67,37 @@ export function defaultDailyGoal(stage: AgeStage): number {
   return 30
 }
 
+/**
+ * 睡前收尾。
+ *
+ * 晚上用的时候,「结束」比「开始」难得多 —— 让孩子自己停下来是不现实的,
+ * 而每天靠家长去拉锯,几次之后这个 App 就会跟「被没收」绑在一起。
+ * 所以到点了由程序温和地说一句「今天到这儿啦」,
+ * 把「该停了」这件事从家长身上挪到程序身上。
+ *
+ * 不强制退出、不锁屏 —— 那会变成对抗。只是把话说在那里。
+ */
+export function isBedtime(nowHHMM: string, bedtimeHHMM: string): boolean {
+  if (!bedtimeHHMM) return false
+  const toMin = (s: string) => {
+    const [h, m] = s.split(':').map((x) => parseInt(x, 10))
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : -1
+  }
+  const now = toMin(nowHHMM)
+  const bed = toMin(bedtimeHHMM)
+  if (now < 0 || bed < 0) return false
+  // 睡觉时间到凌晨 4 点之间都算「该睡了」—— 跨零点的情况必须处理
+  return now >= bed || now < 4 * 60
+}
+
+/** 各学段建议的睡觉时间(家长可改) */
+export function defaultBedtime(stage: AgeStage): string {
+  if (stage === 'toddler') return '20:30'
+  if (stage === 'primary') return '21:30'
+  if (stage === 'junior') return '22:30'
+  return '23:00'
+}
+
 export const STAGE_LABEL: Record<AgeStage, string> = {
   toddler: '幼儿园',
   primary: '小学',

@@ -11,6 +11,7 @@ import {
   removeBuiltinDeck,
 } from '../../store/study'
 import type { AgeStage } from '../../types'
+import { askParent } from '../../lib/parentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -60,18 +61,14 @@ function Packs() {
     if (busy) return
     const childId = getCurrentChildId()
     if (row.added) {
-      Taro.showModal({
-        title: `移除「${row.name}」?`,
-        content: '这个内容包的学习进度也会一起删掉,以后可以再加回来。',
-        success: (res) => {
-          if (!res.confirm) return
-          try {
-            removeBuiltinDeck(childId, row.key)
-          } catch {
-            /* 忽略 */
-          }
-          refresh()
-        },
+      // 删卡组会连学习进度一起没 —— 孩子误点一下就没了,走家长闸门
+      askParent(`移除「${row.name}」?`, '这个内容包的学习进度也会一起删掉,以后可以再加回来。', () => {
+        try {
+          removeBuiltinDeck(childId, row.key)
+        } catch {
+          /* 忽略 */
+        }
+        refresh()
       })
       return
     }

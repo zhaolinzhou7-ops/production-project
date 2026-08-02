@@ -75,6 +75,15 @@ const LEVELS: DialogLevel[] = ['easy', 'medium', 'hard']
 function Talk() {
   const [tab, setTab] = useState<Tab>('dialog')
   const stage = getStage()
+  /*
+    幼儿段不显示「自由对话」。
+
+    不是因为它做得不好,是这个年纪**结构上就用不了**:自由对话要么打字、
+    要么读屏幕上的英文句子,而 4 岁半的孩子两样都不会。摆在第一个位置上,
+    他每次点进来先撞见一个用不了的东西 —— 那个位置该留给他真能玩的。
+    大一点的孩子照常保留。
+  */
+  const visibleTabs = TABS.filter(([k]) => !(k === 'chat' && stage === 'toddler'))
 
   /**
    * 难度:默认跟学段走,选过之后就按选的来。
@@ -770,7 +779,7 @@ function Talk() {
 
       {!inDetail ? (
         <View className='tabs2'>
-          {TABS.map(([k, icon, label]) => (
+          {visibleTabs.map(([k, icon, label]) => (
             <View
               key={k}
               className={k === tab ? 'tab2 tab2--on' : 'tab2'}

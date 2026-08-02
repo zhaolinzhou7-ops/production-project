@@ -33,7 +33,8 @@ import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { AgeStage, LearnDeck } from '../../types'
 import { todayISO } from '../../core/dateUtils'
-import { defaultDailyMinutes } from '../../core/ageStage'
+import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
+import { askParent } from '../../lib/parentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -105,6 +106,8 @@ function Index() {
   const [installing, setInstalling] = useState('')
   /** 还没选过学段 —— 先当面问一次,别替家长做主 */
   const [needStage, setNeedStage] = useState(false)
+  /** 到睡觉时间了 —— 由程序说这句话,而不是每天让家长去说 */
+  const [bedtime, setBedtime] = useState(false)
 
   /**
    * 载入首页数据。
@@ -182,6 +185,12 @@ function Index() {
       setXp(points.xp)
       setLevel(levelOf(points.xp))
       setLimitMin(readObject<number>('dailyMinuteLimit', defaultDailyMinutes(getStage())))
+      {
+        const bed = readObject<string>('bedtime', defaultBedtime(getStage()))
+        const d = new Date()
+        const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        setBedtime(isBedtime(hhmm, bed))
+      }
       setStreak(getStudyStreak())
       setGoalN(getDailyGoal())
       setTodayN(todayAnswered(childId))
@@ -252,18 +261,14 @@ function Index() {
 
   /** 本地数据坏掉/存满时的自救按钮 */
   const resetLocal = () => {
-    Taro.showModal({
-      title: '清空本地数据',
-      content: '会清掉本机的学习进度并重新生成内容包。确定吗?',
-      success: (res) => {
-        if (!res.confirm) return
-        clearAll()
-        syncedThisLaunch = false
-        sanitizedThisLaunch = false
-        installedKeys.clear()
-        setLoading(true)
-        refresh()
-      },
+    // 这个按钮会把孩子所有的进度清光 —— 必须确认是家长在点
+    askParent('清空本地数据', '会清掉本机的学习进度、积分、宠物和打卡记录,并重新生成内容包。', () => {
+      clearAll()
+      syncedThisLaunch = false
+      sanitizedThisLaunch = false
+      installedKeys.clear()
+      setLoading(true)
+      refresh()
     })
   }
 
@@ -349,6 +354,19 @@ function Index() {
               <Text className='pickstage__l'>{s.label}</Text>
             </View>
           ))}
+        </View>
+      ) : null}
+
+      {/*
+        睡前收尾。
+        晚上用的时候「结束」比「开始」难 —— 让孩子自己停下来不现实,
+        每天靠家长拉锯,几次之后这个 App 就跟「被没收」绑在一起了。
+        所以到点由程序说这句话。不锁屏、不强退,那会变成对抗。
+      */}
+      {bedtime ? (
+        <View className='bed'>
+          <Text className='bed__e'>🌙</Text>
+          <Text className='bed__t'>今天到这儿啦,明天再来 —— 睡好了才记得住</Text>
         </View>
       ) : null}
 

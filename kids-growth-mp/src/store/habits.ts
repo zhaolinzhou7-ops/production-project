@@ -82,8 +82,19 @@ export function removeHabit(id: string): void {
 
 // ---------------------------------------------------------------- 打卡
 
+/**
+ * 某一天勾了哪些(默认今天)。
+ *
+ * 要能补昨天 —— 因为真正在点这些格子的人是家长,而家长常常是第二天早上
+ * 才想起「昨晚洗澡了、刷牙了」。不给补,记录就永远是不准的,
+ * 连续天数也会被一次「忘了点」白白打断。
+ */
+export function doneOn(date = todayISO()): string[] {
+  return readLog()[date] ?? []
+}
+
 export function doneToday(): string[] {
-  return readLog()[todayISO()] ?? []
+  return doneOn(todayISO())
 }
 
 export function isDone(id: string, date = todayISO()): boolean {
@@ -171,8 +182,8 @@ export function allDoneStreak(): number {
  * 孩子勾完只看到一个对勾,完全不知道这跟他的成长值有关系。
  * 「打卡 → 加分 → 升级 → 换奖励」这条链子,少了第一环的可见性就断了。
  */
-export function todayHabitPoints(): number {
-  const done = doneToday()
+export function habitPointsOn(date = todayISO()): number {
+  const done = doneOn(date)
   const all = listHabits()
   let n = 0
   for (const id of done) {
@@ -183,8 +194,8 @@ export function todayHabitPoints(): number {
 }
 
 /** 按分类统计今天完成情况 —— 家长能一眼看出「这周全是学习,一条运动都没有」 */
-export function todayByCategory(): Array<{ category: HabitCategory; done: number; total: number }> {
-  const done = new Set(doneToday())
+export function byCategoryOn(date = todayISO()): Array<{ category: HabitCategory; done: number; total: number }> {
+  const done = new Set(doneOn(date))
   const map = new Map<HabitCategory, { done: number; total: number }>()
   for (const h of listHabits()) {
     const c = (h.category ?? '生活') as HabitCategory
@@ -194,4 +205,13 @@ export function todayByCategory(): Array<{ category: HabitCategory; done: number
     map.set(c, cur)
   }
   return [...map.entries()].map(([category, v]) => ({ category, ...v }))
+}
+
+/** 保留旧名字,内部走带日期的版本 */
+export function todayHabitPoints(): number {
+  return habitPointsOn(todayISO())
+}
+
+export function todayByCategory(): Array<{ category: HabitCategory; done: number; total: number }> {
+  return byCategoryOn(todayISO())
 }

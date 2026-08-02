@@ -218,3 +218,44 @@
     color: #374151;
   }
 }
+
+/* 今天 / 补昨天 —— 真正在点这一页的是家长,他常常是第二天才想起来 */
+.daysw {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 18px;
+
+  &__b {
+    flex: 1;
+    min-height: 78px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 2px solid transparent;
+
+    &--on {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: #38bdf8;
+    }
+  }
+
+  &__t {
+    font-size: 26px;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  &__b--on .daysw__t {
+    color: #0284c7;
+  }
+
+  &__note {
+    display: block;
+    margin: -8px 0 18px;
+    font-size: 22px;
+    color: #b45309;
+    text-align: center;
+  }
+}

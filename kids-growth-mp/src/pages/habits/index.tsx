@@ -14,13 +14,13 @@ import { levelOf } from '../../core/levels'
 import {
   ensureHabits,
   listHabits,
-  doneToday,
+  doneOn,
   toggleHabit,
   habitStreak,
   weekGrid,
   allDoneStreak,
-  todayHabitPoints,
-  todayByCategory,
+  habitPointsOn,
+  byCategoryOn,
   addHabitFromTemplate,
   addCustomHabit,
   removeHabit,
@@ -28,6 +28,7 @@ import {
 } from '../../store/habits'
 import { getStage } from '../../store/study'
 import CorrectBurst from '../../components/CorrectBurst'
+import { todayISO, addDays } from '../../core/dateUtils'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -43,22 +44,36 @@ function Habits() {
   const [cats, setCats] = useState<Array<{ category: HabitCategory; done: number; total: number }>>([])
   /** 刚勾上时飘一个「+5」,让加分这件事被看见 */
   const [gained, setGained] = useState(0)
+  /*
+    在看哪一天。
 
-  const refresh = () => {
+    这一页真正的用户是家长 —— 4 岁半的孩子不会自己来点「按时蹲粑粑」。
+    而家长常常是第二天早上才想起「昨晚洗澡了、刷牙了」。不给补,记录就
+    永远是不准的,连续天数还会被一次「忘了点」白白打断。
+  */
+  const [day, setDay] = useState(todayISO())
+  const isToday = day === todayISO()
+
+  const refresh = (d = day) => {
     ensureHabits()
     setHabits(listHabits())
-    setDone(doneToday())
+    setDone(doneOn(d))
     setFullStreak(allDoneStreak())
-    setHabitPts(todayHabitPoints())
+    setHabitPts(habitPointsOn(d))
     setXp(getPoints().xp)
-    setCats(todayByCategory())
+    setCats(byCategoryOn(d))
   }
 
-  useDidShow(refresh)
+  useDidShow(() => refresh())
+
+  const switchDay = (d: string) => {
+    setDay(d)
+    refresh(d)
+  }
 
   const tap = (h: Habit) => {
     if (manage) return
-    const nowDone = toggleHabit(h.id)
+    const nowDone = toggleHabit(h.id, day)
     if (nowDone) {
       setBurst((b) => b + 1)
       // 飘一个「+5」:孩子得看见分是怎么来的,否则打卡就只是个对勾
@@ -132,6 +147,27 @@ function Habits() {
     <View className='hb'>
       {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
       {gained > 0 ? <Text className='gain'>+{gained} 分</Text> : null}
+
+      {/*
+        今天 / 昨天。真正在点这些格子的是家长,而家长常常是第二天早上
+        才想起「昨晚洗澡了」。不给补,记录永远不准,连续天数也会被
+        一次「忘了点」白白打断。
+      */}
+      <View className='daysw'>
+        <View
+          className={isToday ? 'daysw__b daysw__b--on' : 'daysw__b'}
+          onClick={() => switchDay(todayISO())}
+        >
+          <Text className='daysw__t'>今天</Text>
+        </View>
+        <View
+          className={!isToday ? 'daysw__b daysw__b--on' : 'daysw__b'}
+          onClick={() => switchDay(addDays(todayISO(), -1))}
+        >
+          <Text className='daysw__t'>补昨天</Text>
+        </View>
+      </View>
+      {!isToday ? <Text className='daysw__note'>正在补记 {day} 的打卡</Text> : null}
 
       <View className='hb__hero'>
         <View className='ring'>

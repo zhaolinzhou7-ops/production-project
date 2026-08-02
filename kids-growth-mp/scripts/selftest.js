@@ -291,6 +291,44 @@ function run() {
   study.clearStageOverride()
   ok(study.getStage() !== 'junior', '取消手动指定后应回到跟着生日走')
 
+  /*
+    ---- 睡前收尾 ----
+    晚上用的时候「结束」比「开始」难。跨零点必须处理对,
+    否则 23:00 说该睡了、00:30 反而说没到点。
+  */
+  eq(ag.isBedtime('19:00', '20:30'), false, '还没到点不该催')
+  eq(ag.isBedtime('20:30', '20:30'), true, '到点了应该催')
+  eq(ag.isBedtime('22:10', '20:30'), true, '过了点应该催')
+  eq(ag.isBedtime('00:30', '20:30'), true, '跨过零点仍算该睡了')
+  eq(ag.isBedtime('07:00', '20:30'), false, '早上七点不该催睡觉')
+  eq(ag.isBedtime('21:00', ''), false, '没设睡觉时间就不催')
+  ok(ag.defaultBedtime('toddler') < ag.defaultBedtime('junior'), '幼儿的建议睡觉时间应更早')
+
+  /*
+    ---- 家长闸门 ----
+    孩子会到处点,而「确定吗?」那个确定他照点不误。
+    所以清空类操作要过一道他做不了、家长一眼能算的两位数加法。
+  */
+  const pg = L('core/parentGate.js')
+  for (let i = 0; i < 200; i++) {
+    const q = pg.makeGateQuestion()
+    const m = /^(\d+) \+ (\d+) = \?$/.exec(q.text)
+    ok(!!m, '闸门题目格式应是「a + b = ?」')
+    if (m) {
+      const a = Number(m[1])
+      const b = Number(m[2])
+      eq(q.answer, a + b, '闸门答案必须等于题目算出来的值')
+      ok(a >= 10 && b >= 10, '两个加数都得是两位数,个位数孩子会算')
+    }
+  }
+  const q0 = pg.makeGateQuestion(() => 0.5)
+  eq(pg.gateAnswerOk(String(q0.answer), q0), true, '答对应放行')
+  eq(pg.gateAnswerOk(String(q0.answer + 1), q0), false, '答错不放行')
+  eq(pg.gateAnswerOk('', q0), false, '空白不放行')
+  eq(pg.gateAnswerOk('   ', q0), false, '只打空格不放行')
+  eq(pg.gateAnswerOk('abc', q0), false, '乱按字母不放行')
+  eq(pg.gateAnswerOk(` ${q0.answer} `, q0), true, '答案前后有空格仍算对')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {

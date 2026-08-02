@@ -538,3 +538,22 @@
     font-weight: 500;
   }
 }
+
+/* 睡前收尾:温和、不吓人,不带任何「你超时了」的责备意味 */
+.bed {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border-radius: 24px;
+  padding: 24px 26px;
+  margin-bottom: 20px;
+
+  &__e { font-size: 44px; }
+  &__t {
+    flex: 1;
+    font-size: 26px;
+    color: #fff;
+    line-height: 1.5;
+  }
+}

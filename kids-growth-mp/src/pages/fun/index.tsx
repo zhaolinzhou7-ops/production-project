@@ -14,6 +14,7 @@ import {
   getChallenge,
   type PetState,
 } from '../../store/fun'
+import { askParent } from '../../lib/parentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -84,17 +85,23 @@ function Fun() {
         pet.graduated.length > 0 ? `、养大过的 ${pet.graduated.length} 只` : ''
       }。这个操作不能撤销 —— 只想重新养眼前这只的话,用上面那个按钮。`
     }
-    Taro.showModal({
-      title,
-      content,
-      success: (res) => {
-        if (!res.confirm) return
-        if (what === 'one') resetOnePet()
-        else if (what === 'all') resetPet()
-        else resetStickers()
-        refresh()
-      },
-    })
+    const apply = () => {
+      if (what === 'one') resetOnePet()
+      else if (what === 'all') resetPet()
+      else resetStickers()
+      refresh()
+    }
+    /*
+      「这一只从头养」是可逆的(别的蛋都在),普通确认就够。
+      而「全部重置」「清空贴纸册」清掉的是他一题一题攒出来的东西 ——
+      对 4 岁半的孩子来说,「确定吗?」那个确定他照点不误,
+      所以这两个走家长闸门(一道两位数加法,他答不上来)。
+    */
+    if (what === 'one') {
+      Taro.showModal({ title, content, success: (res) => res.confirm && apply() })
+    } else {
+      askParent(title, content, apply)
+    }
   }
 
   return (
