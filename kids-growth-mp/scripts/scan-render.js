@@ -87,6 +87,16 @@ const hasEvt = (s) => {
 }
 const lineOf = (src, i) => src.slice(0, i).split('\n').length
 
+/** .ts 也要扫(showModal 不只出现在 .tsx 里) */
+function walkTs(d, out = []) {
+  for (const f of fs.readdirSync(d)) {
+    const p = path.join(d, f)
+    if (fs.statSync(p).isDirectory()) walkTs(p, out)
+    else if (/\.ts$/.test(f) && !/\.d\.ts$/.test(f)) out.push(p)
+  }
+  return out
+}
+
 let found = 0
 for (const file of walk(path.resolve('src'))) {
   const src = fs.readFileSync(file, 'utf8')
@@ -118,6 +128,33 @@ for (const file of walk(path.resolve('src'))) {
     }
   }
 }
+/*
+  顺带查一件真机上才暴露的事:`showModal({ editable: true })` 的输入框很难用 ——
+  键盘常常挡住输入区、有时干脆点不进去。用户的原话是「计算本身不难,
+  难的是无法输入正确」—— 一个功能卡在输入这一步,后面做得再好都到不了他手上。
+
+  页面内的 <Input>(见 components/Prompt.tsx)没有这个问题:键盘弹起时
+  页面会自己让位,输入全程看得见。所以这个写法一律禁掉。
+*/
+let editableHits = 0
+for (const file of [...walk(path.resolve('src')), ...walkTs(path.resolve('src'))]) {
+  const src = fs.readFileSync(file, 'utf8')
+  if (!/editable:\s*true/.test(src)) continue
+  // Prompt/ParentGate 的注释里会提到它,注释不算
+  const lines = src.split('\n')
+  lines.forEach((ln, i) => {
+    if (!/editable:\s*true/.test(ln)) return
+    if (/^\s*(\/\/|\*|\/\*)/.test(ln)) return
+    editableHits++
+    console.log(`\n⚠️  ${path.relative(process.cwd(), file)}:${i + 1}  用了 showModal 的 editable 输入框`)
+    console.log('    真机上常常点不进去/被键盘挡住,改用 components/Prompt.tsx 的 usePrompt()')
+  })
+}
+if (editableHits > 0) {
+  console.error(`\n❌ 发现 ${editableHits} 处 showModal 可输入弹窗,改用页面内的 usePrompt()。`)
+  process.exit(1)
+}
+
 if (found > 0) {
   console.error(`\n❌ 发现 ${found} 处「同位置节点类型会变」的写法(真机上会报 _num)。`)
   console.error('   改法:拆成两个独立的「有/无」条件,或用同一个节点只切 className。')

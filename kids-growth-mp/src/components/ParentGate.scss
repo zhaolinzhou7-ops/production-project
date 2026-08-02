@@ -1,0 +1,131 @@
+/* 家长闸门:页面内的大数字键盘,不调系统键盘 —— 系统键盘会挡住输入区 */
+.pgate {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 900;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  box-sizing: border-box;
+
+  &__box {
+    width: 100%;
+    max-width: 640px;
+    max-height: 92vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 32px;
+    padding: 36px 30px;
+    box-sizing: border-box;
+  }
+
+  &__t {
+    display: block;
+    font-size: 34px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__d {
+    display: block;
+    margin: 14px 0 20px;
+    font-size: 23px;
+    color: #6b7280;
+    line-height: 1.6;
+  }
+
+  &__q {
+    display: block;
+    text-align: center;
+    font-size: 46px;
+    font-weight: bold;
+    color: #f9497a;
+  }
+
+  &__screen {
+    margin: 18px 0 8px;
+    min-height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4f4f6;
+    border-radius: 20px;
+  }
+
+  &__val {
+    font-size: 48px;
+    font-weight: bold;
+    color: #374151;
+    letter-spacing: 4px;
+  }
+
+  &__err {
+    display: block;
+    text-align: center;
+    font-size: 23px;
+    color: #b91c1c;
+    margin-bottom: 8px;
+  }
+
+  &__pad {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  &__k {
+    width: calc(33.33% - 10px);
+    min-height: 104px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4f4f6;
+    border-radius: 20px;
+
+    &:active {
+      background: #e5e7eb;
+    }
+  }
+
+  &__kt {
+    font-size: 36px;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  &__row {
+    display: flex;
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  &__btn {
+    flex: 1;
+    min-height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 22px;
+    background: #f9497a;
+
+    &--ghost {
+      background: #f4f4f6;
+    }
+  }
+
+  &__bt {
+    font-size: 30px;
+    color: #fff;
+    font-weight: 500;
+  }
+
+  &__btn--ghost .pgate__bt {
+    color: #6b7280;
+  }
+}

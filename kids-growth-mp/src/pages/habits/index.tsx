@@ -29,10 +29,12 @@ import {
 import { getStage } from '../../store/study'
 import CorrectBurst from '../../components/CorrectBurst'
 import { todayISO, addDays } from '../../core/dateUtils'
+import { usePrompt } from '../../components/Prompt'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 function Habits() {
+  const { prompt, promptNode } = usePrompt()
   const [habits, setHabits] = useState<Habit[]>([])
   const [done, setDone] = useState<string[]>([])
   const [fullStreak, setFullStreak] = useState(0)
@@ -118,14 +120,10 @@ function Habits() {
   }
 
   const addCustom = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(Taro.showModal as any)({
+    prompt({
       title: '自己加一条',
-      editable: true,
-      placeholderText: '比如:给绿植浇水',
-      success: (res: { confirm: boolean; content?: string }) => {
-        if (!res.confirm) return
-        const name = (res.content || '').trim()
+      hint: '比如:给绿植浇水',
+      onOk: (name) => {
         if (!name) return
         Taro.showActionSheet({
           itemList: PERIODS.map((p) => `${p.emoji} ${p.label}`),
@@ -145,6 +143,7 @@ function Habits() {
 
   return (
     <View className='hb'>
+      {promptNode}
       {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
       {gained > 0 ? <Text className='gain'>+{gained} 分</Text> : null}
 

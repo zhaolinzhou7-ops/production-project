@@ -39,6 +39,7 @@ import {
   type Reward,
 } from '../../store/rewards'
 import { errorHistory, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
+import { usePrompt } from '../../components/Prompt'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -54,6 +55,7 @@ const GOAL_KEY = 'dailyMinuteLimit'
 const DEFAULT_LIMIT = 30
 
 function Parent() {
+  const { prompt, promptNode } = usePrompt()
   const [unlocked, setUnlocked] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [stats, setStats] = useState<LearningStats | null>(null)
@@ -156,14 +158,10 @@ function Parent() {
 
   /** 新建词本,然后立刻让家长粘贴单词 */
   const newDeck = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(Taro.showModal as any)({
+    prompt({
       title: '新建词本',
-      editable: true,
-      placeholderText: '给词本起个名,如「三年级上册」',
-      success: (res: { confirm: boolean; content?: string }) => {
-        if (!res.confirm) return
-        const name = (res.content || '').trim()
+      hint: '给词本起个名,如「三年级上册」',
+      onOk: (name) => {
         if (!name) {
           Taro.showToast({ title: '得起个名字', icon: 'none' })
           return
@@ -244,14 +242,10 @@ function Parent() {
   }
 
   const addNewReward = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(Taro.showModal as any)({
+    prompt({
       title: '新增奖励',
-      editable: true,
-      placeholderText: '格式:名称 空格 分数,如「去游乐园 200」',
-      success: (res: { confirm: boolean; content?: string }) => {
-        if (!res.confirm) return
-        const raw = (res.content || '').trim()
+      hint: '格式:名称 空格 分数,如「去游乐园 200」',
+      onOk: (raw) => {
         const m = raw.match(/^(.+?)\s+(\d+)$/)
         if (!m) {
           Taro.showToast({ title: '格式:名称 空格 分数', icon: 'none' })
@@ -282,16 +276,11 @@ function Parent() {
   }
 
   const changePin = () => {
-    // Taro 的类型里还没有 editable/content(微信基础库 2.17+ 起支持可输入弹窗),
-    // 这里放宽一层类型再调用。
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(Taro.showModal as any)({
+    prompt({
       title: '修改家长密码',
-      editable: true,
-      placeholderText: '输入 4 位数字',
-      success: (res: { confirm: boolean; content?: string }) => {
-        if (!res.confirm) return
-        const v = (res.content || '').trim()
+      hint: '输入 4 位数字',
+      numeric: true,
+      onOk: (v) => {
         if (!/^\d{4}$/.test(v)) {
           Taro.showToast({ title: '要 4 位数字', icon: 'none' })
           return
@@ -337,6 +326,7 @@ function Parent() {
 
   return (
     <View className='pa'>
+      {promptNode}
       {/* 等级 */}
       <View className='lv'>
         <Text className='lv__e'>{stats.level.cur.emoji}</Text>

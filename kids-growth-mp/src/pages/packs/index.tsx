@@ -11,7 +11,7 @@ import {
   removeBuiltinDeck,
 } from '../../store/study'
 import type { AgeStage } from '../../types'
-import { askParent } from '../../lib/parentGate'
+import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -30,6 +30,7 @@ interface Row {
 }
 
 function Packs() {
+  const { ask: askParent, gate: parentGate } = useParentGate()
   const [stage, setStageState] = useState<AgeStage>('primary')
   const [rows, setRows] = useState<Row[]>([])
   const [busy, setBusy] = useState('')
@@ -92,6 +93,7 @@ function Packs() {
 
   return (
     <View className='packs'>
+      {parentGate}
       <View className='tabs'>
         {STAGES.map(([s, label]) => (
           <View

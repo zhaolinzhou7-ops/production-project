@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 import { getMyVoice } from '../store/voice'
-import { playFile, fileExists } from './recorder'
+import { playFile, fileExists, stopFile } from './recorder'
 import { readObject, writeObject } from '../store/db'
 import { textToSpeech, isSpeechAvailable, type SpeechLang } from './speech'
 
@@ -333,6 +333,8 @@ function dispose(a: Taro.InnerAudioContext): void {
 
 export function stopAudio(): void {
   token += 1
+  // 家长录音走的是另一个播放器,不停它就会和在线音源叠着响
+  stopFile()
   if (current) {
     dispose(current)
     current = null

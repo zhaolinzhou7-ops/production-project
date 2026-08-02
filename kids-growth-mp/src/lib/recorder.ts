@@ -6,8 +6,38 @@ import Taro from '@tarojs/taro'
 // 隐私:录音只存本地临时文件,不上传;可随时被系统回收。
 
 let manager: Taro.RecorderManager | null = null
+
+/**
+ * 当前这次录音的回调。
+ *
+ * ⚠️ 这里有个很隐蔽的坑:原先每次 startRecord() 都调一遍 `r.onStop(...)`。
+ * RecorderManager 的 onStop 是**往监听列表里加**,不是替换 —— 录第 5 句时,
+ * 前 4 次注册的回调会一起被触发,而每个回调都闭包着**自己那句话**。
+ * 结果是录第 5 句时,前 4 句的录音路径全被改写成第 5 句的音频,
+ * 家长会发现「录了一圈,点哪句放的都是最后录的那句」。
+ *
+ * 所以监听只在创建 manager 时注册一次,真正要跑的回调放在这两个变量里换。
+ */
+let pendingStop: ((tempFilePath: string) => void) | null = null
+let pendingError: ((msg: string) => void) | null = null
+
 function rec(): Taro.RecorderManager {
-  if (!manager) manager = Taro.getRecorderManager()
+  if (!manager) {
+    manager = Taro.getRecorderManager()
+    manager.onStop((res) => {
+      const cb = pendingStop
+      // 先清再调:回调里如果又发起一次录音,新注册的不能被这次清理擦掉
+      pendingStop = null
+      pendingError = null
+      if (cb) cb(res.tempFilePath)
+    })
+    manager.onError((res) => {
+      const cb = pendingError
+      pendingStop = null
+      pendingError = null
+      cb?.((res && (res as { errMsg?: string }).errMsg) || '录音失败')
+    })
+  }
   return manager
 }
 
@@ -17,11 +47,11 @@ function player(): Taro.InnerAudioContext {
   return playCtx
 }
 
-/** 开始录音;stopRecord() 后通过回调拿到本地临时文件路径 */
+/** 开始录音;stopRecord() 后通过回调拿到本机临时文件路径 */
 export function startRecord(onStop: (tempFilePath: string) => void, onError?: (msg: string) => void): void {
   const r = rec()
-  r.onStop((res) => onStop(res.tempFilePath))
-  r.onError((res) => onError?.((res && (res as { errMsg?: string }).errMsg) || '录音失败'))
+  pendingStop = onStop
+  pendingError = onError ?? null
   r.start({
     duration: 15000,
     format: 'mp3',
@@ -82,5 +112,20 @@ export function fileExists(path: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * 停掉本机文件的播放。
+ *
+ * 必须有这个:家长录音走的是**这里**的播放器,在线音源走 audio.ts 里的
+ * 另一个。原先 stopAudio() 只停得了后者 —— 于是「正在放爸爸的录音时
+ * 又点了别的词」,两个声音会叠在一起响。
+ */
+export function stopFile(): void {
+  try {
+    playCtx?.stop()
+  } catch {
+    /* 忽略 */
   }
 }

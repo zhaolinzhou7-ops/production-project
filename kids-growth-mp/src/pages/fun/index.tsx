@@ -14,11 +14,12 @@ import {
   getChallenge,
   type PetState,
 } from '../../store/fun'
-import { askParent } from '../../lib/parentGate'
+import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
 function Fun() {
+  const { ask: askParent, gate: parentGate } = useParentGate()
   const [owned, setOwned] = useState<string[]>([])
   const [pet, setPet] = useState<PetState>({ line: '', fed: 0, fedByLine: {}, graduated: [] })
   const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
@@ -106,6 +107,7 @@ function Fun() {
 
   return (
     <View className='fun'>
+      {parentGate}
       {/* 每日挑战 */}
       <View className='chal'>
         <Text className='chal__t'>今日挑战</Text>

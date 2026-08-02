@@ -34,7 +34,7 @@ import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { AgeStage, LearnDeck } from '../../types'
 import { todayISO } from '../../core/dateUtils'
 import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
-import { askParent } from '../../lib/parentGate'
+import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -80,6 +80,7 @@ function msgOf(e: unknown): string {
 }
 
 function Index() {
+  const { ask: askParent, gate: parentGate } = useParentGate()
   const [rows, setRows] = useState<DeckRow[]>([])
   const [xp, setXp] = useState(0)
   const [streak, setStreak] = useState(0)
@@ -291,6 +292,7 @@ function Index() {
 
   return (
     <View className='home'>
+      {parentGate}
       <View className='home__hero'>
         {/*
           版本号只放在页面最下面。

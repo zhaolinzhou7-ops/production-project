@@ -48,7 +48,7 @@ import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount } from '../../store/voice'
-import { askParent } from '../../lib/parentGate'
+import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -75,6 +75,7 @@ const POINTS_PER_LINE = 1
 const LEVELS: DialogLevel[] = ['easy', 'medium', 'hard']
 
 function Talk() {
+  const { ask: askParent, gate: parentGate } = useParentGate()
   const [tab, setTab] = useState<Tab>('dialog')
   const stage = getStage()
   /*
@@ -881,6 +882,7 @@ function Talk() {
 
   return (
     <View className='talk'>
+      {parentGate}
       {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
 
       {/*
