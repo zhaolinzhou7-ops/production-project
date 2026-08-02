@@ -165,6 +165,30 @@ function Session() {
   }, [])
 
   /**
+   * 低龄:每换一张卡就把题目念出来。
+   *
+   * 这条是给「还不识字」的孩子的 —— 4 岁半的孩子面对一屏汉字,他不是不想做,
+   * 是根本读不了。听音类的题本来就会自动播,可「看图选一选」这类是静默的,
+   * 于是那道题对他来说等于一片空白。所以幼儿段一律念出来,
+   * 而且只念题面、不念答案。
+   *
+   * 只在 toddler 生效:大一点的孩子自己会读,每张都念反而吵。
+   * 磨耳朵有自己的连播逻辑,这里让开。
+   */
+  useEffect(() => {
+    if (getStage() !== 'toddler') return
+    if (mode === 'earTrain' || mode === 'listenChoose' || mode === 'dictation') return
+    if (mode === 'listenPic' || mode === 'listenPicEn') return
+    const card = cards[idx]?.card
+    if (!card || phase !== 'prompt') return
+    const timer = setTimeout(() => {
+      void playText(card.audioText ?? card.front, 'zh_CN')
+    }, 420)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, cards, mode, phase])
+
+  /**
    * 磨耳朵的自动连播:英文 → 停 → 中文 → 停 → 下一张,循环。
    * 用定时器串起来而不是等 onEnded —— 音源偶尔不出声时,靠 onEnded 会卡死不动。
    */

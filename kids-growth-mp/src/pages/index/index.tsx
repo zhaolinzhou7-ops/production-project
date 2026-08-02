@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { View, Text, Picker } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { defaultPacksForStage } from '../../core/learningContent'
 import { modesFor, repeatModesFor } from '../../core/practiceModes'
@@ -14,6 +14,8 @@ import {
   getStage,
   hasStage,
   setStage,
+  getBirthdate,
+  setBirthdate,
   syncDeckContent,
   sanitizeData,
   getDailyGoal,
@@ -30,6 +32,8 @@ import { getLine, stageOf } from '../../core/pets'
 import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { AgeStage, LearnDeck } from '../../types'
+import { todayISO } from '../../core/dateUtils'
+import { defaultDailyMinutes } from '../../core/ageStage'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -177,7 +181,7 @@ function Index() {
       const points = getPoints()
       setXp(points.xp)
       setLevel(levelOf(points.xp))
-      setLimitMin(readObject<number>('dailyMinuteLimit', DAILY_LIMIT_MIN))
+      setLimitMin(readObject<number>('dailyMinuteLimit', defaultDailyMinutes(getStage())))
       setStreak(getStudyStreak())
       setGoalN(getDailyGoal())
       setTodayN(todayAnswered(childId))
@@ -305,10 +309,30 @@ function Index() {
       */}
       {needStage ? (
         <View className='pickstage'>
-          <Text className='pickstage__t'>孩子多大啦?</Text>
+          <Text className='pickstage__t'>孩子的生日是?</Text>
           <Text className='pickstage__d'>
-            选完才会准备内容 —— 选错了随时能在「📚 内容库」里改回来。
+            填了生日,内容难度就一直跟着他的年龄走 —— 他长大了程序自己知道,
+            不用你再回来改。生日也是身高体重曲线要用的。
           </Text>
+          <Picker
+            mode='date'
+            value={getBirthdate() || '2021-01-01'}
+            start='2005-01-01'
+            end={todayISO()}
+            onChange={(e) => {
+              setBirthdate(String(e.detail.value))
+              installedKeys.clear()
+              syncedThisLaunch = false
+              setLoading(true)
+              refresh()
+            }}
+          >
+            <View className='pickstage__b'>
+              <Text className='pickstage__e'>🎂</Text>
+              <Text className='pickstage__l'>点这里选生日</Text>
+            </View>
+          </Picker>
+          <Text className='pickstage__d'>不想填生日的话,也可以直接选一个:</Text>
           {STAGE_OPTIONS.map((s) => (
             <View
               key={s.key}

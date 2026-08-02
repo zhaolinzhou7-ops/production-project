@@ -248,11 +248,48 @@ function run() {
 
   // ---- 学段:没选过必须能被认出来,不能静默当成小学 ----
   reset()
-  eq(study.hasStage(), false, '还没选过学段时 hasStage 应为 false')
-  eq(study.getStage(), 'primary', '没选时 getStage 仍给一个可用的默认值')
+  eq(study.hasStage(), false, '还不知道孩子多大时 hasStage 应为 false')
+  eq(study.getStage(), 'primary', '不知道时 getStage 仍给一个可用的默认值')
   study.setStage('toddler')
-  eq(study.hasStage(), true, '选过之后 hasStage 应为 true')
-  eq(study.getStage(), 'toddler', '选过之后应返回选的那个')
+  eq(study.hasStage(), true, '指定之后 hasStage 应为 true')
+  eq(study.getStage(), 'toddler', '指定之后应返回指定的那个')
+
+  /*
+    ---- 学段跟着生日走 ----
+
+    学段本来是个会过期的快照:孩子明年上小学了,没人会想起来回设置里改它。
+    挂在生日上之后,今天算今天的 —— 他长大了程序自己知道。
+  */
+  const ag = L('core/ageStage.js')
+  eq(ag.stageFromMonths(54), 'toddler', '4 岁半应是幼儿园')
+  eq(ag.stageFromMonths(71), 'toddler', '差一个月满 6 岁仍是幼儿园')
+  eq(ag.stageFromMonths(72), 'primary', '满 6 岁应升小学')
+  eq(ag.stageFromMonths(143), 'primary', '差一个月满 12 岁仍是小学')
+  eq(ag.stageFromMonths(144), 'junior', '满 12 岁应升初中')
+  eq(ag.stageFromMonths(180), 'senior', '满 15 岁应升高中')
+  eq(ag.stageFromBirthdate('', '2026-08-02'), undefined, '没填生日应返回 undefined,不能瞎猜')
+  eq(ag.stageFromBirthdate('2022-02-01', '2026-08-02'), 'toddler', '2022-02 出生,今天 4 岁半 → 幼儿园')
+  eq(ag.describeAge('2022-02-01', '2026-08-02'), '4 岁 6 个月', '年龄要说人话')
+  // 低龄的默认时长/题量必须更短 —— 4 岁半晚上用,30 分钟 20 题是折磨
+  ok(
+    ag.defaultDailyMinutes('toddler') < ag.defaultDailyMinutes('primary'),
+    '幼儿的每日时长上限应短于小学',
+  )
+  ok(ag.defaultDailyGoal('toddler') < ag.defaultDailyGoal('primary'), '幼儿的每日题量目标应少于小学')
+
+  // 只填生日、不手动指定学段:学段应自己算出来
+  reset()
+  study.setBirthdate('2022-02-01')
+  eq(study.hasStage(), true, '填了生日就算知道孩子多大了')
+  eq(study.isStageManual(), false, '只填生日时不算手动指定')
+  ok(['toddler', 'primary'].includes(study.getStage()), '学段应由生日推出来')
+  eq(study.getDailyGoal() <= 20, true, '幼儿的每日题量默认不该跟小学一样多')
+  // 手动指定要能盖过生日,取消之后又回到跟着生日走
+  study.setStage('junior')
+  eq(study.getStage(), 'junior', '手动指定应盖过生日推算')
+  eq(study.isStageManual(), true, '手动指定后应能识别出来')
+  study.clearStageOverride()
+  ok(study.getStage() !== 'junior', '取消手动指定后应回到跟着生日走')
 
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')

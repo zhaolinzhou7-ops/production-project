@@ -11,6 +11,8 @@ import type {
   BuiltinWordCard,
 } from '../core/learningContent'
 import { todayISO } from '../core/dateUtils'
+import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
+import { getProfile, saveProfile } from './records'
 import { computeStreak } from '../core/streak'
 import type {
   AgeStage,
@@ -284,26 +286,70 @@ export function sanitizeData(childId: string): void {
 }
 
 /** 当前学段(幼儿/小学/初中):决定首页展示与「内容库」里能选哪些包 */
+/**
+ * 当前学段。
+ *
+ * 优先级:家长手动指定 > 按生日推算 > 默认小学。
+ *
+ * 生日排在前面是有原因的 —— 它是一次录入、终身有效的事实,而「学段」是个
+ * 会过期的快照:孩子明年上小学了没人会想起来去改它。挂在生日上,
+ * 今天算今天的,他长大了程序自己知道。
+ */
 export function getStage(): AgeStage {
+  const manual = readObject<string>('stageManual', '')
+  if (manual === 'toddler' || manual === 'primary' || manual === 'junior' || manual === 'senior') {
+    return manual
+  }
+  const byBirth = stageFromBirthdate(getProfile().birthdate, todayISO())
+  if (byBirth) return byBirth
   return readObject<AgeStage>('stage', 'primary')
 }
 
 /**
- * 家长到底有没有选过学段。
+ * 家长到底有没有告诉过我们孩子多大。
  *
- * 这个区别很要紧:没选过时 getStage() 会返回默认的 'primary',于是幼儿园的
- * 孩子拿到的是小学的内容包、口算直接从两位数加减起步。更糟的是学段存在
- * 本地存储里 —— 清一次数据就退回默认值,孩子第二天打开发现题目全变难了,
- * 而没有任何地方告诉他发生了什么。所以「没选过」必须能被识别出来、
- * 并且在首页当面问一次,而不是悄悄替家长做主。
+ * 这个区别很要紧:不知道的时候 getStage() 会返回默认的 'primary',于是
+ * 幼儿园的孩子拿到的是小学的内容包、口算直接从两位数加减起步。而这个默认值
+ * 还会在清一次数据之后**悄悄复活** —— 孩子第二天打开发现题目全变难了,
+ * 没有任何地方告诉他发生了什么。所以「还不知道」必须能被识别出来、
+ * 并且在首页当面问一次。
  */
 export function hasStage(): boolean {
-  const v = readObject<string>('stage', '')
-  return v === 'toddler' || v === 'primary' || v === 'junior' || v === 'senior'
+  const manual = readObject<string>('stageManual', '')
+  if (manual === 'toddler' || manual === 'primary' || manual === 'junior' || manual === 'senior') {
+    return true
+  }
+  return !!stageFromBirthdate(getProfile().birthdate, todayISO())
 }
 
+/** 只写生日 —— 学段自己会跟着走,不用再单独存一份 */
+export function setBirthdate(birthdate: string): void {
+  const p = getProfile()
+  saveProfile({ ...p, birthdate })
+}
+
+export function getBirthdate(): string {
+  return getProfile().birthdate
+}
+
+/**
+ * 手动指定学段 —— 只在家长明确要盖过生日推算时用
+ * (比如孩子提前入学、或者想让他先练更简单的内容)。
+ */
 export function setStage(stage: AgeStage): void {
+  writeObject('stageManual', stage)
   writeObject('stage', stage)
+}
+
+/** 取消手动指定,回到跟着生日走 */
+export function clearStageOverride(): void {
+  writeObject('stageManual', '')
+}
+
+/** 现在这个学段是家长手动定死的,还是跟着生日走的 */
+export function isStageManual(): boolean {
+  const v = readObject<string>('stageManual', '')
+  return v === 'toddler' || v === 'primary' || v === 'junior' || v === 'senior'
 }
 
 /** 该孩子已加过哪些内置包 */
@@ -869,8 +915,10 @@ export function listCustomDecks(childId: string): LearnDeck[] {
 
 /** 每天想练多少题。默认 20 —— 幼儿园孩子的注意力大约就是这个量。 */
 export function getDailyGoal(): number {
-  const n = readObject<number>('dailyGoal', 20)
-  return typeof n === 'number' && n > 0 ? n : 20
+  // 没设过就按年龄给 —— 4 岁半和初中生的「今天练几题算够」显然不是一个数
+  const fallback = defaultDailyGoal(getStage())
+  const n = readObject<number>('dailyGoal', fallback)
+  return typeof n === 'number' && n > 0 ? n : fallback
 }
 
 export function setDailyGoal(n: number): void {
