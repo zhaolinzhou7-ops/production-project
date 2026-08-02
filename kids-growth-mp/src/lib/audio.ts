@@ -1,4 +1,6 @@
 import Taro from '@tarojs/taro'
+import { getMyVoice } from '../store/voice'
+import { playFile, fileExists } from './recorder'
 import { readObject, writeObject } from '../store/db'
 import { textToSpeech, isSpeechAvailable, type SpeechLang } from './speech'
 
@@ -522,9 +524,26 @@ export function prefetchAudio(text: string, lang: 'zh' | 'en'): void {
 }
 
 /** 播放单词的真人发音(英语) */
+/**
+ * 家长自己录的那一句,优先于**任何**在线音源。
+ *
+ * 顺序不能反 —— 家长愿意花时间录一遍,就是因为在线的那些不够好用
+ * (英语整句根本没有可用的免费音源)。如果还先去试网络、失败了才回落到
+ * 他的录音,那就等于把他的劳动排在了一堆读不出来的接口后面。
+ * 而且本机文件是**秒开**的,不用等下载。
+ */
+function playMine(text: string): boolean {
+  const p = getMyVoice(text)
+  if (!p || !fileExists(p)) return false
+  stopAudio()
+  playFile(p)
+  return true
+}
+
 export function playWordAudio(word: string, accent: Accent = 2): void {
   const t = word.trim()
   if (!t) return
+  if (playMine(t)) return
   clearLastPlayed()
   buzz()
   token += 1
@@ -576,6 +595,7 @@ async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> 
 export async function playText(text: string, lang: SpeechLang): Promise<void> {
   const t = text.trim()
   if (!t) return
+  if (playMine(t)) return
   clearLastPlayed()
   buzz()
   if (isSpeechAvailable()) {

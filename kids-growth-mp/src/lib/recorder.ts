@@ -50,3 +50,37 @@ export function playFile(tempFilePath: string): void {
     /* 忽略 */
   }
 }
+
+/**
+ * 把录音从临时文件转成**长期文件**。
+ *
+ * RecorderManager 给的是 tempFilePath —— 小程序退出就可能被清掉。
+ * 家长录了 50 句,第二天全没了,这个功能就白做了。
+ * saveFile 之后拿到的路径才是能一直用的。
+ */
+export function keepRecording(
+  tempFilePath: string,
+  onDone: (savedPath: string) => void,
+  onError?: (msg: string) => void,
+): void {
+  try {
+    Taro.getFileSystemManager().saveFile({
+      tempFilePath,
+      success: (res) => onDone((res as { savedFilePath?: string }).savedFilePath || tempFilePath),
+      fail: (e) => onError?.((e && (e as { errMsg?: string }).errMsg) || '保存失败'),
+    })
+  } catch (e) {
+    onError?.(e instanceof Error ? e.message : String(e))
+  }
+}
+
+/** 这个本机文件还在不在 —— 系统空间紧张时会回收长期文件 */
+export function fileExists(path: string): boolean {
+  if (!path) return false
+  try {
+    Taro.getFileSystemManager().accessSync(path)
+    return true
+  } catch {
+    return false
+  }
+}

@@ -42,11 +42,13 @@ import {
   getFailedSentence,
   playWordByWord,
 } from '../../lib/audio'
-import { startRecord, stopRecord, playFile } from '../../lib/recorder'
+import { startRecord, stopRecord, playFile, keepRecording } from '../../lib/recorder'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
+import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount } from '../../store/voice'
+import { askParent } from '../../lib/parentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -84,6 +86,65 @@ function Talk() {
     大一点的孩子照常保留。
   */
   const visibleTabs = TABS.filter(([k]) => !(k === 'chat' && stage === 'toddler'))
+
+  /** 家长录音模式:开着的时候每句下面多一排录音按钮 */
+  const [recMode, setRecMode] = useState(false)
+  /** 正在录的是哪一句(空 = 没在录) */
+  const [parentRec, setParentRec] = useState('')
+  /** 录/删之后用它逼界面重读一次,否则按钮状态不会变 */
+  const [, setVoiceTick] = useState(0)
+
+  const startParentRec = (sentence: string) => {
+    if (parentRec) return
+    setParentRec(sentence)
+    startRecord(
+      (tempPath) => {
+        // 一定要转成长期文件 —— 临时文件退出小程序就可能被清掉,
+        // 家长录了几十句第二天全没了,这个功能就白做了
+        keepRecording(
+          tempPath,
+          (saved) => {
+            saveMyVoice(sentence, saved)
+            setParentRec('')
+            setVoiceTick((n) => n + 1)
+            Taro.showToast({ title: '录好了', icon: 'success' })
+          },
+          (msg) => {
+            setParentRec('')
+            Taro.showModal({ title: '没存下来', content: msg, showCancel: false })
+          },
+        )
+      },
+      (msg) => {
+        setParentRec('')
+        Taro.showModal({ title: '录音失败', content: msg, showCancel: false })
+      },
+    )
+  }
+
+  const stopParentRec = () => stopRecord()
+
+  const dropVoice = (sentence: string) => {
+    deleteMyVoice(sentence)
+    setVoiceTick((n) => n + 1)
+    Taro.showToast({ title: '已删掉', icon: 'none' })
+  }
+
+  /*
+    开关走家长闸门 —— 录音会覆盖已录好的那一条,孩子乱按一下就没了。
+    关掉不用问:退出录音模式是无害的。
+  */
+  const toggleRecMode = () => {
+    if (recMode) {
+      setRecMode(false)
+      return
+    }
+    askParent(
+      '打开家长录音',
+      '打开后,每句英文下面会多一排录音按钮,你念一遍存在手机里。以后这句就放你的声音,不再依赖网络。录音只存本机,不会上传。',
+      () => setRecMode(true),
+    )
+  }
 
   /**
    * 难度:默认跟学段走,选过之后就按选的来。
@@ -256,8 +317,53 @@ function Talk() {
   }
 
   /** 一句台词下面通用的「听 / 慢 / 录 / 对比 / 打分」工具条 */
+  /*
+    家长录音条。
+
+    英语**整句**没有可用的免费音源 —— 单词能读是因为有道词典存了真人录音,
+    整句它没有,其它免费接口要么不给整句,要么读出来是机器拼的。
+    换了七八个音源都绕不过去,这不是代码问题,是没有料。
+
+    家长自己录一遍就一次解决:不依赖网络、不会被接口下线、发音稳定,
+    而且是**爸爸的声音** —— 对 4 岁半的孩子来说这比任何合成音都强,
+    他会为了听那个声音多点两遍。录的音只存在本机,不传任何地方。
+
+    只在「家长录音模式」打开时出现,免得孩子乱按把录好的盖掉。
+  */
+  const voiceBar = (sentence: string) => {
+    if (!recMode) return null
+    const mine = getMyVoice(sentence)
+    const busy = parentRec === sentence
+    return (
+      <View className='vbar'>
+        {busy ? (
+          <View className='vbar__b vbar__b--rec' onClick={stopParentRec}>
+            <Text className='vbar__t'>⏹ 录完了</Text>
+          </View>
+        ) : null}
+        {!busy ? (
+          <View className='vbar__b' onClick={() => startParentRec(sentence)}>
+            <Text className='vbar__t'>{mine ? '🔁 重录这句' : '🎤 录这句'}</Text>
+          </View>
+        ) : null}
+        {mine && !busy ? (
+          <View className='vbar__b' onClick={() => playFile(mine)}>
+            <Text className='vbar__t'>▶️ 试听</Text>
+          </View>
+        ) : null}
+        {mine && !busy ? (
+          <View className='vbar__b' onClick={() => dropVoice(sentence)}>
+            <Text className='vbar__t'>🗑 删掉</Text>
+          </View>
+        ) : null}
+        {mine && !busy ? <Text className='vbar__ok'>已录 —— 以后这句就放你的声音</Text> : null}
+      </View>
+    )
+  }
+
   const toolbar = (sentence: string, alts?: string[]) => (
     <View className='tools'>
+      {voiceBar(sentence)}
       <View className='tool' onClick={() => listen(sentence)}>
         <Text className='tool__t'>🔊 听</Text>
       </View>
@@ -776,6 +882,20 @@ function Talk() {
   return (
     <View className='talk'>
       {burst > 0 ? <CorrectBurst seed={burst} combo={0} /> : null}
+
+      {/*
+        家长录音入口。
+        英语整句没有可用的免费音源 —— 这是唯一能真正解决它的办法,
+        所以入口要一直在,而不是藏在设置里。
+      */}
+      <View className={recMode ? 'recmode recmode--on' : 'recmode'} onClick={toggleRecMode}>
+        <Text className='recmode__t'>
+          {recMode ? '🎤 家长录音中 · 点这里退出' : '🎤 家长录音'}
+        </Text>
+        <Text className='recmode__n'>
+          {myVoiceCount() > 0 ? `已录 ${myVoiceCount()} 句` : '录一句,以后这句就放你的声音'}
+        </Text>
+      </View>
 
       {!inDetail ? (
         <View className='tabs2'>

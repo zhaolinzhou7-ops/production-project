@@ -551,3 +551,73 @@
     margin-top: 12px;
   }
 }
+
+/* 家长录音:入口一直在,不藏进设置 —— 这是英语整句唯一能真正解决的路 */
+.recmode {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid transparent;
+  border-radius: 22px;
+  padding: 20px 24px;
+  margin-bottom: 18px;
+
+  &--on {
+    background: rgba(244, 63, 94, 0.1);
+    border-color: #f43f5e;
+  }
+
+  &__t {
+    flex: 1;
+    font-size: 26px;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  &--on .recmode__t { color: #be123c; }
+
+  &__n {
+    font-size: 22px;
+    color: #9ca3af;
+  }
+}
+
+/* 每句下面的那一排录音按钮 */
+.vbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+
+  &__b {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
+    border-radius: 18px;
+    background: rgba(244, 63, 94, 0.1);
+
+    &--rec {
+      background: #f43f5e;
+    }
+  }
+
+  &__t {
+    font-size: 24px;
+    color: #be123c;
+    font-weight: 500;
+  }
+
+  &__b--rec .vbar__t { color: #fff; }
+
+  &__ok {
+    width: 100%;
+    font-size: 21px;
+    color: #059669;
+  }
+}

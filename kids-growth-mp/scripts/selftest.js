@@ -329,6 +329,41 @@ function run() {
   eq(pg.gateAnswerOk('abc', q0), false, '乱按字母不放行')
   eq(pg.gateAnswerOk(` ${q0.answer} `, q0), true, '答案前后有空格仍算对')
 
+  /*
+    ---- 家长自己录的句子 ----
+
+    英语整句没有可用的免费音源,家长录一遍是唯一能真正解决的办法。
+    最要命的失败方式是「明明录过了却找不到」—— 同一句话在对话里带标点、
+    在复述里不带、在字幕里首字母大写,直接拿原文当键就会对不上。
+  */
+  const vk = L('core/voiceKey.js')
+  eq(vk.voiceKeyOf('Good morning!'), 'good morning', '句末标点不该影响匹配')
+  eq(vk.voiceKeyOf('  Good   morning  '), 'good morning', '首尾空白和多余空格要归一')
+  eq(vk.voiceKeyOf('Good morning'), vk.voiceKeyOf('good morning?'), '大小写和句末问号都不该分家')
+  eq(vk.voiceKeyOf('这是什么?'), '这是什么', '中文句末问号同样去掉')
+  ok(vk.voiceKeyOf("Let's go") !== vk.voiceKeyOf('Lets go'), '句中的撇号要保留 —— 那是两句话')
+  eq(vk.isValidVoiceKey(vk.voiceKeyOf('   ')), false, '空句子不该占一条录音')
+
+  reset()
+  const vs = L('store/voice.js')
+  eq(vs.getMyVoice('Good morning'), '', '没录过应返回空')
+  eq(vs.saveMyVoice('Good morning!', '/local/a.mp3'), true, '录一句应存下来')
+  eq(vs.getMyVoice('good morning'), '/local/a.mp3', '换个写法也要能找到同一条')
+  eq(vs.myVoiceCount(), 1, '应记到 1 条')
+  eq(vs.saveMyVoice('Good morning', '/local/b.mp3'), true, '同一句重录应允许')
+  eq(vs.getMyVoice('Good morning'), '/local/b.mp3', '重录应覆盖旧的')
+  eq(vs.myVoiceCount(), 1, '重录不该变成两条')
+  eq(vs.saveMyVoice('  ', '/local/c.mp3'), false, '空句子不该存')
+  vs.saveMyVoice('How are you?', '/local/d.mp3')
+  eq(vs.listMyVoices().length, 2, '应能列出全部录音')
+  eq(vs.listMyVoices()[0].text, 'How are you?', '最近录的排最前面')
+  // 文件被系统回收后必须清掉记录 —— 否则表现成「显示已录音,点了不响」
+  eq(vs.pruneMissing((p) => p !== '/local/b.mp3'), 1, '失效的那条应被清掉')
+  eq(vs.getMyVoice('Good morning'), '', '清掉之后就该当作没录过')
+  eq(vs.myVoiceCount(), 1, '没失效的那条要留着')
+  vs.deleteMyVoice('How are you')
+  eq(vs.myVoiceCount(), 0, '删掉应生效,且不受句末标点影响')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {

@@ -268,24 +268,6 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     load: () => json(require('../data/decks/enlight-abc.json')),
   },
   {
-    /*
-      听指令做动作(TPR 全身反应法)。
-
-      3–6 岁的语言重心应该在**听和说**,不在读和写 —— 这个年纪最有效的输入
-      方式是「听到一句话,用身体做出来」,不需要认字、不需要拼写,
-      而且家长可以直接参与:你念,他做。
-      这也是幼儿段唯一一个「不识字也能百分之百玩下去」的内容包。
-    */
-    key: 'enlight-commands',
-    name: '听指令做动作',
-    subject: '启蒙',
-    icon: '🙌',
-    itemType: 'pic',
-    stages: ['toddler'],
-    default: true,
-    load: () => json(require('../data/decks/enlight-commands.json')),
-  },
-  {
     key: 'phonics-cvc',
     // v36 扩充了词量,rev +1 让已装在设备上的卡组自动补齐新词(进度不受影响)
     rev: 2,

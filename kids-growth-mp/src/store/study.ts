@@ -228,6 +228,17 @@ export function sanitizeData(childId: string): void {
       changed = true
       continue
     }
+    /*
+      内置包被下架了(我把某个内容包从程序里删掉了),设备上那份要跟着清掉。
+
+      不清的话它会变成一个「孤儿卡组」:首页照常列出来、点进去还能做,
+      但内容库里找不到它、也没法移除 —— 用户只能靠清空全部数据来摆脱它。
+      自定义词本和错题本没有 builtinKey,不受影响。
+    */
+    if (d.builtinKey && !getPackMeta(d.builtinKey)) {
+      changed = true
+      continue
+    }
     deckIds.add(d.id)
     goodDecks.push({
       ...d,
