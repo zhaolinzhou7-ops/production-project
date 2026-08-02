@@ -12,6 +12,8 @@ import {
   getStudyStreak,
   getTodayStudyMinutes,
   getStage,
+  hasStage,
+  setStage,
   syncDeckContent,
   sanitizeData,
   getDailyGoal,
@@ -27,7 +29,7 @@ import { spendable, pendingCount } from '../../store/rewards'
 import { getLine, stageOf } from '../../core/pets'
 import { levelOf, type LevelInfo } from '../../core/levels'
 import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
-import type { LearnDeck } from '../../types'
+import type { AgeStage, LearnDeck } from '../../types'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
@@ -38,6 +40,14 @@ interface DeckRow {
 
 /** 每日建议学习时长上限(分钟)的默认值,家长中心可改 */
 const DAILY_LIMIT_MIN = 30
+
+/** 首次打开时问的那一次「孩子多大」 */
+const STAGE_OPTIONS: Array<{ key: AgeStage; label: string; emoji: string }> = [
+  { key: 'toddler', label: '幼儿园(3–6 岁)', emoji: '🧸' },
+  { key: 'primary', label: '小学(6–12 岁)', emoji: '🎒' },
+  { key: 'junior', label: '初中(12–15 岁)', emoji: '📐' },
+  { key: 'senior', label: '高中(15 岁以上)', emoji: '🎓' },
+]
 
 /**
  * 内容包同步一次启动只做一次。
@@ -89,6 +99,8 @@ function Index() {
   const [pending, setPending] = useState(0)
   /** 首次装内容包时的进度提示(装完就消失) */
   const [installing, setInstalling] = useState('')
+  /** 还没选过学段 —— 先当面问一次,别替家长做主 */
+  const [needStage, setNeedStage] = useState(false)
 
   /**
    * 载入首页数据。
@@ -106,6 +118,20 @@ function Index() {
       if (!sanitizedThisLaunch) {
         sanitizeData(childId)
         sanitizedThisLaunch = true
+      }
+      /*
+       * 还没选过学段就先问 —— 在装任何内容包之前。
+       *
+       * 以前没选时会静默按「小学」处理:幼儿园的孩子一进来拿到的是小学词库,
+       * 口算从两位数加减起步。而且学段存在本地存储里,清一次数据就退回默认值,
+       * 孩子第二天打开只会觉得「怎么全变难了」。装包是不可逆的(要写上千张卡),
+       * 所以必须先问清楚再装。
+       */
+      setNeedStage(!hasStage())
+      if (!hasStage()) {
+        setRows([])
+        setLoading(false)
+        return
       }
       /*
        * 只自动加「默认包」;其余在内容库里自助添加。
@@ -271,6 +297,36 @@ function Index() {
           </Text>
         </View>
       </View>
+
+      {/*
+        没选过学段时,先当面问一次再装内容。
+        以前这里是静默按「小学」处理的 —— 幼儿园的孩子拿到小学词库、
+        口算直接上两位数,而没有任何地方告诉家长发生了什么。
+      */}
+      {needStage ? (
+        <View className='pickstage'>
+          <Text className='pickstage__t'>孩子多大啦?</Text>
+          <Text className='pickstage__d'>
+            选完才会准备内容 —— 选错了随时能在「📚 内容库」里改回来。
+          </Text>
+          {STAGE_OPTIONS.map((s) => (
+            <View
+              key={s.key}
+              className='pickstage__b'
+              onClick={() => {
+                setStage(s.key)
+                installedKeys.clear()
+                syncedThisLaunch = false
+                setLoading(true)
+                refresh()
+              }}
+            >
+              <Text className='pickstage__e'>{s.emoji}</Text>
+              <Text className='pickstage__l'>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/*
         今日目标进度条。孩子对「还差几题」远比对「累计多少题」有感觉,

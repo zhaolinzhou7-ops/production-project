@@ -288,6 +288,20 @@ export function getStage(): AgeStage {
   return readObject<AgeStage>('stage', 'primary')
 }
 
+/**
+ * 家长到底有没有选过学段。
+ *
+ * 这个区别很要紧:没选过时 getStage() 会返回默认的 'primary',于是幼儿园的
+ * 孩子拿到的是小学的内容包、口算直接从两位数加减起步。更糟的是学段存在
+ * 本地存储里 —— 清一次数据就退回默认值,孩子第二天打开发现题目全变难了,
+ * 而没有任何地方告诉他发生了什么。所以「没选过」必须能被识别出来、
+ * 并且在首页当面问一次,而不是悄悄替家长做主。
+ */
+export function hasStage(): boolean {
+  const v = readObject<string>('stage', '')
+  return v === 'toddler' || v === 'primary' || v === 'junior' || v === 'senior'
+}
+
 export function setStage(stage: AgeStage): void {
   writeObject('stage', stage)
 }

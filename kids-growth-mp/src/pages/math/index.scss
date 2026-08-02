@@ -42,6 +42,44 @@
   }
 }
 
+/* 难度档:放在题型上面,一眼能看见现在是哪一档、并且随手能换 */
+.tiers {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.tier {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.75);
+  border: 2px solid transparent;
+  border-radius: 20px;
+  padding: 20px;
+
+  &--on {
+    background: rgba(249, 73, 122, 0.1);
+    border-color: #f9497a;
+  }
+
+  &__lab {
+    display: block;
+    font-size: 28px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &--on .tier__lab {
+    color: #f9497a;
+  }
+
+  &__desc {
+    display: block;
+    margin-top: 8px;
+    font-size: 21px;
+    color: #9ca3af;
+    line-height: 1.5;
+  }
+}
+
 .kinds {
   display: flex;
   flex-wrap: wrap;

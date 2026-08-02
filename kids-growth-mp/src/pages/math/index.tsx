@@ -1,8 +1,18 @@
 import { useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useUnload } from '@tarojs/taro'
-import { mathKindsFor, generateDrill, type MathKind, type MathProblem } from '../../core/mathDrill'
+import {
+  mathKindsForTier,
+  generateDrill,
+  defaultTierFor,
+  tierOfKind,
+  MATH_TIERS,
+  type MathKind,
+  type MathTier,
+  type MathProblem,
+} from '../../core/mathDrill'
 import { getCurrentChildId, finishDrill, addStudyTime, getStage } from '../../store/study'
+import { readObject, writeObject } from '../../store/db'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import CorrectBurst from '../../components/CorrectBurst'
 import type { StickerDef } from '../../core/stickers'
@@ -15,8 +25,36 @@ const COUNTS = [10, 20, 30]
 
 function MathPage() {
   const [screen, setScreen] = useState<Screen>('config')
-  // 初始题型跟着学段走 —— 幼儿档不该默认落在「加法(100 以内)」上
-  const [kind, setKind] = useState<MathKind>(mathKindsFor(getStage())[0].kind)
+  /*
+    难度档:优先用上次选的,没有才按学段猜。
+
+    这里踩过一个真实的坑 —— 学段存在本地存储里,清一次数据就退回默认的「小学」,
+    于是孩子第二天打开,口算从「10 以内加法」变成了两位数乘除。他不会去想
+    「是不是哪个设置被重置了」,只会觉得「我不会做了」。所以难度必须
+    ①页面上看得见 ②自己记得住 ③随手能换。
+  */
+  const [tier, setTierState] = useState<MathTier>(
+    () => readObject<MathTier>('mathTier', '' as MathTier) || defaultTierFor(getStage()),
+  )
+  const [kind, setKind] = useState<MathKind>(() => {
+    const saved = readObject<MathKind>('mathKind', '' as MathKind)
+    const t = readObject<MathTier>('mathTier', '' as MathTier) || defaultTierFor(getStage())
+    if (saved && tierOfKind(saved) === t) return saved
+    return mathKindsForTier(t)[0].kind
+  })
+
+  const chooseTier = (t: MathTier) => {
+    setTierState(t)
+    writeObject('mathTier', t)
+    const first = mathKindsForTier(t)[0].kind
+    setKind(first)
+    writeObject('mathKind', first)
+  }
+
+  const chooseKind = (k: MathKind) => {
+    setKind(k)
+    writeObject('mathKind', k)
+  }
   const [count, setCount] = useState(20)
   const [problems, setProblems] = useState<MathProblem[]>([])
   const [idx, setIdx] = useState(0)
@@ -96,10 +134,23 @@ function MathPage() {
   if (screen === 'config') {
     return (
       <View className='math'>
+        <Text className='math__h'>难度</Text>
+        <View className='tiers'>
+          {MATH_TIERS.map((t) => (
+            <View
+              key={t.tier}
+              className={tier === t.tier ? 'tier tier--on' : 'tier'}
+              onClick={() => chooseTier(t.tier)}
+            >
+              <Text className='tier__lab'>{t.label}</Text>
+              <Text className='tier__desc'>{t.desc}</Text>
+            </View>
+          ))}
+        </View>
         <Text className='math__h'>选择题型</Text>
         <View className='kinds'>
-          {mathKindsFor(getStage()).map((k) => (
-            <View key={k.kind} className={kind === k.kind ? 'kind kind--on' : 'kind'} onClick={() => setKind(k.kind)}>
+          {mathKindsForTier(tier).map((k) => (
+            <View key={k.kind} className={kind === k.kind ? 'kind kind--on' : 'kind'} onClick={() => chooseKind(k.kind)}>
               <Text className='kind__icon'>{k.icon}</Text>
               <Text className='kind__lab'>{k.label}</Text>
             </View>

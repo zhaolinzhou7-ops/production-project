@@ -59,13 +59,50 @@ export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
 const TODDLER_KINDS: MathKind[] = ['count10', 'add10', 'sub10', 'makeTen', 'compare', 'add20']
 
 /**
- * 按学段给题型。
+ * 难度档。
+ *
+ * 为什么要把它和「学段」分开:学段存在本地存储里,一旦清过数据就退回默认的
+ * 「小学」,孩子第二天打开发现口算全变成了两位数乘除 —— 他不知道发生了什么,
+ * 只知道「我做不出来了」。难度必须是**页面上看得见、随手能换**的东西,
+ * 而不是藏在别处、还会被一次清缓存悄悄改掉的设置。
+ */
+export type MathTier = 'toddler' | 'school'
+
+export interface MathTierDef {
+  tier: MathTier
+  label: string
+  desc: string
+}
+
+export const MATH_TIERS: MathTierDef[] = [
+  { tier: 'toddler', label: '幼儿档', desc: '数一数、10 以内加减、凑十、20 以内进位' },
+  { tier: 'school', label: '小学档', desc: '加减乘除、乘法口诀、混合运算' },
+]
+
+/** 学段对应的默认难度档(只作默认值,页面上随时可改) */
+export function defaultTierFor(stage: AgeStage): MathTier {
+  return stage === 'toddler' ? 'toddler' : 'school'
+}
+
+/** 某一档里有哪些题型 */
+export function mathKindsForTier(tier: MathTier): MathKindDef[] {
+  return tier === 'toddler'
+    ? MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
+    : MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind))
+}
+
+/** 这个题型属于哪一档 —— 用来把「上次选的题型」还原到对的档上 */
+export function tierOfKind(kind: MathKind): MathTier {
+  return TODDLER_KINDS.includes(kind) ? 'toddler' : 'school'
+}
+
+/**
+ * 按学段给题型(保留旧签名,内部走难度档)。
  * 幼儿看到的是「数一数 / 10 以内加 / 10 以内减 / 凑十 / 比大小 / 进位加」,
  * 不会看到乘除 —— 摆在那里只会让孩子挫败。
  */
 export function mathKindsFor(stage: AgeStage): MathKindDef[] {
-  if (stage === 'toddler') return MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
-  return MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind))
+  return mathKindsForTier(defaultTierFor(stage))
 }
 
 function randInt(min: number, max: number): number {

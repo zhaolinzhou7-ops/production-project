@@ -488,3 +488,53 @@
     font-weight: 500;
   }
 }
+
+/* 首次打开:先问学段,再装内容。选错了直接决定孩子看到的难度,值得占满一屏 */
+.pickstage {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 28px;
+  padding: 30px 26px;
+  margin-bottom: 24px;
+
+  &__t {
+    display: block;
+    font-size: 36px;
+    font-weight: bold;
+    color: #374151;
+  }
+
+  &__d {
+    display: block;
+    margin: 12px 0 24px;
+    font-size: 23px;
+    color: #9ca3af;
+    line-height: 1.6;
+  }
+
+  &__b {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 100px;
+    padding: 0 26px;
+    margin-bottom: 16px;
+    border-radius: 22px;
+    background: #f8f8fa;
+    border: 2px solid transparent;
+
+    &:active {
+      border-color: #f9497a;
+      background: rgba(249, 73, 122, 0.08);
+    }
+  }
+
+  &__e {
+    font-size: 44px;
+  }
+
+  &__l {
+    font-size: 30px;
+    color: #374151;
+    font-weight: 500;
+  }
+}

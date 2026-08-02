@@ -209,6 +209,51 @@ function run() {
   const keys = content.BUILTIN_PACKS.map((p) => p.key)
   eq(keys.length, new Set(keys).size, '内容包 key 不能重复')
 
+  /*
+    ---- 口算难度档 ----
+
+    这里对应一个真实事故:学段存在本地存储里,而每次更新我都让用户
+    「清缓存 → 全部清除」—— 一清就退回默认的 'primary',幼儿园的孩子
+    第二天打开,口算从「10 以内加法」变成了两位数乘除。
+    所以:①「有没有选过学段」必须能被识别 ②难度必须能脱离学段单独选。
+  */
+  const md = L('core/mathDrill.js')
+  eq(md.defaultTierFor('toddler'), 'toddler', '幼儿园默认应是幼儿档')
+  eq(md.defaultTierFor('primary'), 'school', '小学默认应是小学档')
+  ok(md.mathKindsForTier('toddler').length >= 5, '幼儿档应有足够的题型')
+  ok(md.mathKindsForTier('school').length >= 5, '小学档应有足够的题型')
+  for (const k of md.mathKindsForTier('toddler')) {
+    eq(md.tierOfKind(k.kind), 'toddler', `${k.label} 应归在幼儿档`)
+    // 幼儿档不许出现乘除 —— 摆在那里只会让孩子挫败
+    ok(!['mul', 'div', 'mulTable', 'mixed'].includes(k.kind), `幼儿档不该出现 ${k.label}`)
+  }
+  for (const k of md.mathKindsForTier('school')) {
+    eq(md.tierOfKind(k.kind), 'school', `${k.label} 应归在小学档`)
+  }
+  // 两档不能有交集,否则「换一档」换不干净
+  const tKinds = md.mathKindsForTier('toddler').map((k) => k.kind)
+  const sKinds = md.mathKindsForTier('school').map((k) => k.kind)
+  eq(tKinds.filter((k) => sKinds.includes(k)).length, 0, '两个难度档的题型不该重叠')
+  // 每一档的题都得能真的生成出来,且答案对得上
+  for (const tier of ['toddler', 'school']) {
+    for (const k of md.mathKindsForTier(tier)) {
+      const ps = md.generateDrill(k.kind, 8, tier === 'toddler' ? 'toddler' : 'primary')
+      eq(ps.length, 8, `${k.label} 应能出 8 道题`)
+      ok(
+        ps.every((p) => p.text && Number.isFinite(p.answer) && p.answer >= 0),
+        `${k.label} 的题目必须有题干,答案必须是非负整数(孩子还没学负数)`,
+      )
+    }
+  }
+
+  // ---- 学段:没选过必须能被认出来,不能静默当成小学 ----
+  reset()
+  eq(study.hasStage(), false, '还没选过学段时 hasStage 应为 false')
+  eq(study.getStage(), 'primary', '没选时 getStage 仍给一个可用的默认值')
+  study.setStage('toddler')
+  eq(study.hasStage(), true, '选过之后 hasStage 应为 true')
+  eq(study.getStage(), 'toddler', '选过之后应返回选的那个')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {
