@@ -686,3 +686,20 @@
     line-height: 1.6;
   }
 }
+
+/* 睡前安静模式的一行提示:让孩子知道不是坏了,是到点了 */
+.quiettip {
+  display: block;
+  text-align: center;
+  font-size: 21px;
+  color: #818cf8;
+  padding: 8px 0;
+}
+
+/* 「这道不对」:做得小、放在角落 —— 是给家长的,不该吸引孩子去点 */
+.sess__flag {
+  margin-left: 16px;
+  font-size: 26px;
+  color: #d1d5db;
+  padding: 6px 10px;
+}

@@ -557,3 +557,52 @@
     line-height: 1.5;
   }
 }
+
+/* 「今天就做这个」—— 幼儿段唯一需要点的东西,所以它必须比页面上任何东西都大 */
+.today {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, #34d399, #059669);
+  border-radius: 30px;
+  padding: 34px 28px;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 22px rgba(5, 150, 105, 0.25);
+
+  &--done {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: none;
+  }
+
+  &__e { font-size: 62px; }
+  &__meta { flex: 1; }
+  &__t {
+    display: block;
+    font-size: 40px;
+    font-weight: bold;
+    color: #fff;
+  }
+  &__s {
+    display: block;
+    margin-top: 8px;
+    font-size: 23px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  &__dots { display: flex; gap: 8px; }
+  &__d {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    &--on { background: #fff; }
+  }
+}
+
+.morebtn {
+  display: block;
+  text-align: center;
+  font-size: 24px;
+  color: #9ca3af;
+  padding: 20px;
+  margin-bottom: 12px;
+}

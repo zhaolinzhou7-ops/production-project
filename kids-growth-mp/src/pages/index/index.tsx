@@ -34,6 +34,8 @@ import { isCloudConfigured, pushToCloud, pullFromCloud } from '../../cloud/sync'
 import type { AgeStage, LearnDeck } from '../../types'
 import { todayISO } from '../../core/dateUtils'
 import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
+import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
+import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
@@ -109,6 +111,11 @@ function Index() {
   const [needStage, setNeedStage] = useState(false)
   /** 到睡觉时间了 —— 由程序说这句话,而不是每天让家长去说 */
   const [bedtime, setBedtime] = useState(false)
+  /** 今天这条路 + 走到第几步 —— 幼儿段的主入口 */
+  const [plan, setPlan] = useState<PlanStep[]>([])
+  const [planDone, setPlanDone] = useState(0)
+  /** 幼儿段默认把其余入口收起来 */
+  const [showMore, setShowMore] = useState(false)
 
   /**
    * 载入首页数据。
@@ -181,7 +188,32 @@ function Index() {
       )
       // 一次扫描算出所有卡组的待学数(原先每个卡组各扫一遍全表)
       const dueMap = countDueByDeck(childId)
-      setRows(decks.map((deck) => ({ deck, due: dueMap[deck.id] ?? 0 })))
+      const deckRows = decks.map((deck) => ({ deck, due: dueMap[deck.id] ?? 0 }))
+      setRows(deckRows)
+      /*
+        排今天这条路。今天排过就沿用 —— 每次进首页顺序都在变的话,
+        孩子建立不起「先做这个、再做那个」的预期。
+      */
+      {
+        const saved = getPlan()
+        if (saved.steps.length > 0) {
+          setPlan(saved.steps)
+          setPlanDone(saved.done)
+        } else {
+          const built = buildPlan(
+            deckRows.map((r) => ({
+              id: r.deck.id,
+              itemType: r.deck.itemType,
+              name: r.deck.name,
+              due: r.due,
+            })),
+            getStage(),
+          )
+          savePlan(built)
+          setPlan(built)
+          setPlanDone(0)
+        }
+      }
       const points = getPoints()
       setXp(points.xp)
       setLevel(levelOf(points.xp))
@@ -229,6 +261,16 @@ function Index() {
   const go = (deckId: string, mode: string, free = false) => {
     Taro.navigateTo({
       url: `/pages/session/index?deckId=${deckId}&mode=${mode}${free ? '&free=1' : ''}`,
+      fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
+    })
+  }
+
+  /** 走今天这条路的第 i 步 —— 会话页做完会自动接下一步 */
+  const goPlan = (i: number) => {
+    const st = plan[i]
+    if (!st) return
+    Taro.navigateTo({
+      url: `/pages/session/index?deckId=${st.deckId}&mode=${st.mode}&plan=1&limit=${st.limit}`,
       fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
     })
   }
@@ -453,6 +495,46 @@ function Index() {
         </View>
       </View>
 
+      {/*
+        「今天就做这个」—— 幼儿段唯一需要点的东西。
+
+        首页有 9 个入口、32 个内容包、11 种练法,而使用者是一个 4 岁半、
+        **不识字**的孩子。他打开首页面对十几个读不了的字,真实结果是
+        点到哪儿算哪儿。功能多不是错,错的是「今天该做什么」不清楚了。
+        所以给他一条排好的路,其余全部收进「更多」。
+      */}
+      {plan.length > 0 && planDone < plan.length ? (
+        <View className='today' onClick={() => goPlan(planDone)}>
+          <Text className='today__e'>▶️</Text>
+          <View className='today__meta'>
+            <Text className='today__t'>{planDone > 0 ? '接着做' : '今天就做这个'}</Text>
+            <Text className='today__s'>
+              {plan.length} 步 · 约 {planMinutes(plan)} 分钟{planDone > 0 ? ` · 已完成 ${planDone} 步` : ''}
+            </Text>
+          </View>
+          <View className='today__dots'>
+            {plan.map((st, i) => (
+              <View key={st.deckId + st.mode} className={i < planDone ? 'today__d today__d--on' : 'today__d'} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+      {plan.length > 0 && planDone >= plan.length ? (
+        <View className='today today--done'>
+          <Text className='today__e'>🎉</Text>
+          <View className='today__meta'>
+            <Text className='today__t'>今天的做完啦</Text>
+            <Text className='today__s'>想再玩的话,下面每组都有「再练一遍」</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* 幼儿段默认收起下面这些 —— 他一个字都读不了,列出来只会干扰 */}
+      {getStage() === 'toddler' && !showMore ? (
+        <Text className='morebtn' onClick={() => setShowMore(true)}>更多(家长用)▾</Text>
+      ) : null}
+
+      {getStage() !== 'toddler' || showMore ? (
       <View className='entries'>
         <View className='entry entry--math' onClick={() => openPage('/pages/math/index')}>
           <Text className='entry__icon'>🧮</Text>
@@ -463,6 +545,7 @@ function Index() {
           <Text className='entry__t'>错题本</Text>
         </View>
       </View>
+      ) : null}
 
       {/* 等级:成长值攒到下一级还差多少,一眼可见 */}
       <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>

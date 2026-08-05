@@ -39,6 +39,11 @@ import {
   type Reward,
 } from '../../store/rewards'
 import { errorHistory, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
+import { exportBackupToWechat, importBackupFromWechat } from '../../lib/backupFile'
+import { summarize, type UsageSummary } from '../../store/usage'
+import { listReports, reportsToText, clearReports } from '../../store/reports'
+import { masteredByDeck } from '../../store/progress'
+import { listChildDecks } from '../../store/study'
 import { usePrompt } from '../../components/Prompt'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
@@ -66,6 +71,12 @@ function Parent() {
   const [rewards, setRewards] = useState<Reward[]>([])
   const [redeems, setRedeems] = useState<Redemption[]>([])
   const [zhVoice, setZhVoice] = useState('')
+  /** 他实际怎么用的 —— 在这之前我们只能靠猜 */
+  const [usage, setUsage] = useState<UsageSummary | null>(null)
+  /** 已掌握的清单:家长真正想知道的那件事 */
+  const [mastered, setMastered] = useState<Array<{ deck: string; count: number; sample: string[] }>>([])
+  /** 标记过「这道不对」的题 */
+  const [reports, setReports] = useState<ReturnType<typeof listReports>>([])
   const [enVoice, setEnVoice] = useState('')
 
   const load = () => {
@@ -78,6 +89,9 @@ function Parent() {
     ensureRewards()
     setRewards(listRewards())
     setRedeems(listRedemptions().filter((d) => !d.granted))
+    setUsage(summarize(listChildDecks(childId).map((d) => d.name)))
+    setMastered(masteredByDeck(childId))
+    setReports(listReports())
     setZhVoice(getVoice('zh'))
     setEnVoice(getVoice('en'))
   }
@@ -239,6 +253,30 @@ function Parent() {
       success: () =>
         Taro.showModal({ title: '已复制到剪贴板', content: text, showCancel: false }),
     })
+  }
+
+  /** 备份:写成文件转发到微信,存进「文件传输助手」就等于存进了聊天记录 */
+  const doBackup = () => {
+    exportBackupToWechat((msg) =>
+      Taro.showModal({ title: '备份没做成', content: msg, showCancel: false }),
+    )
+  }
+
+  /** 恢复:破坏性操作,先把备份里有什么摆出来让家长确认 */
+  const doRestore = () => {
+    importBackupFromWechat(
+      (summary, run) => {
+        Taro.showModal({
+          title: '确认恢复?',
+          content: `这份备份:\n${summary}\n\n恢复会**先清空本机现在的数据**再写入,不能撤销。`,
+          confirmText: '恢复',
+          success: (res) => {
+            if (res.confirm) run()
+          },
+        })
+      },
+      (msg) => Taro.showModal({ title: '没能恢复', content: msg, showCancel: false }),
+    )
   }
 
   const addNewReward = () => {
@@ -650,10 +688,93 @@ function Parent() {
         ) : null}
       </View>
 
+      {/* 他到底会了多少 —— 积分和等级回答不了这个问题 */}
+      {mastered.length > 0 ? (
+        <View className='sec'>
+          <Text className='sec__t'>已经掌握的</Text>
+          {mastered.map((m) => (
+            <View key={m.deck} className='mst'>
+              <Text className='mst__n'>
+                {m.deck} · {m.count} 个
+              </Text>
+              <Text className='mst__s'>{m.sample.join(' ')}{m.count > m.sample.length ? ' …' : ''}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* 他实际怎么用的 —— 该砍什么、该多做什么,不用再猜 */}
+      {usage ? (
+        <View className='sec'>
+          <Text className='sec__t'>最近 7 天怎么用的</Text>
+          <Text className='usg'>
+            打开 {usage.opens} 组,做完 {usage.finished} 组,半途退出 {usage.quits} 组
+            {usage.peakHour >= 0 ? ` · 最常用 ${usage.peakHour}:00 前后` : ''}
+          </Text>
+          {usage.top.length > 0 ? (
+            <Text className='usg'>最常做:{usage.top.map((t) => `${t.deck}(${t.n})`).join('、')}</Text>
+          ) : null}
+          {usage.dropping.length > 0 ? (
+            <Text className='usg usg--warn'>
+              最容易半途退出:{usage.dropping.map((d) => `${d.deck}·${d.mode}(${d.quitRate}%)`).join('、')}
+            </Text>
+          ) : null}
+          {usage.untouched.length > 0 ? (
+            <Text className='usg usg--warn'>一次都没打开过:{usage.untouched.join('、')}</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* 内容报错:自测查得了结构,查不了对错 */}
+      {reports.length > 0 ? (
+        <View className='sec'>
+          <Text className='sec__t'>标记为「不对」的题 {reports.length} 条</Text>
+          {reports.slice(0, 8).map((r) => (
+            <Text key={r.id} className='usg'>
+              [{r.deckName}] {r.front} → {r.back}
+            </Text>
+          ))}
+          <View
+            className='lrow'
+            onClick={() =>
+              Taro.setClipboardData({
+                data: reportsToText(),
+                success: () => Taro.showToast({ title: '已复制,发给我改', icon: 'none' }),
+              })
+            }
+          >
+            <Text className='lrow__t'>复制这些题(发给我批量改)</Text>
+          </View>
+          <View
+            className='lrow'
+            onClick={() => {
+              clearReports()
+              setReports([])
+            }}
+          >
+            <Text className='lrow__t'>清空标记</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View className='sec'>
         <Text className='sec__t'>其它</Text>
+        {/*
+          真正的备份。
+          在这之前这套系统没有任何备份 —— 云同步没配过,原先那个「导出数据」
+          导出的只有五行统计摘要,恢复不了任何东西。而成长档案(身高体重、
+          事例、健康、成绩)和学习进度不一样:进度能重新练回来,那些不能。
+        */}
+        <View className='lrow lrow--hi' onClick={doBackup}>
+          <Text className='lrow__t'>📦 备份全部数据(发到微信)</Text>
+          <Text className='lrow__h'>建议转发给「文件传输助手」,换手机也还在</Text>
+        </View>
+        <View className='lrow' onClick={doRestore}>
+          <Text className='lrow__t'>♻️ 从备份恢复</Text>
+          <Text className='lrow__h'>从聊天记录里选回那个文件;会先让你确认</Text>
+        </View>
         <View className='lrow' onClick={exportData}>
-          <Text className='lrow__t'>导出数据(复制到剪贴板)</Text>
+          <Text className='lrow__t'>复制一份统计摘要</Text>
         </View>
         <View
           className='lrow'

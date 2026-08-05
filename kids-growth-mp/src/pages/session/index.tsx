@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import {
@@ -25,6 +25,12 @@ import PolyphoneNote from '../../components/PolyphoneNote'
 import { awardSticker, feedPetDetailed, bumpChallenge, type FeedResult } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
+import { advancePlan } from '../../store/plan'
+import { noteUsage } from '../../store/usage'
+import { reportCard } from '../../store/reports'
+import { isWindDown, defaultBedtime } from '../../core/ageStage'
+import { readObject } from '../../store/db'
+import type { PlanStep } from '../../core/dailyPlan'
 import { withGuard } from '../../components/Guard'
 import { flushNow } from '../../store/db'
 import './index.scss'
@@ -52,6 +58,24 @@ function Session() {
    * 这一组照常给分、照常喂宠物,但**不动 SRS 的间隔**,免得反复刷把复习节奏搅乱。
    */
   const freePractice = router.params.free === '1'
+  /*
+    在走「今天就做这个」那条路。做完这一组要**自动接下一步**,
+    而不是把 4 岁半的孩子丢回一屏他读不了的首页去自己找下一个。
+  */
+  const inPlan = router.params.plan === '1'
+  const limitParam = Number(router.params.limit)
+  const cardLimit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 12
+  const [nextStep, setNextStep] = useState<PlanStep | null>(null)
+  /*
+    睡前降刺激:彩带、连击、震动都是提高兴奋度的设计,睡前半小时该反着来。
+    只关特效,不关内容 —— 他照常能学,只是屏幕安静下来。
+  */
+  const quiet = (() => {
+    const bed = readObject<string>('bedtime', defaultBedtime(getStage()))
+    const d = new Date()
+    const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return isWindDown(hhmm, bed)
+  })()
 
   const [childId, setChildId] = useState('')
   const [deck, setDeck] = useState<LearnDeck | null>(null)
@@ -91,6 +115,22 @@ function Session() {
   const [earOn, setEarOn] = useState(false)
   const [ready, setReady] = useState(false)
 
+  /*
+    卸载时要记「半途退出」,而卸载回调拿到的是**第一次渲染时**的那份状态。
+    所以把需要的几个值同步到 ref 里 —— 这是 React 里记录「离开时的现场」
+    唯一可靠的办法。
+  */
+  const summaryRef = useRef(false)
+  const cardsRef = useRef<DueCard[]>([])
+  const idxRef = useRef(0)
+  const deckRef = useRef('')
+  const modeRef = useRef<string>(mode)
+  cardsRef.current = cards
+  idxRef.current = idx
+  deckRef.current = deck?.name ?? deckId
+  modeRef.current = mode
+  summaryRef.current = !!summary
+
   const itemType = deck?.itemType ?? 'word'
   const isHanzi = itemType === 'hanzi'
   /**
@@ -122,7 +162,7 @@ function Session() {
   useEffect(() => {
     try {
       const cid = getCurrentChildId()
-      const list = getSessionCards(cid, deckId, 12, freePractice)
+      const list = getSessionCards(cid, deckId, cardLimit, freePractice)
       const d = getDeck(deckId) ?? null
       const all = getDeckCards(deckId)
       setChildId(cid)
@@ -138,6 +178,17 @@ function Session() {
       setLinePool(lines)
       setCards(list)
       setReady(true)
+      noteUsage('open', d?.name ?? deckId, mode)
+      /*
+        提前把这一组要用的发音拉下来。
+        晚上可能在床上、车上,网络不稳 —— 播的时候才下载,就会卡在
+        「点了没声音」。提前拉好,后面每一题都是秒响。
+      */
+      try {
+        prefetchAudio(list.map((x) => x.card.audioText ?? x.card.front).slice(0, 12))
+      } catch {
+        /* 预取失败不影响做题 */
+      }
       const autoPlay = mode === 'listenChoose' || mode === 'dictation' || mode === 'listenPic' || mode === 'listenPicEn'
       if (list[0] && autoPlay) {
         const c0 = list[0].card
@@ -215,6 +266,20 @@ function Session() {
   /** 离开页面就把声音停掉,免得返回首页还在响 */
   useEffect(() => {
     return () => stopAudio()
+  }, [])
+
+  /*
+    半途退出也要记。
+    「他每次做两题就退出」这件事,只有记下来才看得见 ——
+    而那正是「这个练法对他不合适」的最强信号。
+  */
+  useEffect(() => {
+    return () => {
+      if (!summaryRef.current && cardsRef.current.length > 0) {
+        noteUsage('quit', deckRef.current, modeRef.current, idxRef.current, cardsRef.current.length)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /**
@@ -341,6 +406,9 @@ function Session() {
   }
 
   const finish = (finalCorrect: number, total: number) => {
+    // 走计划时,做完这一组就把进度推一格,并记下一步是什么
+    if (inPlan) setNextStep(advancePlan() ?? null)
+    noteUsage('finish', deck?.name ?? deckId, mode, total, total)
     const durationSec = Math.round((Date.now() - startedAt) / 1000)
     addStudyTime(durationSec)
     const res = finishSession({
@@ -407,7 +475,7 @@ function Session() {
       })
       setBurst((b) => b + 1)
       try {
-        Taro.vibrateShort({ type: 'light' })
+        if (!quiet) Taro.vibrateShort({ type: 'light' })
       } catch {
         /* 忽略 */
       }
@@ -554,7 +622,26 @@ function Session() {
           </View>
         ) : null}
         {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
-        <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
+        {inPlan && nextStep ? (
+          <View
+            className='btn btn--primary'
+            onClick={() =>
+              Taro.redirectTo({
+                url: `/pages/session/index?deckId=${nextStep.deckId}&mode=${nextStep.mode}&plan=1&limit=${nextStep.limit}`,
+              })
+            }
+          >
+            <Text className='btn__t'>继续下一个 →</Text>
+          </View>
+        ) : null}
+        {inPlan && !nextStep ? (
+          <View className='btn btn--primary' onClick={() => Taro.navigateBack()}>
+            <Text className='btn__t'>🎉 今天的做完啦</Text>
+          </View>
+        ) : null}
+        {!inPlan ? (
+          <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
+        ) : null}
       </View>
     )
   }
@@ -571,9 +658,33 @@ function Session() {
         <Text className='sess__exit' onClick={() => Taro.navigateBack()}>退出</Text>
         <View className='sess__track'><View className='sess__fill' style={{ width: `${(idx / cards.length) * 100}%` }} /></View>
         <Text className='sess__count'>{idx + 1}/{cards.length}</Text>
+        {/*
+          「这道不对」。4737 张卡是我生成的,自测查得了结构、查不了对错。
+          错的东西会被孩子直接学进去,所以给家长一个随手能按的按钮 ——
+          不弹窗、不打断,按一下就过去了,攒起来一起改。
+        */}
+        <Text
+          className='sess__flag'
+          onClick={() => {
+            const c = cards[idx]?.card
+            if (!c) return
+            reportCard({
+              id: c.id,
+              front: c.front,
+              back: c.back,
+              deckName: deck?.name ?? '',
+              mode: String(mode),
+            })
+            Taro.showToast({ title: '已标记', icon: 'none' })
+          }}
+        >
+          ⚑
+        </Text>
       </View>
       {combo >= 2 ? <Text className='combo'>🔥 连对 {combo}</Text> : null}
-      {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
+      {/* 睡前半小时不放彩带 —— 那是提高兴奋度的设计,这个时段该反着来 */}
+      {burst > 0 && !quiet ? <CorrectBurst seed={burst} combo={combo} /> : null}
+      {quiet ? <Text className='quiettip'>🌙 安静模式:快睡觉了,先不放彩带啦</Text> : null}
 
       {/* 认词 / 认字 */}
       {mode === 'recognize' && (

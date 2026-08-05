@@ -98,6 +98,30 @@ export function defaultBedtime(stage: AgeStage): string {
   return '23:00'
 }
 
+/**
+ * 睡前**降刺激**的那一段(默认睡觉前 30 分钟)。
+ *
+ * 答对时的彩带、连击、震动都是**提高兴奋度**的设计 —— 白天用没问题,
+ * 睡前半小时正好该反着来。让一个 4 岁半的孩子在睡前十分钟一直「哇」,
+ * 换来的是更难哄睡,而那笔账最后要家长付。
+ *
+ * 这一段里只关特效,不关内容 —— 他照常能学,只是屏幕安静下来。
+ */
+export function isWindDown(nowHHMM: string, bedtimeHHMM: string, minutesBefore = 30): boolean {
+  if (!bedtimeHHMM) return false
+  const toMin = (s: string) => {
+    const [h, m] = s.split(':').map((x) => parseInt(x, 10))
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : -1
+  }
+  const now = toMin(nowHHMM)
+  const bed = toMin(bedtimeHHMM)
+  if (now < 0 || bed < 0) return false
+  if (isBedtime(nowHHMM, bedtimeHHMM)) return true
+  const start = bed - minutesBefore
+  // 睡觉时间在午夜前,提前量不会跨天,直接比就行
+  return start >= 0 && now >= start && now < bed
+}
+
 export const STAGE_LABEL: Record<AgeStage, string> = {
   toddler: '幼儿园',
   primary: '小学',

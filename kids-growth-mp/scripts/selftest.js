@@ -76,6 +76,8 @@ const fakeTaro = {
     storage.set(k, JSON.parse(JSON.stringify(v)))
   },
   clearStorageSync: () => storage.clear(),
+  // 备份靠它枚举全部 key —— 不模拟的话测到的是退化分支,不是真实路径
+  getStorageInfoSync: () => ({ keys: [...storage.keys()], currentSize: 0, limitSize: 10240 }),
   // errlog 用它记「出错时在哪个页面」
   getCurrentPages: () => [{ route: 'pages/index/index' }],
 }
@@ -363,6 +365,182 @@ function run() {
   eq(vs.myVoiceCount(), 1, '没失效的那条要留着')
   vs.deleteMyVoice('How are you')
   eq(vs.myVoiceCount(), 0, '删掉应生效,且不受句末标点影响')
+
+  /*
+    ---- 备份与恢复 ----
+
+    在这之前这套系统**没有任何备份**:云同步没配过,「导出数据」导出的
+    只有五行统计摘要。而成长档案(身高体重、事例、健康、成绩)和学习进度
+    不一样 —— 进度能重新练回来,那些不能。所以这一条测得最狠。
+  */
+  reset()
+  const bk = L('store/backup.js')
+  const cidB = study.getCurrentChildId()
+  const dkB = study.ensureBuiltinDeck(cidB, 'enlight-colors')
+  study.adjustPoints(37)
+  const petsForBk = L('core/pets.js')
+  fun.choosePet(petsForBk.PET_LINES[0].key)
+  fun.feedPetDetailed(11)
+  habits.ensureHabits()
+  const someHabit = habits.listHabits()[0]
+  if (someHabit) habits.toggleHabit(someHabit.id)
+  const recStore = L('store/records.js')
+  recStore.saveProfile({ name: '小朋友', gender: 'male', birthdate: '2021-02-01' })
+
+  const text = bk.backupToText()
+  ok(text.length > 100, '备份应该是有内容的')
+  const bkParsed = bk.parseBackup(text)
+  eq(bkParsed.ok, true, '自己导出的备份必须能被自己解析')
+
+  // 校验要严 —— 恢复是破坏性的,拿错文件照做会把仅有的一份也弄没
+  eq(bk.parseBackup('').ok, false, '空内容不该被当成备份')
+  eq(bk.parseBackup('随便一段话').ok, false, '不是 JSON 的不该被当成备份')
+  eq(bk.parseBackup('{"a":1}').ok, false, '别的 JSON 不该被当成备份')
+  eq(bk.parseBackup(JSON.stringify({ app: 'kids-growth-mp', ver: 1 })).ok, false, '没有 data 不该通过')
+  eq(
+    bk.parseBackup(JSON.stringify({ app: 'kids-growth-mp', ver: 1, data: {} })).ok,
+    false,
+    'data 是空的不该通过',
+  )
+  eq(
+    bk.parseBackup(JSON.stringify({ app: 'kids-growth-mp', ver: 99, data: { a: 1 } })).ok,
+    false,
+    '来自更新版本的备份不该硬吃',
+  )
+
+  // 真正的往返:清空 → 恢复 → 每一样都得回来
+  const bkXp = study.getPoints().xp
+  const fedBefore = fun.getPet().fed
+  const cardsBefore = study.countDeckCards(dkB)
+  const habitDoneBefore = habits.doneToday().length
+  db.clearAll()
+  db.__resetCache()
+  eq(study.getPoints().xp, 0, '清空后应该什么都没有')
+  const r = bk.restoreBackup(text)
+  eq(r.ok, true, '恢复应该成功')
+  ok(r.count > 5, '恢复的项数不该只有零星几个')
+  eq(study.getPoints().xp, bkXp, '成长值必须回来')
+  eq(fun.getPet().fed, fedBefore, '宠物喂了几口必须回来')
+  eq(study.countDeckCards(dkB), cardsBefore, '卡片必须回来')
+  eq(habits.doneToday().length, habitDoneBefore, '打卡记录必须回来')
+  eq(recStore.getProfile().birthdate, '2021-02-01', '生日(成长档案的地基)必须回来')
+  eq(study.getCurrentChildId(), cidB, '孩子 id 必须回来,否则所有记录都对不上人')
+
+  /*
+    ---- 今天这条路 ----
+    4 岁半、不识字、每天 15 分钟 —— 他需要的是一条排好的路,不是一屏入口。
+  */
+  const dp = L('core/dailyPlan.js')
+  const fakeDecks = [
+    { id: 'd1', itemType: 'pic', name: '认识动物', due: 20 },
+    { id: 'd2', itemType: 'pic', name: '认识颜色', due: 12 },
+    { id: 'd3', itemType: 'hanzi', name: '幼儿识字', due: 30 },
+    { id: 'd4', itemType: 'word', name: '小学单词', due: 40 },
+  ]
+  const tPlan = dp.buildPlan(fakeDecks, 'toddler')
+  ok(tPlan.length >= 3 && tPlan.length <= 4, '幼儿段应排出 3–4 步')
+  eq(tPlan[0].mode, 'listenPic', '第一步该是「听」—— 不用认字,进入状态最快')
+  eq(tPlan[tPlan.length - 1].mode, 'earTrain', '最后一步该是磨耳朵 —— 收尾要轻松')
+  ok(
+    tPlan.every((s) => s.limit <= 8),
+    '幼儿段每步题量必须小 —— 4 岁半撑不了 12 题一组',
+  )
+  ok(!tPlan.some((s) => s.deckId === 'd4'), '幼儿段不该排小学单词')
+  // 没题可做时不能端上来一组空题
+  eq(dp.buildPlan([{ id: 'x', itemType: 'pic', name: '空', due: 0 }], 'toddler').length, 0, '没到期的卡组不该进今天这条路')
+  eq(dp.buildPlan([], 'toddler').length, 0, '一个卡组都没有时应给出空计划')
+  // 同一步不该重复出现
+  const planKeys = tPlan.map((s) => s.deckId + '|' + s.mode)
+  eq(planKeys.length, new Set(planKeys).size, '同一个卡组+练法不该在一天里排两次')
+  ok(dp.planMinutes(tPlan) > 0 && dp.planMinutes(tPlan) < 30, '一条路的预估时长要在合理范围')
+
+  reset()
+  const planStore = L('store/plan.js')
+  planStore.savePlan(tPlan)
+  eq(planStore.getPlan().done, 0, '刚排好时还没走过')
+  const nx = planStore.advancePlan()
+  eq(planStore.getPlan().done, 1, '走完一步应记一步')
+  eq(nx && nx.mode, tPlan[1].mode, '推进后应给出下一步')
+  planStore.advancePlan()
+  planStore.advancePlan()
+  planStore.advancePlan()
+  eq(planStore.planFinished(), true, '全部走完应判定为完成')
+  eq(planStore.advancePlan(), undefined, '走完之后再推进不该凭空多出一步')
+
+  /*
+    ---- 睡前降刺激 ----
+    彩带、震动是提高兴奋度的设计,睡前半小时该反着来。
+  */
+  eq(ag.isWindDown('20:05', '20:30'), true, '睡前 25 分钟应进入安静模式')
+  eq(ag.isWindDown('19:55', '20:30'), false, '睡前 35 分钟还不用安静')
+  eq(ag.isWindDown('21:00', '20:30'), true, '过了睡觉时间当然算')
+  eq(ag.isWindDown('00:30', '20:30'), true, '跨零点仍算')
+  eq(ag.isWindDown('12:00', '20:30'), false, '中午不该进安静模式')
+  eq(ag.isWindDown('20:05', ''), false, '没设睡觉时间就不进安静模式')
+
+  /*
+    ---- 使用日志 ----
+    在这之前我们只能靠猜他怎么用。
+  */
+  reset()
+  const usageStore = L('store/usage.js')
+  usageStore.noteUsage('open', '认识动物', 'listenPic')
+  usageStore.noteUsage('finish', '认识动物', 'listenPic', 6, 6)
+  usageStore.noteUsage('open', '幼儿识字', 'recognize')
+  usageStore.noteUsage('quit', '幼儿识字', 'recognize', 2, 6)
+  usageStore.noteUsage('open', '幼儿识字', 'recognize')
+  usageStore.noteUsage('quit', '幼儿识字', 'recognize', 1, 6)
+  const sum = usageStore.summarize(['认识动物', '幼儿识字', '从没打开过的包'])
+  eq(sum.opens, 3, '应数出打开了 3 组')
+  eq(sum.finished, 1, '应数出做完 1 组')
+  eq(sum.quits, 2, '应数出半途退出 2 组')
+  eq(sum.top[0].deck, '幼儿识字', '最常做的应排第一')
+  eq(sum.dropping.length > 0 && sum.dropping[0].deck, '幼儿识字', '最容易退出的应被指出来')
+  eq(sum.dropping[0].quitRate, 100, '两次开两次退,退出率应是 100%')
+  eq(sum.untouched.includes('从没打开过的包'), true, '一次都没打开的包必须被点名')
+  eq(sum.untouched.includes('认识动物'), false, '打开过的不该出现在「没打开过」里')
+  ok(sum.peakHour >= 0 && sum.peakHour < 24, '应能算出最常用的时段')
+
+  /*
+    ---- 「这道不对」 ----
+    4737 张卡是我生成的,自测查得了结构、查不了对错。
+  */
+  reset()
+  const repStore = L('store/reports.js')
+  eq(repStore.reportCount(), 0, '一开始没有标记')
+  repStore.reportCard({ id: 'c1', front: '苹果', back: 'apple', deckName: '水果', mode: 'picChoose' })
+  repStore.reportCard({ id: 'c1', front: '苹果', back: 'apple', deckName: '水果', mode: 'picChoose' })
+  eq(repStore.reportCount(), 1, '同一张卡连按两下只该记一条')
+  repStore.reportCard({ id: 'c2', front: '香蕉', back: 'banana', deckName: '水果', mode: 'picChoose' })
+  eq(repStore.reportCount(), 2, '不同的卡应各记一条')
+  ok(repStore.reportsToText().indexOf('苹果') >= 0, '导出的文本里要看得出是哪张卡')
+  repStore.clearReports()
+  eq(repStore.reportCount(), 0, '清空应生效')
+
+  /*
+    ---- 家长录音先录哪些 ----
+    家长真正会录的大概二十句,得把最值的排在最前面。
+  */
+  const vp = L('core/voicePriority.js')
+  const ranked = vp.rankForRecording(
+    [
+      { text: 'Hello', level: 'easy', where: '打招呼' },
+      { text: 'Hello', level: 'easy', where: '在学校' },
+      { text: 'Hello', level: 'easy', where: '在公园' },
+      { text: 'I would like to order a sandwich please', level: 'hard', where: '餐厅' },
+      { text: 'Thank you', level: 'easy', where: '打招呼' },
+    ],
+    3,
+  )
+  eq(ranked[0].text, 'Hello', '出现三次的短句应排第一 —— 录一次到处都能用')
+  eq(ranked[0].times, 3, '应数出它出现了三次')
+  eq(ranked[0].where.length, 3, '应说清楚这句在哪些地方会用到')
+  ok(
+    ranked.findIndex((r) => r.text === 'Thank you') <
+      ranked.findIndex((r) => r.text.indexOf('sandwich') >= 0) + 99,
+    '短的简单句应排在长难句前面',
+  )
+  eq(vp.rankForRecording([], 5).length, 0, '没有候选时应给出空列表')
 
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')

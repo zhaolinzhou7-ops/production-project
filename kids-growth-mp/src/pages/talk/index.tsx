@@ -48,6 +48,7 @@ import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount } from '../../store/voice'
+import { rankForRecording, type RankedSentence } from '../../core/voicePriority'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
@@ -94,6 +95,24 @@ function Talk() {
   const [parentRec, setParentRec] = useState('')
   /** 录/删之后用它逼界面重读一次,否则按钮状态不会变 */
   const [, setVoiceTick] = useState(0)
+
+  /*
+    先录哪些。
+
+    对话内容有几百句,而家长真正会坐下来录的大概二十句。让他自己从几百句里
+    挑,结果通常是录了开头几段就放弃 —— 而开头几段未必是孩子最常碰到的。
+    所以由程序排:重复出现的、短的、简单档的排前面,录一次到处都用得上。
+  */
+  const toRecord = useMemo<RankedSentence[]>(() => {
+    const cands: Array<{ text: string; level: string; where: string }> = []
+    for (const d of DIALOGS) {
+      for (const t of d.turns) {
+        cands.push({ text: t.bot, level: d.level, where: d.title })
+        cands.push({ text: t.expect, level: d.level, where: d.title })
+      }
+    }
+    return rankForRecording(cands, 15)
+  }, [])
 
   const startParentRec = (sentence: string) => {
     if (parentRec) return
@@ -898,6 +917,34 @@ function Talk() {
           {myVoiceCount() > 0 ? `已录 ${myVoiceCount()} 句` : '录一句,以后这句就放你的声音'}
         </Text>
       </View>
+
+      {/* 打开录音模式时,先把「最该录的 15 句」摆出来 */}
+      {recMode ? (
+        <View className='toprec'>
+          <Text className='toprec__t'>先录这 15 句(重复出现最多、最短)</Text>
+          {toRecord.map((r) => {
+            const done = !!getMyVoice(r.text)
+            return (
+              <View key={r.text} className={done ? 'toprec__r toprec__r--on' : 'toprec__r'}>
+                <Text className='toprec__s'>{r.text}</Text>
+                <Text className='toprec__w'>
+                  {done ? '✅ 已录' : `出现 ${r.times} 次 · ${r.where.join('/')}`}
+                </Text>
+                {!done ? (
+                  <View className='toprec__b' onClick={() => startParentRec(r.text)}>
+                    <Text className='toprec__bt'>{parentRec === r.text ? '录制中…' : '🎤 录'}</Text>
+                  </View>
+                ) : null}
+                {parentRec === r.text ? (
+                  <View className='toprec__b toprec__b--stop' onClick={stopParentRec}>
+                    <Text className='toprec__bt'>⏹ 录完</Text>
+                  </View>
+                ) : null}
+              </View>
+            )
+          })}
+        </View>
+      ) : null}
 
       {!inDetail ? (
         <View className='tabs2'>

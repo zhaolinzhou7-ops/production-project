@@ -173,3 +173,38 @@ export function claimNewAchievements(childId: string): string[] {
   if (fresh.length > 0) writeObject(SEEN_ACH_KEY, [...seen, ...fresh])
   return fresh
 }
+
+/**
+ * 已经掌握的都有哪些。
+ *
+ * 这是家长真正想知道的那件事。积分、等级、连续天数是**动力设计**,
+ * 回答不了「他到底会了多少」——而后者才是判断这个工具值不值得
+ * 继续用下去的唯一依据。
+ *
+ * 按卡组分组给出,家长一眼能看到「英语会了 40 个,识字会了 12 个」。
+ */
+export function masteredByDeck(
+  childId: string,
+): Array<{ deck: string; count: number; sample: string[] }> {
+  const states = readTable<StudyState>(KEYS.states).filter(
+    (s) => s.childId === childId && s.status === 'mastered',
+  )
+  const cards = new Map(
+    readTable<{ id: string; front: string; deckId: string }>(KEYS.cards).map((c) => [c.id, c]),
+  )
+  const deckNames = new Map(
+    readTable<{ id: string; name: string }>(KEYS.decks).map((d) => [d.id, d.name]),
+  )
+  const byDeck = new Map<string, string[]>()
+  for (const s of states) {
+    const c = cards.get(s.cardId)
+    if (!c) continue
+    const name = deckNames.get(c.deckId) ?? '其它'
+    const arr = byDeck.get(name) ?? []
+    arr.push(c.front)
+    byDeck.set(name, arr)
+  }
+  return [...byDeck.entries()]
+    .map(([deck, fronts]) => ({ deck, count: fronts.length, sample: fronts.slice(0, 12) }))
+    .sort((a, b) => b.count - a.count)
+}

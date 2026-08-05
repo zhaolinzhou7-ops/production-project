@@ -114,3 +114,35 @@ export const KEYS = {
   drills: 'drills',
   points: 'points',
 } as const
+
+/**
+ * 存储里现在有哪些 key。
+ *
+ * 备份用它来**枚举全部数据**,而不是照着一份手写的清单抄 ——
+ * 手写清单一定会漏:这个项目里散着二十多个 key(pet/habits/rewards/
+ * talkRecords/myVoices/childProfile……),我每加一个功能就多一个,
+ * 漏掉哪个,用户就会在恢复之后发现「宠物还在,打卡记录没了」。
+ */
+export function allKeys(): string[] {
+  try {
+    const info = Taro.getStorageInfoSync()
+    const keys = info && Array.isArray(info.keys) ? info.keys : []
+    // 缓存里可能有还没落盘的新 key,一并算上
+    for (const k of cache.keys()) if (!keys.includes(k)) keys.push(k)
+    return keys
+  } catch {
+    return [...cache.keys()]
+  }
+}
+
+/** 读原始值(备份用,不做类型加工) */
+export function readAny(key: string): unknown {
+  return readRaw(key)
+}
+
+/** 写原始值(恢复用) */
+export function writeAny(key: string, value: unknown): void {
+  cache.set(key, value)
+  dirty.add(key)
+  scheduleFlush()
+}

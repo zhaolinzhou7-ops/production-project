@@ -314,3 +314,31 @@
   margin: 14px 0;
   line-height: 1.6;
 }
+
+/* 备份入口:这是整个家长中心最重要的一条,给它一个显眼的底色 */
+.lrow--hi {
+  background: rgba(52, 211, 153, 0.12);
+  border: 2px solid rgba(52, 211, 153, 0.35);
+}
+.lrow__h {
+  display: block;
+  margin-top: 8px;
+  font-size: 21px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+/* 已掌握清单 + 使用情况 */
+.mst {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  &__n { display: block; font-size: 26px; color: #374151; font-weight: 500; }
+  &__s { display: block; margin-top: 8px; font-size: 22px; color: #9ca3af; line-height: 1.7; }
+}
+.usg {
+  display: block;
+  font-size: 23px;
+  color: #6b7280;
+  line-height: 1.8;
+  &--warn { color: #b45309; }
+}
