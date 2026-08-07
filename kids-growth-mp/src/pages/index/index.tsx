@@ -534,18 +534,23 @@ function Index() {
         <Text className='morebtn' onClick={() => setShowMore(true)}>更多(家长用)▾</Text>
       ) : null}
 
-      {getStage() !== 'toddler' || showMore ? (
+      {/*
+        口算**永远留在主屏**。
+        上一版我把它和错题本一起收进了「更多」—— 错的:错题本是家长偶尔查的,
+        口算是孩子每天要做的。一个每天都用的东西藏起来,用户的感受就是「被删了」。
+      */}
       <View className='entries'>
         <View className='entry entry--math' onClick={() => openPage('/pages/math/index')}>
           <Text className='entry__icon'>🧮</Text>
           <Text className='entry__t'>口算练习</Text>
         </View>
-        <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
-          <Text className='entry__icon'>📕</Text>
-          <Text className='entry__t'>错题本</Text>
-        </View>
+        {getStage() !== 'toddler' || showMore ? (
+          <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
+            <Text className='entry__icon'>📕</Text>
+            <Text className='entry__t'>错题本</Text>
+          </View>
+        ) : null}
       </View>
-      ) : null}
 
       {/* 等级:成长值攒到下一级还差多少,一眼可见 */}
       <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>

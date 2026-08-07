@@ -232,12 +232,16 @@ function run() {
   for (const k of md.mathKindsForTier('school')) {
     eq(md.tierOfKind(k.kind), 'school', `${k.label} 应归在小学档`)
   }
-  // 两档不能有交集,否则「换一档」换不干净
+  // 三档不能有交集,否则「换一档」换不干净
   const tKinds = md.mathKindsForTier('toddler').map((k) => k.kind)
   const sKinds = md.mathKindsForTier('school').map((k) => k.kind)
-  eq(tKinds.filter((k) => sKinds.includes(k)).length, 0, '两个难度档的题型不该重叠')
+  const oKinds = md.mathKindsForTier('olympic').map((k) => k.kind)
+  eq(tKinds.filter((k) => sKinds.includes(k)).length, 0, '幼儿档和小学档不该重叠')
+  eq(tKinds.filter((k) => oKinds.includes(k)).length, 0, '幼儿档和思维档不该重叠')
+  eq(sKinds.filter((k) => oKinds.includes(k)).length, 0, '小学档和思维档不该重叠')
+  ok(oKinds.length >= 4, '思维档应有足够的专题')
   // 每一档的题都得能真的生成出来,且答案对得上
-  for (const tier of ['toddler', 'school']) {
+  for (const tier of ['toddler', 'school', 'olympic']) {
     for (const k of md.mathKindsForTier(tier)) {
       const ps = md.generateDrill(k.kind, 8, tier === 'toddler' ? 'toddler' : 'primary')
       eq(ps.length, 8, `${k.label} 应能出 8 道题`)
@@ -245,7 +249,72 @@ function run() {
         ps.every((p) => p.text && Number.isFinite(p.answer) && p.answer >= 0),
         `${k.label} 的题目必须有题干,答案必须是非负整数(孩子还没学负数)`,
       )
+      // 答案必须是整数 —— 出现小数就是生成器写错了
+      ok(
+        ps.every((p) => Number.isInteger(p.answer)),
+        `${k.label} 的答案必须是整数`,
+      )
     }
+  }
+
+  /*
+    ---- 逐题核对新加的思维题,答案不能靠「看着像对」 ----
+    这些题是我写的生成器出的,而错的答案会被孩子当成对的记住。
+  */
+  for (let i = 0; i < 300; i++) {
+    // 20 以内退位减:必须真的退位(个位不够减),否则和 sub10 没区别
+    const s20 = md.generateProblem('sub20', 'toddler')
+    const m20 = /^(\d+) - (\d+) =$/.exec(s20.text)
+    ok(!!m20, '20 以内退位减的题面格式应正确')
+    if (m20) {
+      const a = Number(m20[1])
+      const b = Number(m20[2])
+      eq(s20.answer, a - b, '20 以内退位减的答案要对')
+      ok(a > 10 && a <= 18, '被减数应在 11–18 之间')
+      ok(a - b >= 0 && a - b <= 9, '差应落在 10 以内')
+      ok(a % 10 < b, '必须是真退位题(个位不够减),否则就成了 10 以内减法')
+    }
+    // 连加连减:结果不能为负
+    const ch = md.generateProblem('chain', 'toddler')
+    const mc = /^(\d+) \+ (\d+) - (\d+) =$/.exec(ch.text)
+    ok(!!mc, '连加连减的题面格式应正确')
+    if (mc) eq(ch.answer, Number(mc[1]) + Number(mc[2]) - Number(mc[3]), '连加连减的答案要对')
+    ok(ch.answer >= 0, '连加连减不该出现负数')
+    // 分一分:必须能整除
+    const hf = md.generateProblem('half', 'toddler')
+    const mh = /平均分给 (\d+) 个小朋友/.exec(hf.text)
+    ok(!!mh, '分一分应说清楚分给几个人')
+    ok(hf.answer >= 1, '每人至少分到 1 个 —— 分到 0 个对孩子没有意义')
+    // 等量代换
+    const sw = md.generateProblem('swap', 'primary')
+    const ms = /1 个 (.+?) 可以换 (\d+) 个 (.+?)\n(\d+) 个/.exec(sw.text)
+    ok(!!ms, '等量代换的题面应完整')
+    if (ms) eq(sw.answer, Number(ms[2]) * Number(ms[4]), '等量代换的答案要对')
+    // 图形计数:n 个格子连成一排,长方形个数 = n(n+1)/2
+    const cr = md.generateProblem('countRect', 'primary')
+    const mr = /的 (\d+) 个格子/.exec(cr.text)
+    ok(!!mr, '图形计数应说清楚有几个格子')
+    if (mr) {
+      const nn = Number(mr[1])
+      eq(cr.answer, (nn * (nn + 1)) / 2, '图形计数的答案要等于 n(n+1)/2')
+    }
+    // 周期问题:答案必须落在那一组的范围里
+    const cy = md.generateProblem('cycle', 'primary')
+    const mcy = /答 1-(\d+)/.exec(cy.text)
+    ok(!!mcy, '周期问题要说清楚答案范围')
+    if (mcy) ok(cy.answer >= 1 && cy.answer <= Number(mcy[1]), '周期问题的答案应落在给定范围内')
+    // 数图形:题面里 target 的个数要和答案一致
+    const cs = md.generateProblem('countShape', 'toddler')
+    const mcs = /一共有几个 (.+?)\?$/.exec(cs.text)
+    ok(!!mcs, '数图形应说清楚数哪一个')
+    if (mcs) {
+      const row = cs.text.split('\n')[0]
+      eq([...row].join('').split(mcs[1]).length - 1, cs.answer, '数图形:图里的个数必须等于答案')
+    }
+    // 排第几:小鸡的位置要和答案一致
+    const od = md.generateProblem('ordinal', 'toddler')
+    const orow = od.text.split('\n')[0]
+    eq([...orow].indexOf('🐣') + 1, od.answer, '排第几:小鸡的实际位置必须等于答案')
   }
 
   // ---- 学段:没选过必须能被认出来,不能静默当成小学 ----

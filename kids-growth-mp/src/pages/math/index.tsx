@@ -73,7 +73,15 @@ function MathPage() {
   useUnload(() => {})
 
   const start = () => {
-    setProblems(generateDrill(kind, count, getStage()))
+    /*
+      范围要按**选中的难度档**算,不能按学段算。
+
+      这里原先传的是 getStage() —— 于是家长明明切到了「小学档」,
+      加法题却还是 10 以内(因为孩子的学段是幼儿园)。选了更难的一档
+      却拿到同样简单的题,那个开关等于是假的。
+    */
+    const rangeStage = tier === 'toddler' ? 'toddler' : 'primary'
+    setProblems(generateDrill(kind, count, rangeStage))
     setIdx(0)
     setCorrect(0)
     setInput('')

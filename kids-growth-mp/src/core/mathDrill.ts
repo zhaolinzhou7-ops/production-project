@@ -9,6 +9,14 @@ export type MathKind =
   | 'makeTen'
   | 'compare'
   | 'add20'
+  // 幼小衔接:20 以内退位减、连加连减、序数、分一半
+  | 'sub20'
+  | 'chain'
+  | 'ordinal'
+  | 'half'
+  // 思维启蒙(真正的「幼儿奥数」不是竖式,是规律/空间/推理)
+  | 'pattern'
+  | 'countShape'
   // 小学及以上
   | 'add'
   | 'sub'
@@ -16,6 +24,11 @@ export type MathKind =
   | 'div'
   | 'mulTable'
   | 'mixed'
+  // 进阶思维:周期、等量代换、图形计数、数列
+  | 'cycle'
+  | 'swap'
+  | 'countRect'
+  | 'series'
 
 export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
@@ -44,19 +57,35 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'makeTen', label: '凑十', icon: '🔟', desc: '几加几等于 10' },
   { kind: 'compare', label: '比大小', icon: '⚖️', desc: '哪个多、哪个少' },
   { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' },
+  { kind: 'sub20', label: '20 以内退位减', icon: '🔻', desc: '13-5 这类,和进位加配套' },
+  { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' },
+  { kind: 'ordinal', label: '排第几', icon: '🥇', desc: '从前数第几个' },
+  { kind: 'half', label: '分一分', icon: '🍰', desc: '平均分,除法的地基' },
+  { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' },
+  { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' },
   { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' },
   { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' },
   { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' },
   { kind: 'mul', label: '乘法', icon: '⏫', desc: '含两位数乘一位数' },
   { kind: 'div', label: '除法', icon: '➗', desc: '整除,无余数' },
   { kind: 'mixed', label: '混合', icon: '🎲', desc: '四则混合随机' },
+  { kind: 'series', label: '数列找规律', icon: '📈', desc: '2,4,8,16… 接下来是几' },
+  { kind: 'cycle', label: '周期问题', icon: '🔁', desc: '重复排下去,第 N 个是什么' },
+  { kind: 'swap', label: '等量代换', icon: '⚖️', desc: '1 个换 2 个,那 3 个换几个' },
+  { kind: 'countRect', label: '图形计数', icon: '▦', desc: '一共能数出几个长方形' },
 ]
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
   return MATH_KINDS.find((k) => k.kind === kind)
 }
 
-const TODDLER_KINDS: MathKind[] = ['count10', 'add10', 'sub10', 'makeTen', 'compare', 'add20']
+const TODDLER_KINDS: MathKind[] = [
+  'count10', 'add10', 'sub10', 'makeTen', 'compare',
+  'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern', 'countShape',
+]
+
+/** 进阶档:经典奥数入门专题,和「算得快」是两回事 —— 考的是想法 */
+const OLYMPIC_KINDS: MathKind[] = ['series', 'cycle', 'swap', 'countRect']
 
 /**
  * 难度档。
@@ -66,7 +95,7 @@ const TODDLER_KINDS: MathKind[] = ['count10', 'add10', 'sub10', 'makeTen', 'comp
  * 只知道「我做不出来了」。难度必须是**页面上看得见、随手能换**的东西,
  * 而不是藏在别处、还会被一次清缓存悄悄改掉的设置。
  */
-export type MathTier = 'toddler' | 'school'
+export type MathTier = 'toddler' | 'school' | 'olympic'
 
 export interface MathTierDef {
   tier: MathTier
@@ -75,8 +104,9 @@ export interface MathTierDef {
 }
 
 export const MATH_TIERS: MathTierDef[] = [
-  { tier: 'toddler', label: '幼儿档', desc: '数一数、10 以内加减、凑十、20 以内进位' },
+  { tier: 'toddler', label: '幼儿档', desc: '10/20 以内加减、凑十、找规律、数图形' },
   { tier: 'school', label: '小学档', desc: '加减乘除、乘法口诀、混合运算' },
+  { tier: 'olympic', label: '思维档', desc: '找规律、周期、等量代换、图形计数' },
 ]
 
 /** 学段对应的默认难度档(只作默认值,页面上随时可改) */
@@ -86,14 +116,16 @@ export function defaultTierFor(stage: AgeStage): MathTier {
 
 /** 某一档里有哪些题型 */
 export function mathKindsForTier(tier: MathTier): MathKindDef[] {
-  return tier === 'toddler'
-    ? MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
-    : MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind))
+  if (tier === 'toddler') return MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
+  if (tier === 'olympic') return MATH_KINDS.filter((k) => OLYMPIC_KINDS.includes(k.kind))
+  return MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind) && !OLYMPIC_KINDS.includes(k.kind))
 }
 
 /** 这个题型属于哪一档 —— 用来把「上次选的题型」还原到对的档上 */
 export function tierOfKind(kind: MathKind): MathTier {
-  return TODDLER_KINDS.includes(kind) ? 'toddler' : 'school'
+  if (TODDLER_KINDS.includes(kind)) return 'toddler'
+  if (OLYMPIC_KINDS.includes(kind)) return 'olympic'
+  return 'school'
 }
 
 /**
@@ -165,6 +197,149 @@ function genAdd20(): MathProblem {
   return { text: `${a} + ${b} =`, answer: a + b }
 }
 
+
+/** 20 以内退位减:13-5 这类。和进位加是配套的一对,只练加不练减会瘸腿 */
+function genSub20(): MathProblem {
+  const a = randInt(11, 18)
+  const b = randInt(a - 9, 9)
+  return { text: `${a} - ${b} =`, answer: a - b }
+}
+
+/** 连加连减:一步一步往下算,练的是「保持住中间结果」这件事 */
+function genChain(): MathProblem {
+  const a = randInt(2, 8)
+  const b = randInt(1, 9 - Math.min(a, 8))
+  const mid = a + b
+  const c = randInt(1, mid)
+  return { text: `${a} + ${b} - ${c} =`, answer: mid - c }
+}
+
+/** 排第几:序数概念。孩子常把「第 3 个」和「3 个」混起来,值得单独练 */
+function genOrdinal(): MathProblem {
+  const shapes = ['🍎', '🐟', '⭐', '🎈', '🚗']
+  const n = randInt(5, 9)
+  const at = randInt(2, n - 1)
+  const e = pick(shapes)
+  const row = new Array(n).fill(e)
+  row[at - 1] = '🐣'
+  return { text: `${row.join('')}\n小鸡排第几个?`, answer: at }
+}
+
+/** 分一分:把 n 个东西平均分给几个人 —— 除法的地基,比背口诀早得多 */
+function genHalf(): MathProblem {
+  const per = randInt(1, 5)
+  const people = randInt(2, 4)
+  const total = per * people
+  const e = pick(['🍬', '🍪', '🍓', '🎁'])
+  return { text: `${e.repeat(total)}\n平均分给 ${people} 个小朋友,每人几个?`, answer: per }
+}
+
+/**
+ * 找规律。
+ *
+ * 这才是真正的「幼儿奥数」—— 不是算得更快,是看出**藏在后面的那条规则**。
+ * 等差、等比、隔项三种,覆盖了低龄段绝大多数规律题。
+ */
+function genPattern(): MathProblem {
+  const type = randInt(1, 3)
+  if (type === 1) {
+    const start = randInt(1, 5)
+    const step = randInt(1, 4)
+    const xs = [start, start + step, start + step * 2, start + step * 3]
+    return { text: `${xs.join(', ')}, ( )\n接着填什么?`, answer: start + step * 4 }
+  }
+  if (type === 2) {
+    const start = randInt(1, 3)
+    const xs = [start, start * 2, start * 4, start * 8]
+    return { text: `${xs.join(', ')}, ( )\n接着填什么?`, answer: start * 16 }
+  }
+  // 隔项:1,5,2,5,3,5,( )
+  const a = randInt(1, 4)
+  const fix = randInt(6, 9)
+  return { text: `${a}, ${fix}, ${a + 1}, ${fix}, ${a + 2}, ${fix}, ( )\n接着填什么?`, answer: a + 3 }
+}
+
+/** 数图形:数量与专注力一起练,而且不需要认字 */
+function genCountShape(): MathProblem {
+  const target = pick(['🔺', '⭐', '🔵', '❤️'])
+  const other = pick(['🟩', '🟨', '⬜', '🟪'])
+  const n = randInt(3, 8)
+  const noise = randInt(3, 8)
+  const all = [...new Array(n).fill(target), ...new Array(noise).fill(other)]
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = all[i]
+    all[i] = all[j]
+    all[j] = t
+  }
+  return { text: `${all.join('')}\n一共有几个 ${target}?`, answer: n }
+}
+
+// ---------------- 进阶思维(奥数入门) ----------------
+
+/** 数列找规律:比幼儿档更长、规则更隐蔽(平方数、斐波那契、二级等差) */
+function genSeries(): MathProblem {
+  const type = randInt(1, 3)
+  if (type === 1) {
+    // 二级等差:1,2,4,7,11(差 1,2,3,4)
+    const a0 = randInt(1, 4)
+    const xs = [a0]
+    for (let i = 1; i < 5; i++) xs.push(xs[i - 1] + i)
+    return { text: `${xs.slice(0, 4).join(', ')}, ( )\n接下来是几?`, answer: xs[4] }
+  }
+  if (type === 2) {
+    // 斐波那契式:前两个相加
+    const a = randInt(1, 3)
+    const b = randInt(2, 5)
+    const xs = [a, b, a + b, a + 2 * b]
+    return { text: `${xs.join(', ')}, ( )\n接下来是几?`, answer: xs[2] + xs[3] }
+  }
+  // 平方数
+  const s0 = randInt(1, 4)
+  const xs = [s0, s0 + 1, s0 + 2, s0 + 3, s0 + 4].map((x) => x * x)
+  return { text: `${xs.slice(0, 4).join(', ')}, ( )\n接下来是几?`, answer: xs[4] }
+}
+
+/**
+ * 周期问题。
+ * 经典奥数入门专题:一串东西循环排下去,问第 N 个是什么。
+ * 考的是「除法 + 余数」的实际含义,而不是会不会算除法。
+ */
+function genCycle(): MathProblem {
+  const set = pick([
+    ['🔴', '🟡', '🔵'],
+    ['🐶', '🐱'],
+    ['⭐', '🌙', '☀️', '☁️'],
+  ])
+  const n = randInt(7, 30)
+  const idx = (n - 1) % set.length
+  return {
+    text: `${set.join('')}${set.join('')}… 一直这样排下去\n第 ${n} 个是第几种?(从左数,答 1-${set.length})`,
+    answer: idx + 1,
+  }
+}
+
+/** 等量代换:代数思维的起点,比列方程早很多年就能懂 */
+function genSwap(): MathProblem {
+  const rate = randInt(2, 4)
+  const k = randInt(2, 5)
+  const a = pick(['🍎', '🍐', '🍊'])
+  const b = pick(['🍬', '🍪', '🥕'])
+  return { text: `1 个 ${a} 可以换 ${rate} 个 ${b}\n${k} 个 ${a} 能换几个 ${b}?`, answer: rate * k }
+}
+
+/**
+ * 图形计数:一排 n 个小格子,一共能数出几个长方形?
+ * 答案是 n(n+1)/2 —— 孩子先靠数,数着数着自己会发现规律。
+ */
+function genCountRect(): MathProblem {
+  const n = randInt(3, 6)
+  return {
+    text: `${'▭'.repeat(n)}\n这样连成一排的 ${n} 个格子,一共能数出几个长方形?`,
+    answer: (n * (n + 1)) / 2,
+  }
+}
+
 // ---------------- 小学及以上 ----------------
 
 function genAdd(stage: AgeStage): MathProblem {
@@ -223,6 +398,26 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genCompare()
     case 'add20':
       return genAdd20()
+    case 'sub20':
+      return genSub20()
+    case 'chain':
+      return genChain()
+    case 'ordinal':
+      return genOrdinal()
+    case 'half':
+      return genHalf()
+    case 'pattern':
+      return genPattern()
+    case 'countShape':
+      return genCountShape()
+    case 'series':
+      return genSeries()
+    case 'cycle':
+      return genCycle()
+    case 'swap':
+      return genSwap()
+    case 'countRect':
+      return genCountRect()
     case 'add':
       return genAdd(stage)
     case 'sub':
