@@ -12,6 +12,7 @@ import type {
 } from '../core/learningContent'
 import { todayISO } from '../core/dateUtils'
 import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
+import { dailyPointCap, allowedAward } from '../core/pointCap'
 import { getProfile, saveProfile } from './records'
 import { computeStreak } from '../core/streak'
 import type {
@@ -46,24 +47,67 @@ export function getPoints(): PointStats {
 }
 
 /**
- * 直接增减成长值(习惯打卡用)。
+ * 今天已经拿到多少分。
+ *
+ * 单独记一份,而不是从流水里算 —— 加分的入口有四个(练习、口算、
+ * 习惯打卡、口语跟读),从流水反推容易漏掉其中一个,漏掉哪个哪个就能刷。
+ */
+interface DayPoints {
+  date: string
+  earned: number
+}
+
+export function earnedToday(): number {
+  const d = readObject<DayPoints>('pointsToday', { date: todayISO(), earned: 0 })
+  return d && d.date === todayISO() ? Math.max(0, d.earned) : 0
+}
+
+function noteEarned(delta: number): void {
+  const cur = earnedToday()
+  writeObject('pointsToday', { date: todayISO(), earned: Math.max(0, cur + delta) })
+}
+
+/** 今天还能再拿多少分(给界面显示用) */
+export function pointsRoomToday(): number {
+  return Math.max(0, dailyPointCap(getStage()) - earnedToday())
+}
+
+/**
+ * 所有加分**必须**走这里。
+ *
+ * 这是唯一的收口:练习、口算、习惯、口语跟读四个入口都汇到这一个函数,
+ * 每日上限才有意义 —— 只要漏掉一个,那个入口就能刷分。
+ *
+ * 返回**实际加了多少**(可能因为撞上上限而少于 delta),
+ * 调用方据此决定要不要提示「今天的分已经拿满啦」。
+ */
+function award(delta: number, keepXpOnNegative: boolean): { stats: PointStats; actual: number } {
+  const actual = allowedAward(delta, earnedToday(), dailyPointCap(getStage()))
+  const cur = getPoints()
+  const next = {
+    balance: cur.balance + actual,
+    xp: keepXpOnNegative && actual < 0 ? cur.xp : Math.max(0, cur.xp + actual),
+  }
+  writeObject(KEYS.points, next)
+  if (actual !== 0) noteEarned(actual)
+  return { stats: next, actual }
+}
+
+/**
+ * 直接增减成长值(习惯打卡、口语跟读用)。
  * 取消打卡要能扣回去 —— 否则反复勾选就能刷分。xp 不会被扣成负数。
  */
 export function adjustPoints(delta: number): PointStats {
-  const cur = getPoints()
-  const next = {
-    balance: cur.balance + delta,
-    xp: Math.max(0, cur.xp + delta),
-  }
-  writeObject(KEYS.points, next)
-  return next
+  return award(delta, false).stats
+}
+
+/** 同上,但会告诉调用方「因为到上限,实际只加了这么多」 */
+export function adjustPointsDetailed(delta: number): { stats: PointStats; actual: number } {
+  return award(delta, false)
 }
 
 function addPoints(delta: number): PointStats {
-  const cur = getPoints()
-  const next = { balance: cur.balance + delta, xp: delta > 0 ? cur.xp + delta : cur.xp }
-  writeObject(KEYS.points, next)
-  return next
+  return award(delta, true).stats
 }
 
 function builtinCardToLearnCard(
@@ -614,6 +658,8 @@ export interface SessionResult {
   pointsAwarded: number
   newBalance: number
   newXp: number
+  /** 这一组有没有因为撞上每日上限而少给了分 */
+  capped?: boolean
 }
 
 /** 会话结束:记录 session、按答对数加分。 */
@@ -644,11 +690,21 @@ export function finishSession(params: {
     createdAt: Date.now(),
   })
   writeTable(KEYS.sessions, sessions)
+  /*
+    ⚠️ 报给界面的必须是**实际加进去的**分,不是打算加的分。
+    撞上每日上限时,如果这里照旧报 points,结算页会显示「+20」
+    而账上只多了 5 —— 孩子下次自己一算就发现对不上,
+    那比不给分更伤:他会觉得这个程序在骗他。
+  */
+  const before = getPoints()
   const after = addPoints(points)
+  const actual = after.balance - before.balance
   return {
     correct,
     total,
-    pointsAwarded: points,
+    pointsAwarded: actual,
+    // 由这里判断「有没有被上限截住」—— 界面拿实际值再去比,永远比不出来
+    capped: actual < points,
     newBalance: after.balance,
     newXp: after.xp,
   }
@@ -679,8 +735,16 @@ export function finishDrill(params: {
     createdAt: Date.now(),
   })
   writeTable(KEYS.drills, drills)
+  // 同上:报实际加进去的分,否则撞上每日上限时结算页的数字是假的
+  const beforeDrill = getPoints()
   const after = addPoints(points)
-  return { correct, total, pointsAwarded: points, newBalance: after.balance, newXp: after.xp }
+  return {
+    correct,
+    total,
+    pointsAwarded: after.balance - beforeDrill.balance,
+    newBalance: after.balance,
+    newXp: after.xp,
+  }
 }
 
 // ============ 错题本(手动录入,跨学科) ============

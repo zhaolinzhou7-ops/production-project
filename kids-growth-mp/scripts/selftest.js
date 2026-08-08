@@ -716,6 +716,105 @@ function run() {
   )
   eq(vp.rankForRecording([], 5).length, 0, '没有候选时应给出空列表')
 
+  /*
+    ---- 每日积分上限(防刷分) ----
+
+    现在每答对一题都给分,而「再练一遍」可以无限次重来 —— 也就是说
+    只要一直点同一组题,分数可以刷到任意高。坏处不是「作弊」,
+    是**把整套激励系统废掉**:等级、贴纸、宠物、奖励兑换全挂在成长值上,
+    一旦孩子发现分能刷,后面所有的鼓励就一起失效了。
+  */
+  const pc = L('core/pointCap.js')
+  ok(pc.dailyPointCap('toddler') < pc.dailyPointCap('primary'), '幼儿的每日上限应低于小学')
+  eq(pc.allowedAward(10, 0, 100), 10, '没到上限时应全额给')
+  eq(pc.allowedAward(10, 95, 100), 5, '快到上限时只给剩下的额度')
+  eq(pc.allowedAward(10, 100, 100), 0, '到上限后不再加分')
+  eq(pc.allowedAward(10, 300, 100), 0, '超过上限(比如上限调小过)也不该给负数额度')
+  eq(pc.allowedAward(-8, 100, 100), -8, '扣分不受上限限制 —— 否则取消打卡扣不回去,照样能刷')
+  eq(pc.allowedAward(0, 0, 100), 0, '加 0 分就是 0')
+
+  reset()
+  const cidCap = study.getCurrentChildId()
+  study.setStage('toddler')
+  const cap = pc.dailyPointCap('toddler')
+  eq(study.earnedToday(), 0, '一开始今天还没拿过分')
+  eq(study.pointsRoomToday(), cap, '一开始的额度应等于上限')
+  study.adjustPoints(30)
+  eq(study.earnedToday(), 30, '加过分之后要记在今天头上')
+  eq(study.pointsRoomToday(), cap - 30, '额度应相应减少')
+  // 一路刷到上限
+  for (let i = 0; i < 100; i++) study.adjustPoints(20)
+  eq(study.getPoints().xp, cap, '不管刷多少次,今天的成长值都不该超过上限')
+  eq(study.pointsRoomToday(), 0, '到上限后额度为 0')
+  eq(study.adjustPoints(50).xp, cap, '到上限后继续加也不涨')
+  // 扣分要能扣回去,并且腾出额度(否则取消打卡就成了单向门)
+  study.adjustPoints(-20)
+  eq(study.getPoints().xp, cap - 20, '扣分必须真的扣掉')
+  ok(study.pointsRoomToday() >= 20, '扣掉之后应腾出额度')
+  // 结算报的分必须是**实际加进去的**,不能是打算加的
+  reset()
+  const cidCap2 = study.getCurrentChildId()
+  study.setStage('toddler')
+  const dkCap = study.ensureBuiltinDeck(cidCap2, 'enlight-colors')
+  study.adjustPoints(pc.dailyPointCap('toddler') - 4)
+  const capRes = study.finishSession({
+    childId: cidCap2,
+    deckId: dkCap,
+    mode: 'picChoose',
+    total: 10,
+    correct: 10,
+    durationSec: 60,
+  })
+  eq(capRes.pointsAwarded, 4, '撞上上限时,结算页显示的分必须等于账上真的多出来的分')
+  eq(capRes.capped, true, '被上限截住时必须告诉界面,否则孩子只会觉得「这次怎么没涨」')
+  eq(study.getPoints().balance, pc.dailyPointCap('toddler'), '余额不该超过上限')
+  reset()
+  const cidCap3 = study.getCurrentChildId()
+  study.setStage('toddler')
+  const dkCap3 = study.ensureBuiltinDeck(cidCap3, 'enlight-colors')
+  const okRes = study.finishSession({
+    childId: cidCap3,
+    deckId: dkCap3,
+    mode: 'picChoose',
+    total: 5,
+    correct: 5,
+    durationSec: 30,
+  })
+  eq(okRes.capped, false, '没撞上限时不该误报「拿满了」')
+  ok(okRes.pointsAwarded > 0, '正常情况下应真的给分')
+
+  // 换一天要重新开始
+  db.writeObject('pointsToday', { date: '2000-01-01', earned: 999 })
+  eq(study.earnedToday(), 0, '昨天的额度不该占着今天')
+
+  /*
+    ---- 录音:家长的和孩子的分开存,都要留住最后一次 ----
+
+    孩子自己的跟读/复述原先根本没存 —— 只拿到一个临时文件路径,
+    退出小程序就没了。家长陪着录了一晚上,第二天想听听进步,什么都不剩。
+  */
+  reset()
+  const vs2 = L('store/voice.js')
+  eq(vs2.saveMyVoice('Good morning', '/p/1.mp3', 'parent'), true, '家长录音应能存')
+  eq(vs2.saveMyVoice('Good morning', '/k/1.mp3', 'kid'), true, '孩子录音应能存')
+  eq(vs2.getMyVoice('Good morning', 'parent'), '/p/1.mp3', '家长那份应独立保存')
+  eq(vs2.getMyVoice('Good morning', 'kid'), '/k/1.mp3', '孩子那份应独立保存')
+  eq(vs2.getMyVoice('Good morning'), '/p/1.mp3', '不传 owner 时默认取家长的(范读)')
+  // 不重录 → 留着最后一次;重录 → 覆盖
+  eq(vs2.getMyVoice('good morning!', 'kid'), '/k/1.mp3', '大小写标点不同也该找到同一条')
+  vs2.saveMyVoice('Good morning', '/k/2.mp3', 'kid')
+  eq(vs2.getMyVoice('Good morning', 'kid'), '/k/2.mp3', '重录应覆盖成最后一次')
+  eq(vs2.myVoiceCount('kid'), 1, '重录不该变成两条')
+  eq(vs2.getMyVoice('Good morning', 'parent'), '/p/1.mp3', '孩子重录不该动到家长那份')
+  // 删一边不影响另一边
+  vs2.deleteMyVoice('Good morning', 'kid')
+  eq(vs2.myVoiceCount('kid'), 0, '删孩子那份应生效')
+  eq(vs2.myVoiceCount('parent'), 1, '删孩子那份不该动家长的')
+  // 失效文件的清理也要分开
+  vs2.saveMyVoice('Hello', '/k/gone.mp3', 'kid')
+  eq(vs2.pruneMissing((x) => x !== '/k/gone.mp3', 'kid'), 1, '孩子那边失效的应被清掉')
+  eq(vs2.myVoiceCount('parent'), 1, '清理孩子那边不该波及家长')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {

@@ -16,7 +16,21 @@ import { voiceKeyOf, isValidVoiceKey } from '../core/voiceKey'
  * 录音只存在本机,不上传任何地方。
  */
 
-const KEY = 'myVoices'
+/**
+ * 谁录的。
+ *
+ * 两种录音的用途完全不同,必须分开存:
+ * - parent:家长的范读。**会顶替在线音源** —— 孩子点「听」放的就是它。
+ * - kid:孩子自己的跟读/复述。只用来回放和 A/B 对比,**绝不能**被当成范读
+ *   放给他听 —— 那等于拿他自己的发音去教他自己。
+ *
+ * 原先孩子那份根本没存:录完只拿到一个临时文件路径,退出小程序就没了。
+ * 家长辛苦陪着录了一晚上,第二天想听听进步,什么都不剩。
+ */
+export type VoiceOwner = 'parent' | 'kid'
+
+/** parent 沿用旧 key,老用户已经录好的不会因为这次改动丢掉 */
+const KEY_BY_OWNER: Record<VoiceOwner, string> = { parent: 'myVoices', kid: 'kidVoices' }
 
 export interface VoiceEntry {
   /** 归一化后的句子(索引用) */
@@ -30,24 +44,24 @@ export interface VoiceEntry {
 
 type VoiceMap = Record<string, VoiceEntry>
 
-function readAll(): VoiceMap {
-  const m = readObject<VoiceMap>(KEY, {})
+function readAll(owner: VoiceOwner = 'parent'): VoiceMap {
+  const m = readObject<VoiceMap>(KEY_BY_OWNER[owner], {})
   return m && typeof m === 'object' ? m : {}
 }
 
 /** 这句话有没有家长录音;有就返回本机文件路径 */
-export function getMyVoice(text: string): string {
+export function getMyVoice(text: string, owner: VoiceOwner = 'parent'): string {
   const k = voiceKeyOf(text)
   if (!isValidVoiceKey(k)) return ''
-  const e = readAll()[k]
+  const e = readAll(owner)[k]
   return e && typeof e.path === 'string' ? e.path : ''
 }
 
 /** 存一条。同一句再录一次直接覆盖 —— 家长重录通常就是因为上一条不满意 */
-export function saveMyVoice(text: string, path: string): boolean {
+export function saveMyVoice(text: string, path: string, owner: VoiceOwner = 'parent'): boolean {
   const k = voiceKeyOf(text)
   if (!isValidVoiceKey(k) || !path) return false
-  const all = readAll()
+  const all = readAll(owner)
   /*
     时间戳必须**严格递增**,不能直接用 Date.now()。
 
@@ -58,25 +72,25 @@ export function saveMyVoice(text: string, path: string): boolean {
   for (const e of Object.values(all)) if (e && e.at > maxAt) maxAt = e.at
   const at = Math.max(Date.now(), maxAt + 1)
   all[k] = { key: k, text: String(text), path, at }
-  writeObject(KEY, all)
+  writeObject(KEY_BY_OWNER[owner], all)
   return true
 }
 
-export function deleteMyVoice(text: string): void {
+export function deleteMyVoice(text: string, owner: VoiceOwner = 'parent'): void {
   const k = voiceKeyOf(text)
-  const all = readAll()
+  const all = readAll(owner)
   if (!all[k]) return
   delete all[k]
-  writeObject(KEY, all)
+  writeObject(KEY_BY_OWNER[owner], all)
 }
 
 /** 全部录音,最近录的排前面 —— 家长中心里列出来管理 */
-export function listMyVoices(): VoiceEntry[] {
-  return Object.values(readAll()).sort((a, b) => b.at - a.at)
+export function listMyVoices(owner: VoiceOwner = 'parent'): VoiceEntry[] {
+  return Object.values(readAll(owner)).sort((a, b) => b.at - a.at)
 }
 
-export function myVoiceCount(): number {
-  return Object.keys(readAll()).length
+export function myVoiceCount(owner: VoiceOwner = 'parent'): number {
+  return Object.keys(readAll(owner)).length
 }
 
 /**
@@ -86,8 +100,8 @@ export function myVoiceCount(): number {
  * 不存在文件的记录,表现就是「显示已录音,点了不响」—— 那比没录还让人恼火。
  * exists 由调用方(能访问文件系统的那一层)提供,这里只做纯粹的筛选。
  */
-export function pruneMissing(exists: (path: string) => boolean): number {
-  const all = readAll()
+export function pruneMissing(exists: (path: string) => boolean, owner: VoiceOwner = 'parent'): number {
+  const all = readAll(owner)
   let dropped = 0
   for (const k of Object.keys(all)) {
     if (!exists(all[k].path)) {
@@ -95,6 +109,6 @@ export function pruneMissing(exists: (path: string) => boolean): number {
       dropped += 1
     }
   }
-  if (dropped > 0) writeObject(KEY, all)
+  if (dropped > 0) writeObject(KEY_BY_OWNER[owner], all)
   return dropped
 }

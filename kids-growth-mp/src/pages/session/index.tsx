@@ -18,13 +18,14 @@ import { getAchievement } from '../../core/achievements'
 import { levelOf } from '../../core/levels'
 import { playWordAudio, playText, playEnglishSlow, stopAudio, prefetchAudio } from '../../lib/audio'
 import { startRecognize, stopRecognize } from '../../lib/speech'
-import { startRecord, stopRecord, playFile } from '../../lib/recorder'
+import { startRecord, stopRecord, playFile, keepRecording } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import PolyphoneNote from '../../components/PolyphoneNote'
 import { awardSticker, feedPetDetailed, bumpChallenge, type FeedResult } from '../../store/fun'
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
+import { saveMyVoice, getMyVoice } from '../../store/voice'
 import { advancePlan } from '../../store/plan'
 import { noteUsage } from '../../store/usage'
 import { reportCard } from '../../store/reports'
@@ -66,6 +67,8 @@ function Session() {
   const limitParam = Number(router.params.limit)
   const cardLimit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 12
   const [nextStep, setNextStep] = useState<PlanStep | null>(null)
+  /** 这一组有没有撞上「今天的分拿满了」 */
+  const [capped, setCapped] = useState(false)
   /*
     睡前降刺激:彩带、连击、震动都是提高兴奋度的设计,睡前半小时该反着来。
     只关特效,不关内容 —— 他照常能学,只是屏幕安静下来。
@@ -440,6 +443,7 @@ function Session() {
     } catch {
       /* 忽略 */
     }
+    setCapped(!!res.capped)
     setSummary({ correct: finalCorrect, total, points: res.pointsAwarded })
     setPhase('done')
     // 一组练完是关键节点,把攒着的写入立刻落盘,别等合并窗口
@@ -533,7 +537,22 @@ function Session() {
       setRecording(true)
       startRecord(
         (path) => {
-          setRecPath(path)
+          /*
+            孩子自己的录音也要**存成长期文件**。
+            原先这里直接用临时路径 —— 退出小程序就没了,家长陪着录了一晚上,
+            第二天想听听进步,什么都不剩。存下来之后,同一句再录会覆盖旧的,
+            所以永远留着的是「最后一次」。
+          */
+          const target = current?.card.front ?? ''
+          keepRecording(
+            path,
+            (saved) => {
+              setRecPath(saved)
+              if (target) saveMyVoice(target, saved, 'kid')
+            },
+            // 存不下来也别挡住练习:退回临时文件,这一次还能回放
+            () => setRecPath(path),
+          )
           setRecording(false)
         },
         () => setRecording(false),
@@ -622,6 +641,14 @@ function Session() {
           </View>
         ) : null}
         {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
+        {/*
+          撞上每日上限时要**说出来**。
+          默默不加分,孩子只会觉得「这次怎么没涨」—— 那比不给分更伤。
+          措辞也不能带责备:他没做错任何事,只是今天已经很够了。
+        */}
+        {capped ? (
+          <Text className='reward__line'>🌙 今天的成长值已经拿满啦,明天再来接着涨</Text>
+        ) : null}
         {inPlan && nextStep ? (
           <View
             className='btn btn--primary'
@@ -842,7 +869,15 @@ function Session() {
       {mode === 'recite' && (
         <View className='card'>
           <Text className='poem__title'>{current.card.front}</Text>
-          <Text className='poem__meta'>{poemMeta?.dynasty}·{poemMeta?.author}</Text>
+          {/*
+            自编的故事没有朝代和作者(亲子共读那一包),两边都空时整行不要 ——
+            否则屏幕上会孤零零挂着一个「·」。
+          */}
+          {poemMeta?.dynasty || poemMeta?.author ? (
+            <Text className='poem__meta'>
+              {[poemMeta?.dynasty, poemMeta?.author].filter(Boolean).join('·')}
+            </Text>
+          ) : null}
           {/*
             逐字点读:每个字都是可点的小方块,点谁读谁。
             为什么不做整句自动连读 —— 目前没有可用的中文整句音源,

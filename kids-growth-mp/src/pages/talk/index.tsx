@@ -42,12 +42,12 @@ import {
   getFailedSentence,
   playWordByWord,
 } from '../../lib/audio'
-import { startRecord, stopRecord, playFile, keepRecording } from '../../lib/recorder'
+import { startRecord, stopRecord, playFile, keepRecording, fileExists } from '../../lib/recorder'
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
-import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount } from '../../store/voice'
+import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount, pruneMissing } from '../../store/voice'
 import { rankForRecording, type RankedSentence } from '../../core/voicePriority'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
@@ -216,6 +216,16 @@ function Talk() {
   const [msg, setMsg] = useState('')
 
   useDidShow(() => {
+    /*
+      清掉指向「已经不存在的文件」的录音条目。
+
+      两种情况会产生它们:①手机空间紧张时系统回收了长期文件;
+      ②换了台手机、从备份恢复 —— 备份里存的是**索引**,音频文件本身
+      不会跟着走。留着这类条目的表现是「显示已录音,点了不响」,
+      那比没录还让人恼火。
+    */
+    pruneMissing(fileExists, 'parent')
+    pruneMissing(fileExists, 'kid')
     setChoice(getLevelChoice())
     // 内容改版后可能留下指向已删场景的练习记录,进页面时顺手清一次。
     // 放在这里而不是 app 启动:否则整份对话内容会被打进公共包。
@@ -264,13 +274,21 @@ function Talk() {
 
   // ---------------- 跟读:录音 / 打分 / A-B 对比 ----------------
 
-  const toggleRecord = () => {
+  const toggleRecord = (kidTarget: string) => {
     if (!recording) {
       setRecording(true)
       setMsg('录音中…读完再点一次')
       startRecord(
         (path) => {
-          setRecPath(path)
+          // 跟读/复述的录音同样存成长期文件,同一句重录覆盖旧的
+          keepRecording(
+            path,
+            (saved) => {
+              setRecPath(saved)
+              if (kidTarget) saveMyVoice(kidTarget, saved, 'kid')
+            },
+            () => setRecPath(path),
+          )
           setRecording(false)
           setMsg('录好啦,可以对比听听')
         },
@@ -390,7 +408,7 @@ function Talk() {
       <View className='tool' onClick={() => playEnglishSlow(sentence)}>
         <Text className='tool__t'>🐢 慢速</Text>
       </View>
-      <View className={recording ? 'tool tool--rec' : 'tool'} onClick={toggleRecord}>
+      <View className={recording ? 'tool tool--rec' : 'tool'} onClick={() => toggleRecord(sentence)}>
         <Text className='tool__t'>{recording ? '⏹ 停止' : '🎙 录我的'}</Text>
       </View>
       {recPath ? (
