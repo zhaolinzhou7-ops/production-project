@@ -361,3 +361,15 @@
   &__fill { height: 100%; background: linear-gradient(90deg, #ffb26b, #f9497a); border-radius: 999px; }
   &__v { width: 220px; text-align: right; font-size: 21px; color: #9ca3af; }
 }
+
+/* 兴趣标签:选中的会真的影响明天推荐什么 */
+.tags { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 6px; }
+.tag {
+  padding: 14px 22px;
+  border-radius: 999px;
+  background: #f4f4f6;
+  border: 2px solid transparent;
+  &--on { background: rgba(249, 73, 122, 0.1); border-color: #f9497a; }
+  &__t { font-size: 24px; color: #374151; }
+  &--on .tag__t { color: #f9497a; font-weight: 500; }
+}

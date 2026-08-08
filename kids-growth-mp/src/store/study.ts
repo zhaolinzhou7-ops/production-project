@@ -494,6 +494,17 @@ function practicedTodayDecks(childId: string, today: string): Set<string> {
 function availableToday(states: StudyState[], today: string, limit: number, topUp = true): StudyState[] {
   const due = states.filter((s) => isDue(s, today))
   due.sort((a, b) => {
+    /*
+      **错过的排最前面。**
+
+      SRS 已经把答错的卡排到第二天,所以它们会回来 —— 但回来之后混在
+      二十张卡中间,孩子往往在还没做到它之前就已经累了。而「上次没记住的」
+      恰恰是这一组里最该被做到的那几张。
+      所以先按「错过几次」倒序,再按老规矩(新卡垫底、到期早的优先)。
+    */
+    const la = a.lapses || 0
+    const lb = b.lapses || 0
+    if (la !== lb) return lb - la
     if (a.status === 'new' && b.status !== 'new') return 1
     if (b.status === 'new' && a.status !== 'new') return -1
     return a.due.localeCompare(b.due)
@@ -1124,4 +1135,113 @@ export function yesterdayScore(): number {
 
 export function recordTodayScore(score: number): void {
   writeObject('scoreToday', { date: todayISO(), score })
+}
+
+
+/** 今天这一组里,有几张是之前答错过的 —— 首页告诉家长「今天要补几题」 */
+export function wrongDueToday(childId: string): number {
+  const today = todayISO()
+  let n = 0
+  for (const st of readTable<StudyState>(KEYS.states)) {
+    if (!st || st.childId !== childId) continue
+    if ((st.lapses || 0) <= 0) continue
+    if (isDue(st, today)) n += 1
+  }
+  return n
+}
+
+/**
+ * 家长自己加内容。
+ *
+ * 内容会用完 —— 20 篇故事、53 段对话,一年就见底了。原先只能自定义
+ * **英语词本**,故事和问答题加不了,而那两样恰恰是家长最容易自己攒的
+ * (随口编的小故事、生活里问他的问题)。
+ *
+ * 三种自定义卡组:
+ * - word:英语词本(原有)
+ * - fact:问答卡「问题|答案」—— 常识、安全、家里的约定都能装
+ * - poem:故事/儿歌,一行一句 —— 走的是逐句点读那套渲染
+ */
+export function createCustomDeckOf(
+  childId: string,
+  name: string,
+  itemType: 'word' | 'fact' | 'poem',
+): string {
+  const deckId = newId()
+  const icon = itemType === 'fact' ? '❓' : itemType === 'poem' ? '📖' : '📗'
+  const subject = itemType === 'fact' ? '常识' : itemType === 'poem' ? '语文' : '英语'
+  const deck: LearnDeck = {
+    id: deckId,
+    childId,
+    subject,
+    name: name || '我加的内容',
+    icon,
+    source: 'custom',
+    itemType,
+    createdAt: Date.now(),
+  }
+  writeTable(KEYS.decks, [...readTable<LearnDeck>(KEYS.decks), deck])
+  return deckId
+}
+
+/**
+ * 解析家长粘贴的问答卡:每行「问题|答案」(全角半角竖线都认)。
+ * 认不出格式的行**跳过而不是报错** —— 家长从别处复制过来,
+ * 中间夹一行标题很正常,不该因此整批失败。
+ */
+export function parseFactList(raw: string): Array<{ q: string; a: string }> {
+  const out: Array<{ q: string; a: string }> = []
+  for (const line of String(raw ?? '').split(/[\r\n]+/)) {
+    const t = line.trim()
+    if (!t) continue
+    const parts = t.split(/[|｜]/)
+    if (parts.length < 2) continue
+    const q = parts[0].trim()
+    const a = parts.slice(1).join('|').trim()
+    if (q && a) out.push({ q, a })
+  }
+  return out
+}
+
+/** 解析家长粘贴的故事:第一行是标题,其余每行一句 */
+export function parseStory(raw: string): { title: string; lines: string[] } | undefined {
+  const rows = String(raw ?? '')
+    .split(/[\r\n]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+  if (rows.length < 2) return undefined
+  return { title: rows[0], lines: rows.slice(1) }
+}
+
+/** 往自定义卡组里加卡(问答 / 故事通用)。返回新增了几张 */
+export function addCustomCards(
+  childId: string,
+  deckId: string,
+  items: Array<{ front: string; back: string; lines?: string[] }>,
+): number {
+  const cards = readTable<LearnCard>(KEYS.cards)
+  const states = readTable<StudyState>(KEYS.states)
+  const have = new Set(cards.filter((c) => c.deckId === deckId).map((c) => c.front))
+  let order = cards.filter((c) => c.deckId === deckId).length
+  const init = initialSrs()
+  let added = 0
+  for (const it of items) {
+    if (!it.front || have.has(it.front)) continue
+    have.add(it.front)
+    const card: LearnCard = {
+      id: newId(),
+      deckId,
+      front: it.front,
+      back: it.back,
+      audioText: it.lines ? it.lines.join('，') : it.front,
+      order: order++,
+      extra: it.lines ? { lines: it.lines, author: '', dynasty: '' } : undefined,
+    }
+    cards.push(card)
+    states.push({ id: newId(), childId, cardId: card.id, deckId, ...init })
+    added += 1
+  }
+  writeTable(KEYS.cards, cards)
+  writeTable(KEYS.states, states)
+  return added
 }

@@ -40,6 +40,7 @@ import { todayISO } from '../../core/dateUtils'
 import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
 import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
 import { rankDecks } from '../../core/recommend'
+import { getInterests, INTEREST_TAGS } from '../../store/notes'
 import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
 import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
@@ -213,8 +214,11 @@ function Index() {
             再交给 buildPlan 去排成一条有节奏的路。
             推荐带着理由 —— 家长看得懂「为什么今天先练这个」才会信任它。
           */
+          const tags = getInterests()
+          const words = INTEREST_TAGS.filter((t) => tags.includes(t.tag)).flatMap((t) => t.match)
           const ranked = rankDecks(
             deckSignals(childId).map((sig) => ({ ...sig })),
+            words,
           )
           const reasonOf = new Map(ranked.map((r) => [r.deckId, r.reason]))
           const order = new Map(ranked.map((r, i) => [r.deckId, i]))
@@ -313,11 +317,11 @@ function Index() {
   }
 
   /** 走今天这条路的第 i 步 —— 会话页做完会自动接下一步 */
-  const goPlan = (i: number) => {
+  const goPlan = (i: number, limitOverride?: number) => {
     const st = plan[i]
     if (!st) return
     Taro.navigateTo({
-      url: `/pages/session/index?deckId=${st.deckId}&mode=${st.mode}&plan=1&limit=${st.limit}`,
+      url: `/pages/session/index?deckId=${st.deckId}&mode=${st.mode}&plan=1&limit=${limitOverride ?? st.limit}`,
       fail: (e) => Taro.showModal({ title: '打不开', content: msgOf(e), showCancel: false }),
     })
   }
@@ -581,6 +585,18 @@ function Index() {
             ))}
           </View>
         </View>
+      ) : null}
+      {/*
+        「今天不想学」也要有出路。
+
+        现在只有「学」和「不打开」两个选项 —— 而习惯的全部价值在于**不断**。
+        给一个 3 题就结束的轻量档:连续天数保住了,明天他还会回来。
+        比起为了凑满今天的量把他弄烦,少学几题划算得多。
+      */}
+      {plan.length > 0 && planDone < plan.length ? (
+        <Text className='lite' onClick={() => goPlan(planDone, 3)}>
+          今天不想学?就来 3 题 →
+        </Text>
       ) : null}
       {plan.length > 0 && planDone < plan.length && plan[planDone]?.reason ? (
         <Text className='todayreason'>💡 {plan[planDone].reason}</Text>

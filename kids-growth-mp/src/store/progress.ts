@@ -6,6 +6,7 @@ import { ownedStickers, getPet } from './fun'
 import { levelOf, type LevelInfo } from '../core/levels'
 import { getPoints, getStudyStreak } from './study'
 import type { StudyState } from '../types'
+import type { TimelineInput } from '../core/timeline'
 
 // 成就 / 等级 / 学习统计。都是从既有记录算出来的,不额外存冗余数据,
 // 只把「已经庆祝过的成就」和几个累计计数存下来。
@@ -207,4 +208,72 @@ export function masteredByDeck(
   return [...byDeck.entries()]
     .map(([deck, fronts]) => ({ deck, count: fronts.length, sample: fronts.slice(0, 12) }))
     .sort((a, b) => b.count - a.count)
+}
+
+/**
+ * 组装学习足迹要用的原始数据。
+ *
+ * 「掌握量随时间的变化」没有历史快照可查,这里用**每张卡最后一次复习的日期**
+ * 近似它变成 mastered 的那天 —— 这是现有数据能给出的最好答案。
+ * 它会有一点点偏差(比如一张早就掌握、昨天又复习了一次的卡会算成昨天),
+ * 但对「大致什么时候到 100 个」这个问题来说完全够用,
+ * 而且不需要为此新增任何埋点。
+ */
+export function timelineInput(childId: string): TimelineInput {
+  const sessions = readTable<{ childId: string; date: string; total: number; correct: number }>(
+    KEYS.sessions,
+  ).filter((s) => s && s.childId === childId)
+  const drills = readTable<{ childId: string; date: string; total: number; correct: number }>(
+    KEYS.drills,
+  ).filter((d) => d && d.childId === childId)
+
+  const byDay = new Map<string, { answered: number; correct: number }>()
+  for (const r of [...sessions, ...drills]) {
+    const cur = byDay.get(r.date) ?? { answered: 0, correct: 0 }
+    cur.answered += r.total || 0
+    cur.correct += r.correct || 0
+    byDay.set(r.date, cur)
+  }
+  const days = [...byDay.entries()].map(([date, v]) => ({ date, ...v }))
+
+  // 掌握量:按「最后一次复习的日期」把 mastered 的卡摊到时间轴上,再做累计
+  const masteredOn = new Map<string, number>()
+  for (const st of readTable<StudyState>(KEYS.states)) {
+    if (!st || st.childId !== childId || st.status !== 'mastered') continue
+    const d = st.lastReviewed ? new Date(st.lastReviewed) : null
+    if (!d || isNaN(d.getTime())) continue
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`
+    masteredOn.set(key, (masteredOn.get(key) ?? 0) + 1)
+  }
+  let acc = 0
+  const masteredByDate = [...masteredOn.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, n]) => {
+      acc += n
+      return { date, mastered: acc }
+    })
+
+  // 连续天数:按日期顺序重算,记下每天当时的连续值
+  const dates = [...byDay.keys()].sort()
+  const streaks: Array<{ date: string; days: number }> = []
+  let run = 0
+  let prev = ''
+  for (const d of dates) {
+    run = prev && isNextDay(prev, d) ? run + 1 : 1
+    streaks.push({ date: d, days: run })
+    prev = d
+  }
+
+  return { days, masteredByDate, streaks }
+}
+
+function isNextDay(a: string, b: string): boolean {
+  const t = new Date(`${a}T00:00:00`).getTime() + 86400000
+  const d = new Date(t)
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+  return key === b
 }

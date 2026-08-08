@@ -45,6 +45,10 @@ import { listReports, reportsToText, clearReports } from '../../store/reports'
 import { masteredByDeck } from '../../store/progress'
 import { listChildDecks } from '../../store/study'
 import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
+import { buildTimeline } from '../../core/timeline'
+import { timelineInput } from '../../store/progress'
+import { addNote, listNotes, getInterests, toggleInterest, INTEREST_TAGS } from '../../store/notes'
+import { listChildren, addChild, switchChild, SHARED_WARNING } from '../../store/children'
 import { todayByArea } from '../../store/study'
 import { todayProgress } from '../../store/habits'
 import { usePrompt } from '../../components/Prompt'
@@ -82,6 +86,12 @@ function Parent() {
   const [reports, setReports] = useState<ReturnType<typeof listReports>>([])
   /** 今日评分卡(分项 + 点评) */
   const [card, setCard] = useState<DailyCard | null>(null)
+  /** 学习足迹 / 家长观察 / 兴趣标签 / 孩子档案 */
+  const [marks, setMarks] = useState<ReturnType<typeof buildTimeline>>([])
+  const [notes, setNotes] = useState<ReturnType<typeof listNotes>>([])
+  const [interests, setInterests2] = useState<string[]>([])
+  const [kids, setKids] = useState<ReturnType<typeof listChildren>>([])
+  const [curKid, setCurKid] = useState('')
   const [enVoice, setEnVoice] = useState('')
 
   const load = () => {
@@ -117,6 +127,11 @@ function Parent() {
       recordTodayScore(built.score)
       setCard(built)
     }
+    setMarks(buildTimeline(timelineInput(childId)))
+    setNotes(listNotes())
+    setInterests2(getInterests())
+    setKids(listChildren())
+    setCurKid(childId)
     setZhVoice(getVoice('zh'))
     setEnVoice(getVoice('en'))
   }
@@ -808,6 +823,105 @@ function Parent() {
           </View>
         </View>
       ) : null}
+
+      {/* 学习足迹:掌握了多少不如「什么时候会的」珍贵 */}
+      {marks.length > 0 ? (
+        <View className='sec'>
+          <Text className='sec__t'>学习足迹</Text>
+          {marks.slice(-12).reverse().map((m) => (
+            <Text key={m.date + m.title} className='usg'>
+              {m.emoji} {m.date} · {m.title}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
+      {/*
+        家长的观察。你看到的东西(今天状态不好、他最近迷恋恐龙)
+        是程序永远看不到的信号,而兴趣标签会**真的**改变明天推荐什么。
+      */}
+      <View className='sec'>
+        <Text className='sec__t'>我的观察</Text>
+        <Text className='usg'>他最近对什么感兴趣?(选中的会被优先推荐)</Text>
+        <View className='tags'>
+          {INTEREST_TAGS.map((t) => (
+            <View
+              key={t.tag}
+              className={interests.includes(t.tag) ? 'tag tag--on' : 'tag'}
+              onClick={() => setInterests2(toggleInterest(t.tag))}
+            >
+              <Text className='tag__t'>
+                {t.emoji} {t.tag}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <View
+          className='lrow'
+          onClick={() =>
+            prompt({
+              title: '记一句观察',
+              hint: '比如:今天很困,错的那几个平时都会',
+              onOk: (v) => {
+                if (addNote(v)) setNotes(listNotes())
+              },
+            })
+          }
+        >
+          <Text className='lrow__t'>✍️ 记一句</Text>
+        </View>
+        {notes.slice(0, 6).map((n) => (
+          <Text key={n.id} className='usg'>
+            {n.date} · {n.text}
+          </Text>
+        ))}
+      </View>
+
+      {/* 多个孩子:学习内容和复习进度各人各自的 */}
+      <View className='sec'>
+        <Text className='sec__t'>孩子档案</Text>
+        {kids.map((k) => (
+          <View
+            key={k.id}
+            className={k.id === curKid ? 'lrow lrow--hi' : 'lrow'}
+            onClick={() => {
+              if (k.id === curKid) return
+              Taro.showModal({
+                title: `切换到${k.name}?`,
+                content: SHARED_WARNING,
+                success: (r) => {
+                  if (!r.confirm) return
+                  switchChild(k.id)
+                  Taro.showModal({
+                    title: '已切换',
+                    content: '请退出小程序重新进入。',
+                    showCancel: false,
+                  })
+                },
+              })
+            }}
+          >
+            <Text className='lrow__t'>
+              {k.emoji} {k.name}
+              {k.id === curKid ? '(当前)' : ''}
+            </Text>
+          </View>
+        ))}
+        <View
+          className='lrow'
+          onClick={() =>
+            prompt({
+              title: '添加一个孩子',
+              hint: '名字',
+              onOk: (v) => {
+                if (addChild(v)) setKids(listChildren())
+              },
+            })
+          }
+        >
+          <Text className='lrow__t'>➕ 添加孩子</Text>
+        </View>
+      </View>
 
       <View className='sec'>
         <Text className='sec__t'>其它</Text>

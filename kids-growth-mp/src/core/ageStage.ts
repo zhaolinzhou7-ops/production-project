@@ -140,3 +140,27 @@ export function monthsToNextStage(months: number): number | undefined {
   if (years < SENIOR_FROM) return Math.ceil(SENIOR_FROM * 12 - months)
   return undefined
 }
+
+
+/**
+ * 快升学段了吗(默认提前 45 天)。
+ *
+ * 为什么要提前:六岁生日那天,内容会**一夜之间**从幼儿档切到小学档 ——
+ * 词库换了、口算从 10 以内跳到 100 以内、看图题变成文字题。
+ * 对孩子来说这不是「长大了」,是「我昨天还会,今天全不会了」。
+ *
+ * 提前打招呼 + 提前把下一档的内容**掺一点**进来,过渡才不会是断崖。
+ */
+export function nearNextStage(months: number, aheadDays = 45): boolean {
+  const left = monthsToNextStage(months)
+  if (left === undefined) return false
+  return left * 30 <= aheadDays
+}
+
+/** 下一个学段是什么(已经是最高段返回 undefined) */
+export function nextStageOf(stage: AgeStage): AgeStage | undefined {
+  if (stage === 'toddler') return 'primary'
+  if (stage === 'primary') return 'junior'
+  if (stage === 'junior') return 'senior'
+  return undefined
+}

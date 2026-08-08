@@ -46,8 +46,14 @@ export interface Reco {
  * 4. **从没开过的垫底**,但一定要给一个位置 ——
  *    否则新装的内容包会永远排不上号,家长会以为「加了没用」。
  */
-export function rankDecks(decks: DeckSignal[]): Reco[] {
+export function rankDecks(decks: DeckSignal[], interests: string[] = []): Reco[] {
   const out: Reco[] = []
+  /*
+    兴趣加权。
+    家长记下的「他最近迷恋恐龙」不该只是一句留言 —— 它应该真的改变今天练什么。
+    加权而不是过滤:兴趣只让相关内容往前挪一点,不会把别的挤掉。
+  */
+  const liked = (name: string) => interests.some((t) => t && name.indexOf(t) >= 0)
   for (const d of decks) {
     if (d.due <= 0 && d.daysSince >= 0) continue // 没题可做,且不是新包
     let weight = 0
@@ -70,6 +76,10 @@ export function rankDecks(decks: DeckSignal[]): Reco[] {
       reason = `今天有 ${d.due} 张要复习`
     } else {
       continue
+    }
+    if (liked(d.name)) {
+      weight += 25
+      reason += '(他最近对这个感兴趣)'
     }
     out.push({ deckId: d.id, name: d.name, itemType: d.itemType, reason, weight })
   }

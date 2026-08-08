@@ -923,6 +923,145 @@ function run() {
   eq(few.length, 2, '类型不够多时应用剩下的补满')
   eq(rc.rankDecks([]).length, 0, '没有卡组时给出空推荐')
 
+  /*
+    ---- 学习足迹 ----
+    「掌握了 23 个词」看得到,「他是什么时候会的」看不到。
+    三年后回头看,后者比任何分数都珍贵。
+  */
+  const tlMod = L('core/timeline.js')
+  const tlMarks = tlMod.buildTimeline({
+    days: [
+      { date: '2026-01-01', answered: 10, correct: 6 },
+      { date: '2026-01-02', answered: 8, correct: 8 },
+      { date: '2026-01-03', answered: 6, correct: 5 },
+    ],
+    masteredByDate: [
+      { date: '2026-01-01', mastered: 1 },
+      { date: '2026-01-02', mastered: 12 },
+      { date: '2026-01-05', mastered: 60 },
+    ],
+    streaks: [
+      { date: '2026-01-01', days: 1 },
+      { date: '2026-01-02', days: 2 },
+      { date: '2026-01-03', days: 3 },
+    ],
+  })
+  ok(tlMarks.length > 0, '应能生成足迹')
+  eq(tlMarks[0].date, '2026-01-01', '第一条应是最早的那天')
+  ok(tlMarks.some((m) => m.title.indexOf('第一次打开') >= 0), '应记下第一次学习')
+  ok(tlMarks.some((m) => m.title.indexOf('10') >= 0), '应记下掌握量 10 的关口')
+  ok(tlMarks.some((m) => m.title.indexOf('50') >= 0), '应记下掌握量 50 的关口')
+  ok(tlMarks.some((m) => m.title.indexOf('连续学习 3 天') >= 0), '应记下连续 3 天')
+  ok(tlMarks.some((m) => m.title.indexOf('一道没错') >= 0), '应记下第一次全对')
+  // 关口只记一次 —— 否则每天复习都会刷出一条「掌握量达到 10」
+  const tenTimes = tlMarks.filter((m) => m.title === '掌握量达到 10').length
+  eq(tenTimes, 1, '同一个关口只该记一次')
+  // 日期必须是升序
+  for (let i = 1; i < tlMarks.length; i++) {
+    ok(tlMarks[i].date >= tlMarks[i - 1].date, '足迹必须按日期升序')
+  }
+  eq(tlMod.buildTimeline({ days: [], masteredByDate: [], streaks: [] }).length, 0, '没有数据时给空足迹')
+
+  /*
+    ---- 家长的观察与兴趣标签 ----
+    兴趣标签不是装饰:它会真的改变今天推荐练什么。
+  */
+  reset()
+  const nt = L('store/notes.js')
+  eq(nt.addNote('  '), false, '空白观察不该被记下')
+  eq(nt.addNote('今天很困,错的那几个平时都会'), true, '观察应能记下')
+  eq(nt.listNotes().length, 1, '应能列出观察')
+  nt.addNote('最近迷恋恐龙')
+  eq(nt.listNotes()[0].text, '最近迷恋恐龙', '最近记的排最前')
+  nt.removeNote(nt.listNotes()[0].id)
+  eq(nt.listNotes().length, 1, '删除应生效')
+  eq(nt.getInterests().length, 0, '一开始没有兴趣标签')
+  nt.toggleInterest('动物')
+  eq(nt.getInterests(), ['动物'], '选中应记下')
+  nt.toggleInterest('动物')
+  eq(nt.getInterests().length, 0, '再点一次应取消')
+  nt.setInterests(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+  ok(nt.getInterests().length <= 5, '兴趣最多 5 个 —— 什么都感兴趣等于什么都不优先')
+  nt.setInterests(['动物', '动物', ' ', '车'])
+  eq(nt.getInterests(), ['动物', '车'], '应去重去空')
+
+  // 兴趣要真的影响排序
+  const sigLike = [
+    { id: 'x', name: '认识动物', itemType: 'pic', due: 3, lapses: 0, daysSince: 1, total: 20 },
+    { id: 'y', name: '学校用品', itemType: 'pic', due: 3, lapses: 0, daysSince: 1, total: 20 },
+  ]
+  const noLike = rc.rankDecks(sigLike, [])
+  const withLike = rc.rankDecks(sigLike, ['动物'])
+  eq(withLike[0].deckId, 'x', '标了兴趣的那组应被排到前面')
+  ok(withLike[0].reason.indexOf('感兴趣') >= 0, '理由里要说明是因为兴趣')
+  ok(noLike.length === withLike.length, '兴趣只加权,不该把别的挤掉')
+
+  /*
+    ---- 多个孩子 ----
+    学习内容和复习进度本来就是按 childId 分的,这里只管档案与切换。
+  */
+  reset()
+  const ch = L('store/children.js')
+  const cid0 = study.getCurrentChildId()
+  eq(ch.listChildren().length, 1, '老数据应被补成第一个孩子,一条不丢')
+  eq(ch.listChildren()[0].id, cid0, '第一个孩子就是当前正在用的那个 id')
+  const kid2 = ch.addChild('弟弟')
+  ok(!!kid2, '应能添加第二个孩子')
+  eq(ch.listChildren().length, 2, '现在有两个孩子')
+  eq(ch.addChild('   '), undefined, '空名字不该建出档案')
+  eq(ch.switchChild(kid2.id), true, '应能切换')
+  eq(study.getCurrentChildId(), kid2.id, '切换后当前孩子应变')
+  eq(ch.currentChild().name, '弟弟', '当前孩子应报对名字')
+  eq(ch.switchChild('不存在的'), false, '切换到不存在的孩子应失败')
+  ch.renameChild(kid2.id, '妹妹')
+  eq(ch.currentChild().name, '妹妹', '改名应生效')
+  eq(ch.removeChild(kid2.id), true, '应能删除档案')
+  eq(study.getCurrentChildId(), cid0, '删掉当前孩子后应自动切回另一个')
+  eq(ch.removeChild(cid0), false, '不允许删掉最后一个孩子')
+
+  /*
+    ---- 家长自己加内容 ----
+    20 篇故事、53 段对话,一年就见底了。
+  */
+  reset()
+  const cidC = study.getCurrentChildId()
+  const facts = study.parseFactList('天为什么是蓝的|因为阳光散射\n  \n乱写的一行\n1+1|2')
+  eq(facts.length, 2, '认不出格式的行应跳过,而不是整批失败')
+  eq(facts[0].q, '天为什么是蓝的', '问题应解析正确')
+  eq(facts[0].a, '因为阳光散射', '答案应解析正确')
+  eq(study.parseFactList('').length, 0, '空输入给空结果')
+  eq(study.parseFactList('全角｜也要认').length, 1, '全角竖线也要认')
+
+  const story = study.parseStory('小鸭子学游泳\n它有点怕\n妈妈说别怕\n它划了一下')
+  ok(!!story, '故事应能解析')
+  eq(story.title, '小鸭子学游泳', '第一行是标题')
+  eq(story.lines.length, 3, '其余每行一句')
+  eq(study.parseStory('只有一行'), undefined, '只有标题没有内容的不算故事')
+
+  const fd = study.createCustomDeckOf(cidC, '我们家的问题', 'fact')
+  eq(study.addCustomCards(cidC, fd, facts.map((f) => ({ front: f.q, back: f.a }))), 2, '应加进 2 张')
+  eq(study.addCustomCards(cidC, fd, facts.map((f) => ({ front: f.q, back: f.a }))), 0, '重复的不该再加')
+  eq(study.countDeckCards(fd), 2, '卡组里应有 2 张')
+  const sd = study.createCustomDeckOf(cidC, '我编的故事', 'poem')
+  eq(
+    study.addCustomCards(cidC, sd, [{ front: story.title, back: story.lines.join('\n'), lines: story.lines }]),
+    1,
+    '故事应能加进去',
+  )
+  ok(study.getDeck(sd).itemType === 'poem', '故事卡组应是 poem 类型,才能走逐句点读')
+
+  /*
+    ---- 升学段过渡 ----
+    六岁生日那天内容一夜之间全变了,对孩子来说不是「长大了」,
+    是「我昨天还会,今天全不会了」。
+  */
+  eq(ag.nearNextStage(71), true, '差一个月满 6 岁应算「快升学段了」')
+  eq(ag.nearNextStage(69), false, '差三个月还早,不用提前打招呼')
+  eq(ag.nearNextStage(60), false, '差一年时还早')
+  eq(ag.nearNextStage(200), false, '已经是最高段时不该报')
+  eq(ag.nextStageOf('toddler'), 'primary', '幼儿园的下一段是小学')
+  eq(ag.nextStageOf('senior'), undefined, '高中没有下一段')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {
