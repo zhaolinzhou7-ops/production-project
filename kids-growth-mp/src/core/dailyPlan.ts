@@ -21,6 +21,8 @@ export interface PlanStep {
   label: string
   /** 这一步大概几题 */
   limit: number
+  /** 为什么今天要练这个 —— 家长看得懂才会信任这条路 */
+  reason?: string
 }
 
 export interface PlanDeck {
@@ -29,6 +31,8 @@ export interface PlanDeck {
   name: string
   /** 今天有多少张能练 */
   due: number
+  /** 为什么推荐它(来自 core/recommend);没有就不显示 */
+  reason?: string
 }
 
 /** 幼儿段一步几题 —— 4 岁半的专注力撑不了 12 题一组 */
@@ -54,7 +58,7 @@ export function buildPlan(decks: PlanDeck[], stage: AgeStage): PlanStep[] {
   const push = (d: PlanDeck | undefined, mode: PracticeMode, label: string, limit: number) => {
     if (!d) return
     if (steps.some((s) => s.deckId === d.id && s.mode === mode)) return
-    steps.push({ deckId: d.id, mode, label, limit })
+    steps.push({ deckId: d.id, mode, label, limit, reason: d.reason })
   }
 
   if (stage === 'toddler') {

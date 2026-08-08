@@ -20,6 +20,7 @@ import { playWordAudio, playText, playEnglishSlow, stopAudio, prefetchAudio } fr
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile, keepRecording } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
+import { rateSession } from '../../core/scoreCard'
 import CorrectBurst from '../../components/CorrectBurst'
 import PolyphoneNote from '../../components/PolyphoneNote'
 import { awardSticker, feedPetDetailed, bumpChallenge, type FeedResult } from '../../store/fun'
@@ -577,12 +578,19 @@ function Session() {
 
   if (phase === 'done' && summary) {
     const pct = summary.total > 0 ? Math.round((summary.correct / summary.total) * 100) : 0
-    const sessStars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct > 0 ? 1 : 0
+    /*
+      这一组的星级与评语走 core/scoreCard 的 rateSession。
+      分数低时给的是「这组太难啦,不是你的问题」—— 措辞很要紧:
+      4 岁半的孩子做错一半,九成是我题出难了,不该让他把这个记成自己的失败。
+    */
+    const rated = rateSession(summary.correct, summary.total)
+    const sessStars = rated.stars
     return (
       <View className='sess sess--center'>
         <Text className='sess__emoji'>{pct >= 80 ? '🌟' : pct >= 60 ? '👍' : '💪'}</Text>
         <Text className='sess__big'>练完啦!</Text>
         <Text className='stars'>{'⭐'.repeat(sessStars)}{'☆'.repeat(3 - sessStars)}</Text>
+        {rated.msg ? <Text className='ratemsg'>{rated.msg}</Text> : null}
         <View className='result'>
           <View className='result__cell'><Text className='result__num'>{summary.correct}/{summary.total}</Text><Text className='result__lab'>答对</Text></View>
           <View className='result__cell'><Text className='result__num result__num--sun'>+{summary.points}</Text><Text className='result__lab'>积分</Text></View>

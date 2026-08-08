@@ -44,6 +44,9 @@ import { summarize, type UsageSummary } from '../../store/usage'
 import { listReports, reportsToText, clearReports } from '../../store/reports'
 import { masteredByDeck } from '../../store/progress'
 import { listChildDecks } from '../../store/study'
+import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
+import { todayByArea } from '../../store/study'
+import { todayProgress } from '../../store/habits'
 import { usePrompt } from '../../components/Prompt'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
@@ -77,6 +80,8 @@ function Parent() {
   const [mastered, setMastered] = useState<Array<{ deck: string; count: number; sample: string[] }>>([])
   /** 标记过「这道不对」的题 */
   const [reports, setReports] = useState<ReturnType<typeof listReports>>([])
+  /** 今日评分卡(分项 + 点评) */
+  const [card, setCard] = useState<DailyCard | null>(null)
   const [enVoice, setEnVoice] = useState('')
 
   const load = () => {
@@ -92,6 +97,26 @@ function Parent() {
     setUsage(summarize(listChildDecks(childId).map((d) => d.name)))
     setMastered(masteredByDeck(childId))
     setReports(listReports())
+    {
+      const goal = getDailyGoal()
+      const byArea = todayByArea(childId)
+      const get = (k: string) => byArea.find((x) => x.key === k) ?? { done: 0, correct: 0 }
+      const en = get('启蒙')
+      const cn = get('语文')
+      const ma = get('数学')
+      const hb = todayProgress()
+      const built = buildDailyCard(
+        [
+          { key: 'en', label: '英语启蒙', emoji: '🔤', done: en.done, correct: en.correct, target: Math.round(goal * 0.4) },
+          { key: 'cn', label: '语文', emoji: '🈶', done: cn.done, correct: cn.correct, target: Math.round(goal * 0.3) },
+          { key: 'ma', label: '数学', emoji: '🧮', done: ma.done, correct: ma.correct, target: Math.round(goal * 0.3) },
+          { key: 'hb', label: '习惯', emoji: '✅', done: hb.done, target: hb.total },
+        ],
+        yesterdayScore(),
+      )
+      recordTodayScore(built.score)
+      setCard(built)
+    }
     setZhVoice(getVoice('zh'))
     setEnVoice(getVoice('en'))
   }
@@ -687,6 +712,33 @@ function Parent() {
           </View>
         ) : null}
       </View>
+
+      {/*
+        今日评分卡(家长版)。
+        孩子首页只看到星星和一句鼓励;这里给的是分项完成度和**实话实说**的
+        点评 —— 包括承认「这组题可能出难了」。家长需要的是能据此调整的信息,
+        不是一句好听的评价。
+      */}
+      {card ? (
+        <View className='sec'>
+          <Text className='sec__t'>今日评分 {card.score} 分</Text>
+          {card.areas.map((a) => (
+            <View key={a.key} className='ar'>
+              <Text className='ar__n'>
+                {a.emoji} {a.label}
+              </Text>
+              <View className='ar__track'>
+                <View className='ar__fill' style={{ width: `${Math.min(100, a.pct)}%` }} />
+              </View>
+              <Text className='ar__v'>
+                {a.done}/{a.target}
+                {a.rate >= 0 ? ` · 正确率 ${a.rate}%` : ''}
+              </Text>
+            </View>
+          ))}
+          <Text className='usg'>{card.note}</Text>
+        </View>
+      ) : null}
 
       {/* 他到底会了多少 —— 积分和等级回答不了这个问题 */}
       {mastered.length > 0 ? (

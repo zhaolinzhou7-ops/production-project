@@ -20,6 +20,10 @@ import {
   sanitizeData,
   getDailyGoal,
   todayAnswered,
+  deckSignals,
+  todayByArea,
+  yesterdayScore,
+  recordTodayScore,
 } from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
@@ -35,6 +39,8 @@ import type { AgeStage, LearnDeck } from '../../types'
 import { todayISO } from '../../core/dateUtils'
 import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
 import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
+import { rankDecks } from '../../core/recommend'
+import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
 import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
@@ -116,6 +122,8 @@ function Index() {
   const [planDone, setPlanDone] = useState(0)
   /** 幼儿段默认把其余入口收起来 */
   const [showMore, setShowMore] = useState(false)
+  /** 今日评分卡 —— 给孩子看星星和一句话,详细分项在家长中心 */
+  const [card, setCard] = useState<DailyCard | null>(null)
 
   /**
    * 载入首页数据。
@@ -200,12 +208,27 @@ function Index() {
           setPlan(saved.steps)
           setPlanDone(saved.done)
         } else {
+          /*
+            先按「实际情况」给卡组排个序(错得多的、久没练的优先),
+            再交给 buildPlan 去排成一条有节奏的路。
+            推荐带着理由 —— 家长看得懂「为什么今天先练这个」才会信任它。
+          */
+          const ranked = rankDecks(
+            deckSignals(childId).map((sig) => ({ ...sig })),
+          )
+          const reasonOf = new Map(ranked.map((r) => [r.deckId, r.reason]))
+          const order = new Map(ranked.map((r, i) => [r.deckId, i]))
+          const sorted = [...deckRows].sort(
+            (a, b) =>
+              (order.get(a.deck.id) ?? 999) - (order.get(b.deck.id) ?? 999),
+          )
           const built = buildPlan(
-            deckRows.map((r) => ({
+            sorted.map((r) => ({
               id: r.deck.id,
               itemType: r.deck.itemType,
               name: r.deck.name,
               due: r.due,
+              reason: reasonOf.get(r.deck.id),
             })),
             getStage(),
           )
@@ -229,6 +252,30 @@ function Index() {
       setTodayN(todayAnswered(childId))
       setMinutes(getTodayStudyMinutes())
       setChallenge(getChallenge())
+      /*
+        今日评分。各板块的目标按每日题量目标摊开 ——
+        不是「每样都要做满」,而是「今天整体够不够」。
+      */
+      {
+        const goal = getDailyGoal()
+        const byArea = todayByArea(childId)
+        const get = (k: string) => byArea.find((x) => x.key === k) ?? { done: 0, correct: 0 }
+        const en = get('启蒙')
+        const cn = get('语文')
+        const ma = get('数学')
+        const hb = todayProgress()
+        const built = buildDailyCard(
+          [
+              { key: 'en', label: '英语启蒙', emoji: '🔤', done: en.done, correct: en.correct, target: Math.round(goal * 0.4) },
+              { key: 'cn', label: '语文', emoji: '🈶', done: cn.done, correct: cn.correct, target: Math.round(goal * 0.3) },
+              { key: 'ma', label: '数学', emoji: '🧮', done: ma.done, correct: ma.correct, target: Math.round(goal * 0.3) },
+              { key: 'hb', label: '习惯', emoji: '✅', done: hb.done, target: hb.total },
+            ],
+          yesterdayScore(),
+        )
+        recordTodayScore(built.score)
+        setCard(built)
+      }
       ensureHabits()
       setHabit(todayProgress())
       setStickerCount(ownedStickers().length)
@@ -415,6 +462,22 @@ function Index() {
       ) : null}
 
       {/*
+        今日评分卡。
+
+        原则写在 core/scoreCard.ts:主要看「做了没有」而不是「对了多少」,
+        和昨天的自己比而不是和满分比,而且**没有不及格**。
+        一个 4 岁半的孩子如果从这套系统里学会的第一件事是「我不行」,
+        那前面做的所有内容都白搭。
+      */}
+      {card && card.stars > 0 ? (
+        <View className='dcard'>
+          <Text className='dcard__s'>{'⭐'.repeat(card.stars)}{'☆'.repeat(5 - card.stars)}</Text>
+          <Text className='dcard__c'>{card.cheer}</Text>
+          {card.trend > 0 ? <Text className='dcard__up'>比昨天进步了</Text> : null}
+        </View>
+      ) : null}
+
+      {/*
         今日目标进度条。孩子对「还差几题」远比对「累计多少题」有感觉,
         这条进度条就是给他一个今天能够到的终点。
       */}
@@ -518,6 +581,9 @@ function Index() {
             ))}
           </View>
         </View>
+      ) : null}
+      {plan.length > 0 && planDone < plan.length && plan[planDone]?.reason ? (
+        <Text className='todayreason'>💡 {plan[planDone].reason}</Text>
       ) : null}
       {plan.length > 0 && planDone >= plan.length ? (
         <View className='today today--done'>

@@ -703,3 +703,13 @@
   color: #d1d5db;
   padding: 6px 10px;
 }
+
+/* 一组做完的评语:分低时说的是「题太难了」,不是「你不行」 */
+.ratemsg {
+  display: block;
+  text-align: center;
+  font-size: 26px;
+  color: #6b7280;
+  margin-top: 10px;
+  line-height: 1.5;
+}

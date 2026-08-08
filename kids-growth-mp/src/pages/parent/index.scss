@@ -342,3 +342,22 @@
   line-height: 1.8;
   &--warn { color: #b45309; }
 }
+
+/* 分项完成度 */
+.ar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+
+  &__n { width: 190px; font-size: 24px; color: #374151; }
+  &__track {
+    flex: 1;
+    height: 16px;
+    background: #f1f1f4;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  &__fill { height: 100%; background: linear-gradient(90deg, #ffb26b, #f9497a); border-radius: 999px; }
+  &__v { width: 220px; text-align: right; font-size: 21px; color: #9ca3af; }
+}

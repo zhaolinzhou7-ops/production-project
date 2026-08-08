@@ -606,3 +606,27 @@
   padding: 20px;
   margin-bottom: 12px;
 }
+
+/* 今日评分卡:给孩子看的只有星星和一句话 —— 分项和点评在家长中心 */
+.dcard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(251, 191, 36, 0.14);
+  border-radius: 24px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+
+  &__s { font-size: 30px; letter-spacing: 2px; }
+  &__c { flex: 1; font-size: 26px; color: #b45309; font-weight: 500; }
+  &__up { font-size: 22px; color: #059669; }
+}
+
+/* 今天为什么先练这个 */
+.todayreason {
+  display: block;
+  margin: -12px 0 20px;
+  font-size: 22px;
+  color: #6b7280;
+  line-height: 1.6;
+}

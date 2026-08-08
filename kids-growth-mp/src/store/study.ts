@@ -13,6 +13,7 @@ import type {
 import { todayISO } from '../core/dateUtils'
 import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
 import { dailyPointCap, allowedAward } from '../core/pointCap'
+import type { DeckSignal } from '../core/recommend'
 import { getProfile, saveProfile } from './records'
 import { computeStreak } from '../core/streak'
 import type {
@@ -1011,4 +1012,116 @@ export function todayAnswered(childId: string): number {
     if (d && d.childId === childId && d.date === today) n += d.total || 0
   }
   return n
+}
+
+/**
+ * 每个卡组的「实际情况」—— 推荐要用的信号。
+ *
+ * 原先「今天就做这个」是按固定顺序挑的,完全不看孩子的真实情况:
+ * 昨天错了一堆的那组不会被优先,五天没碰的那组也不会被想起来。
+ * 有了这些信号,推荐才谈得上是推荐。
+ */
+export function deckSignals(childId: string): DeckSignal[] {
+  const today = todayISO()
+  const states = readTable<StudyState>(KEYS.states).filter((s) => s.childId === childId)
+  const decks = readTable<LearnDeck>(KEYS.decks).filter((d) => d.childId === childId)
+
+  // 每个卡组最后一次练是什么时候(只认正经会话,「再练一遍」不算)
+  const lastDone = new Map<string, string>()
+  for (const s of readTable<{ childId: string; deckId: string; date: string; free?: boolean }>(
+    KEYS.sessions,
+  )) {
+    if (!s || s.childId !== childId || s.free) continue
+    const cur = lastDone.get(s.deckId)
+    if (!cur || s.date > cur) lastDone.set(s.deckId, s.date)
+  }
+
+  const done = practicedTodayDecks(childId, today)
+  return decks.map((d) => {
+    const mine = states.filter((s) => s.deckId === d.id)
+    const last = lastDone.get(d.id)
+    return {
+      id: d.id,
+      name: d.name,
+      itemType: d.itemType,
+      due: availableToday(mine, today, Number.MAX_SAFE_INTEGER, !done.has(d.id)).length,
+      lapses: mine.reduce((n, s) => n + (s.lapses || 0), 0),
+      daysSince: last ? daysBetween(last, today) : -1,
+      total: mine.length,
+    }
+  })
+}
+
+/** 两个日期差几天(都是 YYYY-MM-DD) */
+function daysBetween(a: string, b: string): number {
+  const t1 = new Date(`${a}T00:00:00`).getTime()
+  const t2 = new Date(`${b}T00:00:00`).getTime()
+  if (!Number.isFinite(t1) || !Number.isFinite(t2)) return 0
+  return Math.max(0, Math.round((t2 - t1) / 86400000))
+}
+
+/**
+ * 今天各板块做了多少 —— 每日评分卡要用。
+ * 按科目归拢:英语启蒙、语文、数学、习惯。
+ */
+export function todayByArea(childId: string): Array<{
+  key: string
+  done: number
+  correct: number
+}> {
+  const today = todayISO()
+  const decks = new Map(
+    readTable<LearnDeck>(KEYS.decks).map((d) => [d.id, d.subject || '学习']),
+  )
+  const acc = new Map<string, { done: number; correct: number }>()
+  const bump = (k: string, done: number, correct: number) => {
+    const cur = acc.get(k) ?? { done: 0, correct: 0 }
+    cur.done += done
+    cur.correct += correct
+    acc.set(k, cur)
+  }
+  for (const s of readTable<{
+    childId: string
+    deckId: string
+    date: string
+    total: number
+    correct: number
+  }>(KEYS.sessions)) {
+    if (!s || s.childId !== childId || s.date !== today) continue
+    bump(decks.get(s.deckId) ?? '学习', s.total || 0, s.correct || 0)
+  }
+  for (const d of readTable<{ childId: string; date: string; total: number; correct: number }>(
+    KEYS.drills,
+  )) {
+    if (!d || d.childId !== childId || d.date !== today) continue
+    bump('数学', d.total || 0, d.correct || 0)
+  }
+  return [...acc.entries()].map(([key, v]) => ({ key, ...v }))
+}
+
+/**
+ * 昨天的评分,以及记录今天的。
+ *
+ * 「和昨天的自己比」是这套打分唯一的比较基准 —— 不和满分比,也不和别的孩子比。
+ * 所以必须把昨天那个数留住;跨天时把「今天」挪成「昨天」,而不是算历史平均
+ * (平均数会把一次特别好的一天摊平,孩子感觉不到进步)。
+ */
+interface DayScore {
+  date: string
+  score: number
+}
+
+export function yesterdayScore(): number {
+  const cur = readObject<DayScore>('scoreToday', { date: '', score: -1 })
+  if (cur.date && cur.date !== todayISO()) {
+    // 跨天了:把昨天那个数存好,今天从头开始
+    writeObject('scoreYesterday', cur.score)
+    writeObject('scoreToday', { date: todayISO(), score: -1 })
+    return cur.score
+  }
+  return readObject<number>('scoreYesterday', -1)
+}
+
+export function recordTodayScore(score: number): void {
+  writeObject('scoreToday', { date: todayISO(), score })
 }

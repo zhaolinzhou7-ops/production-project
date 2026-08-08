@@ -815,6 +815,114 @@ function run() {
   eq(vs2.pruneMissing((x) => x !== '/k/gone.mp3', 'kid'), 1, '孩子那边失效的应被清掉')
   eq(vs2.myVoiceCount('parent'), 1, '清理孩子那边不该波及家长')
 
+  /*
+    ---- 每日评分卡 ----
+
+    打分对 4 岁半的孩子风险很高,所以原则要被测试钉死:
+    主要看「做了没有」而不是「对了多少」;和昨天的自己比;**没有不及格**。
+    一个孩子如果从这套系统里学会的第一件事是「我不行」,前面做的全白搭。
+  */
+  const sca = L('core/scoreCard.js')
+  const areasFull = [
+    { key: 'en', label: '英语', emoji: '🔤', done: 10, correct: 9, target: 10 },
+    { key: 'ma', label: '数学', emoji: '🧮', done: 10, correct: 8, target: 10 },
+  ]
+  const full = sca.buildDailyCard(areasFull, -1)
+  ok(full.score >= 85, '都做完且大部分做对,应给高分')
+  eq(full.stars, 5, '满完成度应给满星')
+
+  // 只做了一点点:分低,但**必须有一颗星**,而且话要好听
+  const little = sca.buildDailyCard(
+    [{ key: 'en', label: '英语', emoji: '🔤', done: 1, correct: 0, target: 10 }],
+    -1,
+  )
+  ok(little.stars >= 1, '只要做过一点就必须有星 —— 没有不及格这一档')
+  ok(little.cheer.indexOf('差') < 0 && little.cheer.indexOf('不行') < 0, '给孩子的话里不能出现负面评价')
+
+  // 一点没做:0 星,但话仍然是邀请而不是指责
+  const none = sca.buildDailyCard(
+    [{ key: 'en', label: '英语', emoji: '🔤', done: 0, target: 10 }],
+    -1,
+  )
+  eq(none.stars, 0, '完全没做时是 0 星')
+  eq(none.score, 0, '完全没做时是 0 分')
+
+  // 完成度权重必须高于正确率:全做完但错一半,应该好过只做两题但全对
+  const doneButWrong = sca.buildDailyCard(
+    [{ key: 'a', label: 'A', emoji: '1', done: 10, correct: 5, target: 10 }],
+    -1,
+  )
+  const fewButRight = sca.buildDailyCard(
+    [{ key: 'a', label: 'A', emoji: '1', done: 2, correct: 2, target: 10 }],
+    -1,
+  )
+  ok(
+    doneButWrong.score > fewButRight.score,
+    '「做完了但错了些」必须高于「只做两题全对」—— 这个年纪正确率低多半是题出难了',
+  )
+
+  // 和昨天比
+  eq(sca.buildDailyCard(areasFull, 40).trend, 1, '比昨天高应判为进步')
+  eq(
+    sca.buildDailyCard(
+      [{ key: 'en', label: '英语', emoji: '🔤', done: 2, correct: 2, target: 10 }],
+      90,
+    ).trend,
+    -1,
+    '明显比昨天少做时应如实反映',
+  )
+  eq(sca.buildDailyCard(areasFull, 95).trend, 0, '只差几分算持平 —— 不该为一两题的波动说他退步了')
+  eq(sca.buildDailyCard(areasFull, -1).trend, 0, '没有昨天的数据时不该瞎判趋势')
+
+  // 给家长的话要能指出「题可能出难了」
+  const hardNote = sca.buildDailyCard(
+    [{ key: 'a', label: '数学', emoji: '🧮', done: 10, correct: 2, target: 10 }],
+    -1,
+  ).note
+  ok(hardNote.indexOf('难') >= 0, '正确率很低时,给家长的点评应指出可能是题出难了')
+
+  // 一组练习的评语:分低时说的是题难,不是孩子不行
+  eq(sca.rateSession(10, 10).stars, 3, '全对给三星')
+  eq(sca.rateSession(0, 10).stars, 1, '全错也给一星 —— 他坐下来做完了')
+  ok(sca.rateSession(1, 10).msg.indexOf('难') >= 0, '分很低时的评语应把原因归给题目')
+  eq(sca.rateSession(0, 0).stars, 0, '没有题目时不给星')
+
+  /*
+    ---- 今天推荐练什么,以及为什么 ----
+    原先是按固定顺序挑的,完全不看孩子的实际情况。
+  */
+  const rc = L('core/recommend.js')
+  const sig = [
+    { id: 'a', name: '错得多的', itemType: 'pic', due: 5, lapses: 9, daysSince: 1, total: 30 },
+    { id: 'b', name: '久没练的', itemType: 'hanzi', due: 5, lapses: 0, daysSince: 9, total: 30 },
+    { id: 'c', name: '到期多的', itemType: 'word', due: 20, lapses: 0, daysSince: 1, total: 40 },
+    { id: 'd', name: '刚练过的', itemType: 'poem', due: 2, lapses: 0, daysSince: 0, total: 20 },
+    { id: 'e', name: '没开过的', itemType: 'fact', due: 0, lapses: 0, daysSince: -1, total: 20 },
+    { id: 'f', name: '没题可做的', itemType: 'pic', due: 0, lapses: 0, daysSince: 2, total: 10 },
+  ]
+  const recos = rc.rankDecks(sig)
+  eq(recos[0].deckId, 'a', '错得多的必须排第一 —— 忘掉的不补,后面学的都架空')
+  eq(recos[1].deckId, 'b', '久没练的排第二 —— 再放几天就等于从头再来')
+  ok(recos.some((r) => r.deckId === 'e'), '从没开过的必须给一个位置,否则新装的包永远排不上号')
+  ok(!recos.some((r) => r.deckId === 'f'), '没题可做又不是新包的,不该出现在推荐里')
+  for (const r of recos) ok(r.reason && r.reason.length > 0, `${r.name} 必须给出推荐理由`)
+  ok(recos[0].reason.indexOf('9') >= 0, '理由里要有具体数字,不能只说「加强一下」')
+
+  // 去重类型:连着三步同一种玩法,孩子第二步就腻了
+  const div = rc.diversify(recos, 3)
+  eq(div.length, 3, '应能挑出 3 个')
+  eq(new Set(div.map((d) => d.itemType)).size, 3, '前三个的类型不该重复')
+  // 类型不够多时要能补满,不能少给
+  const few = rc.diversify(
+    [
+      { deckId: '1', name: 'x', itemType: 'pic', reason: 'r', weight: 9 },
+      { deckId: '2', name: 'y', itemType: 'pic', reason: 'r', weight: 8 },
+    ],
+    2,
+  )
+  eq(few.length, 2, '类型不够多时应用剩下的补满')
+  eq(rc.rankDecks([]).length, 0, '没有卡组时给出空推荐')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {
