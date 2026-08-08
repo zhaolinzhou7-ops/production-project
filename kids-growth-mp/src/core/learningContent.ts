@@ -278,6 +278,46 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     stages: ['toddler', 'primary'],
     load: () => json(require('../data/decks/phonics-cvc.json')),
   },
+  // ---------------- 语文:拼音与阅读 ----------------
+  {
+    /*
+      拼音启蒙。部编版一年级上册第一单元就是拼音,5–6 岁必须提前认。
+
+      放在 hanzi 类型里是有意的:它渲染成「大字 + 拼音 + 例词」,
+      正好是拼音卡该有的样子,而且直接复用「认读」「听音选字」两种练法。
+
+      发音这件事这里要说实话:单个字母的读音,在线音源大多读不准
+      (常常把 b 念成「比」而不是「波」)。真正的解法是**家长录一遍** ——
+      口语中心的「🎤 家长录音」录下的就是按文本索引的,
+      家长把 63 个音录一次,以后这一包全程都是他自己的声音。
+    */
+    key: 'pinyin-basic',
+    name: '拼音启蒙·声母韵母',
+    subject: '语文',
+    icon: '🔤',
+    itemType: 'hanzi',
+    stages: ['toddler', 'primary'],
+    load: () => json(require('../data/decks/pinyin-basic.json')),
+  },
+  {
+    /*
+      亲子共读的小故事。
+
+      阅读量是长期学业成绩最强的单一预测因子 —— 比任何刷题都强。
+      而这套系统在此之前**一篇中文读物都没有**。
+
+      放在 poem 类型里同样是有意的:它的「朗读」模式是逐句点读,
+      正好适合亲子共读 —— 你读一句,他跟一句;认得的字他自己读。
+    */
+    key: 'read-story-1',
+    name: '亲子共读·小故事',
+    subject: '语文',
+    icon: '📖',
+    itemType: 'poem',
+    stages: ['toddler', 'primary'],
+    default: true,
+    load: () => json(require('../data/decks/read-story-1.json')),
+  },
   // ---------------- 语文:识字 ----------------
   {
     key: 'hanzi-toddler',

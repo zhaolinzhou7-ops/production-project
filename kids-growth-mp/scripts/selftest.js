@@ -239,9 +239,21 @@ function run() {
   eq(tKinds.filter((k) => sKinds.includes(k)).length, 0, '幼儿档和小学档不该重叠')
   eq(tKinds.filter((k) => oKinds.includes(k)).length, 0, '幼儿档和思维档不该重叠')
   eq(sKinds.filter((k) => oKinds.includes(k)).length, 0, '小学档和思维档不该重叠')
-  ok(oKinds.length >= 4, '思维档应有足够的专题')
+  const aKinds = md.mathKindsForTier('advanced').map((k) => k.kind)
+  eq(aKinds.filter((k) => tKinds.includes(k)).length, 0, '奥数档和幼儿档不该重叠')
+  eq(aKinds.filter((k) => sKinds.includes(k)).length, 0, '奥数档和小学档不该重叠')
+  eq(aKinds.filter((k) => oKinds.includes(k)).length, 0, '奥数档和思维档不该重叠')
+  ok(oKinds.length >= 6, '思维档应有足够的专题')
+  ok(aKinds.length >= 6, '奥数档应有足够的专题')
+  // 每种题型必须能被 tierOfKind 归回它所在的那一档,否则「上次选的题型」会还原到错的档
+  for (const k of md.MATH_KINDS) {
+    ok(
+      md.mathKindsForTier(md.tierOfKind(k.kind)).some((x) => x.kind === k.kind),
+      `${k.label} 应能被归回它所在的档`,
+    )
+  }
   // 每一档的题都得能真的生成出来,且答案对得上
-  for (const tier of ['toddler', 'school', 'olympic']) {
+  for (const tier of ['toddler', 'school', 'olympic', 'advanced']) {
     for (const k of md.mathKindsForTier(tier)) {
       const ps = md.generateDrill(k.kind, 8, tier === 'toddler' ? 'toddler' : 'primary')
       eq(ps.length, 8, `${k.label} 应能出 8 道题`)
@@ -315,6 +327,99 @@ function run() {
     const od = md.generateProblem('ordinal', 'toddler')
     const orow = od.text.split('\n')[0]
     eq([...orow].indexOf('🐣') + 1, od.answer, '排第几:小鸡的实际位置必须等于答案')
+  }
+
+  /*
+    ---- 逐题核对新加的题型 ----
+    这些题的答案错了,孩子会把错的解法记住 —— 比不做还糟。
+    所以每一种都按**题面里给出的数字**独立算一遍,而不是信生成器。
+  */
+  for (let i = 0; i < 400; i++) {
+    // 看图·合起来
+    const pa = md.generateProblem('picAdd', 'toddler')
+    const parts = pa.text.split('\n')[0].split('和').map((x) => x.trim())
+    eq([...parts[0]].length + [...parts[1]].length, pa.answer, '看图合起来:两堆之和必须等于答案')
+    // 看图·拿走了
+    const ps = md.generateProblem('picSub', 'toddler')
+    const psLines = ps.text.split('\n')
+    const took = Number(/(\d+) 个/.exec(psLines[1])[1])
+    eq([...psLines[0]].length - took, ps.answer, '看图拿走了:剩下的必须等于答案')
+    ok(ps.answer >= 1, '拿走之后至少还剩 1 个 —— 剩 0 个对幼儿没有意义')
+    // 看图·多几个
+    const pd = md.generateProblem('picDiff', 'toddler')
+    const pdL = pd.text.split('\n')
+    eq([...pdL[0]].length - [...pdL[1]].length, pd.answer, '看图多几个:差必须等于答案')
+    ok(pd.answer >= 1, '「多几个」的答案至少是 1,否则题目问得不成立')
+    // 认方位
+    const po = md.generateProblem('position', 'toddler')
+    const poRow = [...po.text.split('\n')[0]]
+    const fromLeft = po.text.indexOf('从左边数') >= 0
+    const tgt = po.text.split('\n')[1].split('数,')[1].split(' 排第几个')[0]
+    const realIdx = poRow.findIndex((c) => c === tgt)
+    eq(fromLeft ? realIdx + 1 : poRow.length - realIdx, po.answer, '认方位:实际位置必须等于答案')
+    // 找不同类
+    const oo = md.generateProblem('oddOne', 'toddler')
+    ok(oo.answer >= 1 && oo.answer <= 4, '找不同类的答案应是 1–4')
+    // 比长短
+    const sc = md.generateProblem('sizeCmp', 'toddler')
+    const scL = sc.text.split('\n')
+    const len1 = [...scL[0].replace('1. ', '')].length
+    const len2 = [...scL[1].replace('2. ', '')].length
+    ok(len1 !== len2, '比长短:两行不能一样长,否则没有答案')
+    eq(len1 > len2 ? 1 : 2, sc.answer, '比长短:更长的那一行必须等于答案')
+    // 找不同
+    const sd = md.generateProblem('spotDiff', 'toddler')
+    const [r1, r2] = sd.text.split('\n')
+    const a1 = [...r1]
+    const a2 = [...r2]
+    eq(a1.length, a2.length, '找不同:两排长度必须一样')
+    const diffs = a1.map((c, k) => (c === a2[k] ? -1 : k + 1)).filter((k) => k > 0)
+    eq(diffs.length, 1, '找不同:必须只有一个位置不同')
+    eq(diffs[0], sd.answer, '找不同:那个位置必须等于答案')
+    // 简单枚举
+    const en = md.generateProblem('enumerate', 'primary')
+    const enm = /有 (\d+) .+?、(\d+) /.exec(en.text)
+    eq(Number(enm[1]) * Number(enm[2]), en.answer, '枚举:乘积必须等于答案')
+    // 巧算
+    const cl = md.generateProblem('clever', 'primary')
+    const cn = Number(/… \+ (\d+) =/.exec(cl.text)[1])
+    eq((cn * (cn + 1)) / 2, cl.answer, '巧算:等差求和必须等于答案')
+    // 和差问题
+    const sdp = md.generateProblem('sumDiff', 'primary')
+    const sm = /和是 (\d+),差是 (\d+)/.exec(sdp.text)
+    eq((Number(sm[1]) + Number(sm[2])) / 2, sdp.answer, '和差问题:(和+差)/2 必须等于答案')
+    ok(Number.isInteger(sdp.answer), '和差问题的答案必须是整数')
+    // 年龄问题
+    const ag2 = md.generateProblem('ageDiff', 'primary')
+    const am = /孩子 (\d+) 岁,妈妈 (\d+) 岁/.exec(ag2.text)
+    eq(Number(am[2]) - Number(am[1]), ag2.answer, '年龄问题:年龄差永远不变,必须等于答案')
+    // 植树问题
+    const tr = md.generateProblem('tree', 'primary')
+    const tm = /一条 (\d+) 米的小路,每隔 (\d+) 米/.exec(tr.text)
+    eq(Number(tm[1]) / Number(tm[2]) + 1, tr.answer, '植树问题:两端都栽应是段数+1')
+    // 鸡兔同笼
+    const ck = md.generateProblem('chicken', 'primary')
+    const km = /一共 (\d+) 个头、(\d+) 只脚/.exec(ck.text)
+    const heads = Number(km[1])
+    const feet = Number(km[2])
+    eq((feet - heads * 2) / 2, ck.answer, '鸡兔同笼:(脚-头×2)/2 必须等于答案')
+    ok(ck.answer >= 0 && ck.answer <= heads, '兔子数必须在合理范围内')
+    // 盈亏问题
+    const pl = md.generateProblem('profitLoss', 'primary')
+    // 直接按顺序取题面里的数字 —— 比猜全角/半角标点可靠
+    const pnums = (pl.text.match(/\d+/g) || []).map(Number)
+    eq(pnums.length, 4, '盈亏问题的题面应含 4 个数字')
+    const lowPer = pnums[0]
+    const over = pnums[1]
+    const highPer = pnums[2]
+    const short2 = pnums[3]
+    eq((over + short2) / (highPer - lowPer), pl.answer, '盈亏问题:(盈+亏)/每人差 必须等于答案')
+    ok(short2 >= 0, '盈亏问题里「少了几颗」不该是负数')
+    // 平均数
+    const av = md.generateProblem('average', 'primary')
+    const nums = av.text.split('\n')[0].split('、').map(Number)
+    eq(nums.reduce((x, y) => x + y, 0) / nums.length, av.answer, '平均数:总和/个数 必须等于答案')
+    ok(nums.every((x) => x > 0), '平均数的每个数都该是正数')
   }
 
   // ---- 学段:没选过必须能被认出来,不能静默当成小学 ----

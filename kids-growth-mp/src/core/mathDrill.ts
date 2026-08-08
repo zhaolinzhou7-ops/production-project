@@ -17,6 +17,16 @@ export type MathKind =
   // 思维启蒙(真正的「幼儿奥数」不是竖式,是规律/空间/推理)
   | 'pattern'
   | 'countShape'
+  // 幼小衔接:看图列式(从「会算」到「看懂题」)
+  | 'picAdd'
+  | 'picSub'
+  | 'picDiff'
+  // 思维板块:方位、分类、量的比较、推理、专注力
+  | 'position'
+  | 'oddOne'
+  | 'sizeCmp'
+  | 'logic3'
+  | 'spotDiff'
   // 小学及以上
   | 'add'
   | 'sub'
@@ -29,6 +39,15 @@ export type MathKind =
   | 'swap'
   | 'countRect'
   | 'series'
+  | 'enumerate'
+  | 'clever'
+  // 中高年级经典奥数专题
+  | 'sumDiff'
+  | 'ageDiff'
+  | 'tree'
+  | 'chicken'
+  | 'profitLoss'
+  | 'average'
 
 export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
@@ -63,6 +82,14 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'half', label: '分一分', icon: '🍰', desc: '平均分,除法的地基' },
   { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' },
   { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' },
+  { kind: 'picAdd', label: '看图·合起来', icon: '🧺', desc: '两堆合在一起有几个' },
+  { kind: 'picSub', label: '看图·拿走了', icon: '✋', desc: '走掉一些,还剩几个' },
+  { kind: 'picDiff', label: '看图·多几个', icon: '⚖️', desc: '哪边多,多几个' },
+  { kind: 'position', label: '认方位', icon: '🧭', desc: '从左数、从右数,排第几' },
+  { kind: 'oddOne', label: '找不同类', icon: '🧩', desc: '哪个不是一伙的' },
+  { kind: 'sizeCmp', label: '比长短', icon: '📏', desc: '哪个长、哪个高' },
+  { kind: 'logic3', label: '想一想', icon: '💭', desc: '谁最高、谁最快' },
+  { kind: 'spotDiff', label: '找不同', icon: '👀', desc: '两排里哪个不一样' },
   { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' },
   { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' },
   { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' },
@@ -73,6 +100,14 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'cycle', label: '周期问题', icon: '🔁', desc: '重复排下去,第 N 个是什么' },
   { kind: 'swap', label: '等量代换', icon: '⚖️', desc: '1 个换 2 个,那 3 个换几个' },
   { kind: 'countRect', label: '图形计数', icon: '▦', desc: '一共能数出几个长方形' },
+  { kind: 'enumerate', label: '有几种搭配', icon: '👕', desc: '简单枚举:一共几种穿法' },
+  { kind: 'clever', label: '巧算', icon: '⚡', desc: '1+2+3+…,不用一个个加' },
+  { kind: 'sumDiff', label: '和差问题', icon: '➕➖', desc: '知道和与差,求那两个数' },
+  { kind: 'ageDiff', label: '年龄问题', icon: '👨‍👦', desc: '年龄差是不会变的' },
+  { kind: 'tree', label: '植树问题', icon: '🌳', desc: '每隔几米栽一棵,要几棵' },
+  { kind: 'chicken', label: '鸡兔同笼', icon: '🐔', desc: '数头又数脚' },
+  { kind: 'profitLoss', label: '盈亏问题', icon: '🍬', desc: '多了几个、少了几个' },
+  { kind: 'average', label: '平均数', icon: '📊', desc: '匀一匀,每份是多少' },
 ]
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
@@ -82,10 +117,25 @@ export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
 const TODDLER_KINDS: MathKind[] = [
   'count10', 'add10', 'sub10', 'makeTen', 'compare',
   'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern', 'countShape',
+  // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」,
+  // 是完全不同的两件事,而一年级立刻就考后者
+  'picAdd', 'picSub', 'picDiff',
+  // 4–6 岁真正的思维板块:方位、分类、比较、推理、专注力
+  'position', 'oddOne', 'sizeCmp', 'logic3', 'spotDiff',
 ]
 
-/** 进阶档:经典奥数入门专题,和「算得快」是两回事 —— 考的是想法 */
-const OLYMPIC_KINDS: MathKind[] = ['series', 'cycle', 'swap', 'countRect']
+/**
+ * 思维档(低年级奥数入门)。
+ * 和「算得快」是两回事 —— 考的是想法:看出藏在后面的那条规则。
+ */
+const OLYMPIC_KINDS: MathKind[] = [
+  'series', 'cycle', 'swap', 'countRect', 'enumerate', 'clever',
+]
+
+/** 奥数档:中高年级经典专题。名字听着吓人,但每一个都有一句话的窍门 */
+const ADVANCED_KINDS: MathKind[] = [
+  'sumDiff', 'ageDiff', 'tree', 'chicken', 'profitLoss', 'average',
+]
 
 /**
  * 难度档。
@@ -95,7 +145,7 @@ const OLYMPIC_KINDS: MathKind[] = ['series', 'cycle', 'swap', 'countRect']
  * 只知道「我做不出来了」。难度必须是**页面上看得见、随手能换**的东西,
  * 而不是藏在别处、还会被一次清缓存悄悄改掉的设置。
  */
-export type MathTier = 'toddler' | 'school' | 'olympic'
+export type MathTier = 'toddler' | 'school' | 'olympic' | 'advanced'
 
 export interface MathTierDef {
   tier: MathTier
@@ -106,7 +156,8 @@ export interface MathTierDef {
 export const MATH_TIERS: MathTierDef[] = [
   { tier: 'toddler', label: '幼儿档', desc: '10/20 以内加减、凑十、找规律、数图形' },
   { tier: 'school', label: '小学档', desc: '加减乘除、乘法口诀、混合运算' },
-  { tier: 'olympic', label: '思维档', desc: '找规律、周期、等量代换、图形计数' },
+  { tier: 'olympic', label: '思维档', desc: '找规律、周期、等量代换、图形计数、巧算' },
+  { tier: 'advanced', label: '奥数档', desc: '和差、年龄、植树、鸡兔同笼、盈亏、平均数' },
 ]
 
 /** 学段对应的默认难度档(只作默认值,页面上随时可改) */
@@ -118,13 +169,20 @@ export function defaultTierFor(stage: AgeStage): MathTier {
 export function mathKindsForTier(tier: MathTier): MathKindDef[] {
   if (tier === 'toddler') return MATH_KINDS.filter((k) => TODDLER_KINDS.includes(k.kind))
   if (tier === 'olympic') return MATH_KINDS.filter((k) => OLYMPIC_KINDS.includes(k.kind))
-  return MATH_KINDS.filter((k) => !TODDLER_KINDS.includes(k.kind) && !OLYMPIC_KINDS.includes(k.kind))
+  if (tier === 'advanced') return MATH_KINDS.filter((k) => ADVANCED_KINDS.includes(k.kind))
+  return MATH_KINDS.filter(
+    (k) =>
+      !TODDLER_KINDS.includes(k.kind) &&
+      !OLYMPIC_KINDS.includes(k.kind) &&
+      !ADVANCED_KINDS.includes(k.kind),
+  )
 }
 
 /** 这个题型属于哪一档 —— 用来把「上次选的题型」还原到对的档上 */
 export function tierOfKind(kind: MathKind): MathTier {
   if (TODDLER_KINDS.includes(kind)) return 'toddler'
   if (OLYMPIC_KINDS.includes(kind)) return 'olympic'
+  if (ADVANCED_KINDS.includes(kind)) return 'advanced'
   return 'school'
 }
 
@@ -261,7 +319,7 @@ function genPattern(): MathProblem {
 
 /** 数图形:数量与专注力一起练,而且不需要认字 */
 function genCountShape(): MathProblem {
-  const target = pick(['🔺', '⭐', '🔵', '❤️'])
+  const target = pick(['🔺', '⭐', '🔵', '🟣'])
   const other = pick(['🟩', '🟨', '⬜', '🟪'])
   const n = randInt(3, 8)
   const noise = randInt(3, 8)
@@ -334,10 +392,260 @@ function genSwap(): MathProblem {
  */
 function genCountRect(): MathProblem {
   const n = randInt(3, 6)
+  // ▭ 不是 emoji(会显示成方框),用真 emoji 的方块代替
   return {
-    text: `${'▭'.repeat(n)}\n这样连成一排的 ${n} 个格子,一共能数出几个长方形?`,
+    text: `${'🟨'.repeat(n)}\n这样连成一排的 ${n} 个格子,一共能数出几个长方形?`,
     answer: (n * (n + 1)) / 2,
   }
+}
+
+
+// ---------------- 幼小衔接:看图列式 ----------------
+
+/*
+  「会算 5+3」和「看懂一幅图、知道该用加法」是完全不同的两件事,
+  而一年级立刻就考后者。孩子卡在应用题上,几乎从来不是算错,
+  是不知道该加还是该减 —— 所以这三种要单独练:
+  合起来(加)、拿走了(减)、比多少(减但问法不同)。
+*/
+
+function genPicAdd(): MathProblem {
+  const e = pick(['🍎', '🐟', '⭐', '🎈', '🍬', '🐤'])
+  const a = randInt(1, 6)
+  const b = randInt(1, 9 - a)
+  return { text: `${e.repeat(a)}   和   ${e.repeat(b)}\n合起来一共有几个?`, answer: a + b }
+}
+
+function genPicSub(): MathProblem {
+  const [e, verb] = pick([
+    ['🐟', '游走了'],
+    ['🐤', '飞走了'],
+    ['🍬', '吃掉了'],
+    ['🎈', '飞走了'],
+    ['🚗', '开走了'],
+  ])
+  const a = randInt(3, 9)
+  const b = randInt(1, a - 1)
+  return { text: `${e.repeat(a)}\n${verb} ${b} 个,还剩几个?`, answer: a - b }
+}
+
+function genPicDiff(): MathProblem {
+  const e1 = pick(['🐶', '🐱', '🐰'])
+  const e2 = pick(['🦴', '🐟', '🥕'])
+  const a = randInt(3, 9)
+  const b = randInt(1, a - 1)
+  return { text: `${e1.repeat(a)}\n${e2.repeat(b)}\n上面比下面多几个?`, answer: a - b }
+}
+
+// ---------------- 思维板块:方位 / 分类 / 比较 / 推理 / 专注 ----------------
+
+/** 认方位:序数 + 左右。「从右数第几个」是很多孩子第一次真正卡住的地方 */
+function genPosition(): MathProblem {
+  const fill = pick(['🍎', '🌟', '🔵'])
+  const target = pick(['🐣', '🦋', '🍓'])
+  const n = randInt(5, 8)
+  const at = randInt(2, n - 1)
+  const row = new Array(n).fill(fill)
+  row[at - 1] = target
+  const fromLeft = randInt(1, 2) === 1
+  return {
+    text: `${row.join('')}\n从${fromLeft ? '左' : '右'}边数,${target} 排第几个?`,
+    answer: fromLeft ? at : n - at + 1,
+  }
+}
+
+/** 找不同类:分类与归纳。答序号,不用认字 */
+function genOddOne(): MathProblem {
+  const groups: Array<[string[], string[]]> = [
+    [['🍎', '🍌', '🍇', '🍓'], ['🚗', '✈️', '🚌']],
+    [['🐶', '🐱', '🐰', '🐷'], ['🌳', '🌸', '🌵']],
+    [['🚗', '🚌', '🚲', '✈️'], ['🍎', '🐶', '⚽']],
+    [['👕', '👖', '🧦', '👟'], ['🍕', '🐟', '📕']],
+    [['⚽', '🏀', '🎾', '🏐'], ['🍇', '🐶', '🚗']],
+  ]
+  const [same, other] = pick(groups)
+  const three = [...same].sort(() => Math.random() - 0.5).slice(0, 3)
+  const odd = pick(other)
+  const at = randInt(1, 4)
+  const row: string[] = []
+  let k = 0
+  for (let i = 1; i <= 4; i++) row.push(i === at ? odd : three[k++])
+  return {
+    text: `${row.map((x, i) => `${i + 1}.${x}`).join('  ')}\n哪个和其它三个不是一伙的?(答序号)`,
+    answer: at,
+  }
+}
+
+/** 比长短/高矮:用重复的方块表示长度,一眼能比出来 */
+function genSizeCmp(): MathProblem {
+  /*
+    ⚠️ 只用真 emoji。原先这里用的是 ▬(U+25AC)—— 它长得像方块,
+    但**不是 emoji**,在很多手机上是一个空方框,孩子看到的是两排空框。
+    这正是内容包里已经修过一次的那类坑,代码里同样不能犯。
+  */
+  const [what, unit] = pick([
+    ['长', '🟩'],
+    ['长', '🟦'],
+    ['大', '🟨'],
+  ])
+  let a = randInt(2, 8)
+  let b = randInt(2, 8)
+  if (a === b) b = a + 1
+  return {
+    text: `1. ${unit.repeat(a)}\n2. ${unit.repeat(b)}\n哪个更${what}?(答 1 或 2)`,
+    answer: a > b ? 1 : 2,
+  }
+}
+
+/**
+ * 简单推理:传递关系。
+ * 「小明比小红高,小红比小刚高,谁最高」—— 这是逻辑推理最早的样子,
+ * 4–5 岁就能懂,而它是后面所有应用题的底子。
+ */
+function genLogic3(): MathProblem {
+  const names = ['小明', '小红', '小刚']
+  // 成对的反义词 —— 原先反着问会生成「最不高」这种不是人话的题面
+  const [adj, most, least] = pick([
+    ['高', '最高', '最矮'],
+    ['快', '最快', '最慢'],
+    ['大', '最大', '最小'],
+  ])
+  // 随机一个真实排序,再按传递关系描述出来
+  const order = [0, 1, 2].sort(() => Math.random() - 0.5)
+  const [first, second, third] = order
+  const askTop = randInt(1, 2) === 1
+  return {
+    text:
+      `${names[first]}比${names[second]}${adj},${names[second]}比${names[third]}${adj}\n` +
+      `谁${askTop ? most : least}?(1 ${names[0]} 2 ${names[1]} 3 ${names[2]})`,
+    answer: (askTop ? first : third) + 1,
+  }
+}
+
+/** 找不同:两排里有一个位置不一样。练的是专注力,不是知识 */
+function genSpotDiff(): MathProblem {
+  /*
+    这里只能用**单码点**的 emoji。
+    ❤️ 这类是「基本字符 + 变体选择符」两个码点拼出来的,混进来之后
+    两排的视觉长度会对不齐,判定「第几个不一样」也会错位。
+  */
+  const a = pick(['🔵', '🟢', '🟣'])
+  const b = pick(['🔴', '🟡', '🟠'])
+  const n = randInt(5, 8)
+  const at = randInt(1, n)
+  const row1: string[] = []
+  const row2: string[] = []
+  for (let i = 1; i <= n; i++) {
+    const e = randInt(1, 2) === 1 ? a : b
+    row1.push(e)
+    row2.push(i === at ? (e === a ? b : a) : e)
+  }
+  return { text: `${row1.join('')}\n${row2.join('')}\n第几个不一样?`, answer: at }
+}
+
+// ---------------- 思维档:枚举与巧算 ----------------
+
+/** 简单枚举:2 件上衣配 3 条裤子有几种穿法 —— 乘法原理的启蒙 */
+function genEnumerate(): MathProblem {
+  const a = randInt(2, 5)
+  const b = randInt(2, 5)
+  const pairs = pick([
+    ['件上衣', '条裤子', '种穿法'],
+    ['种面包', '种果酱', '种搭配'],
+    ['条路', '条路', '种走法'],
+  ])
+  return {
+    text: `有 ${a} ${pairs[0]}、${b} ${pairs[1]}\n一共有几${pairs[2]}?`,
+    answer: a * b,
+  }
+}
+
+/** 巧算:1+2+…+n。孩子先一个个加,加着加着自己会发现「首尾配对」 */
+function genClever(): MathProblem {
+  const n = pick([5, 6, 8, 9, 10, 12, 15, 20])
+  return { text: `1 + 2 + 3 + … + ${n} =\n(想想有没有快办法)`, answer: (n * (n + 1)) / 2 }
+}
+
+// ---------------- 奥数档:中高年级经典专题 ----------------
+
+/** 和差问题:大数 =(和 + 差)÷ 2。一句话的窍门,但要真的想明白 */
+function genSumDiff(): MathProblem {
+  const big = randInt(6, 40)
+  const small = randInt(1, big - 1)
+  return {
+    text: `两个数,和是 ${big + small},差是 ${big - small}\n大的那个数是几?`,
+    answer: big,
+  }
+}
+
+/** 年龄问题:年龄差**永远不变** —— 这是这一类题唯一的窍门 */
+function genAgeDiff(): MathProblem {
+  const kid = randInt(5, 14)
+  const gap = randInt(20, 35)
+  const after = randInt(2, 12)
+  return {
+    text: `今年孩子 ${kid} 岁,妈妈 ${kid + gap} 岁\n${after} 年后,妈妈比孩子大几岁?`,
+    answer: gap,
+  }
+}
+
+/** 植树问题:两端都栽 → 棵数 = 段数 + 1。差的就是那个 +1 */
+function genTree(): MathProblem {
+  const gap = pick([2, 3, 4, 5, 10])
+  const seg = randInt(3, 12)
+  return {
+    text: `一条 ${gap * seg} 米的小路,每隔 ${gap} 米栽一棵树\n两头都栽,一共要栽几棵?`,
+    answer: seg + 1,
+  }
+}
+
+/** 鸡兔同笼:兔子数 =(脚 − 头×2)÷ 2 */
+function genChicken(): MathProblem {
+  const rabbit = randInt(2, 12)
+  const chicken = randInt(2, 12)
+  const heads = rabbit + chicken
+  const feet = rabbit * 4 + chicken * 2
+  return { text: `笼子里有鸡和兔,一共 ${heads} 个头、${feet} 只脚\n兔子有几只?`, answer: rabbit }
+}
+
+/** 盈亏问题:人数 =(盈 + 亏)÷(两次每人分的差) */
+function genProfitLoss(): MathProblem {
+  const people = randInt(3, 12)
+  const perLow = randInt(2, 6)
+  const perHigh = perLow + randInt(1, 3)
+  /*
+    ⚠️「多出来的那几颗」必须小于「多分一轮所需要的总量」,否则算出来的
+    「少了几颗」会是**负数** —— 题面上就成了「少了 -2 颗」,孩子看不懂,
+    而且这道题根本不成立。自测按题面里的数字反算时抓到了这个。
+  */
+  const maxLeft = Math.min(perLow, people * (perHigh - perLow) - 1)
+  const left = randInt(1, Math.max(1, maxLeft))
+  const total = perLow * people + left
+  const short = perHigh * people - total // 按多的分,差 short 个
+  return {
+    text: `一些糖分给小朋友:每人 ${perLow} 颗,多出 ${left} 颗;每人 ${perHigh} 颗,少了 ${short} 颗\n一共有几个小朋友?`,
+    answer: people,
+  }
+}
+
+/** 平均数:匀一匀。先会「总数 ÷ 份数」,后面统计全靠它 */
+function genAverage(): MathProblem {
+  const n = randInt(3, 5)
+  const avg = randInt(3, 20)
+  const xs: number[] = []
+  let acc = 0
+  for (let i = 0; i < n - 1; i++) {
+    const v = Math.max(1, avg + randInt(-3, 3))
+    xs.push(v)
+    acc += v
+  }
+  const last = avg * n - acc
+  xs.push(last > 0 ? last : 1)
+  const total = xs.reduce((a, b) => a + b, 0)
+  // 保证整除:用实际总数反推平均数
+  if (total % n !== 0) xs[xs.length - 1] += n - (total % n)
+  const sum = xs.reduce((a, b) => a + b, 0)
+  return { text: `${xs.join('、')}\n这 ${n} 个数的平均数是几?`, answer: sum / n }
 }
 
 // ---------------- 小学及以上 ----------------
@@ -418,6 +726,38 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genSwap()
     case 'countRect':
       return genCountRect()
+    case 'picAdd':
+      return genPicAdd()
+    case 'picSub':
+      return genPicSub()
+    case 'picDiff':
+      return genPicDiff()
+    case 'position':
+      return genPosition()
+    case 'oddOne':
+      return genOddOne()
+    case 'sizeCmp':
+      return genSizeCmp()
+    case 'logic3':
+      return genLogic3()
+    case 'spotDiff':
+      return genSpotDiff()
+    case 'enumerate':
+      return genEnumerate()
+    case 'clever':
+      return genClever()
+    case 'sumDiff':
+      return genSumDiff()
+    case 'ageDiff':
+      return genAgeDiff()
+    case 'tree':
+      return genTree()
+    case 'chicken':
+      return genChicken()
+    case 'profitLoss':
+      return genProfitLoss()
+    case 'average':
+      return genAverage()
     case 'add':
       return genAdd(stage)
     case 'sub':
