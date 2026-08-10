@@ -11,6 +11,8 @@ import {
   deleteCustomDeck,
   parseWordList,
   addWordsToDeck,
+  yesterdayScore,
+  recordTodayScore,
 } from '../../store/study'
 import type { LearnDeck } from '../../types'
 import { getStats, weakCards, earnedAchievements, type LearningStats } from '../../store/progress'
@@ -342,10 +344,16 @@ function Parent() {
     }
   })
 
-  const tryUnlock = () => {
+  /*
+    typed 参数是给「输满自动进入」用的:那一刻 pinInput 这个 state
+    还没更新到最新值(setState 是异步的),直接读会拿到只有 3 位的旧值。
+  */
+  const tryUnlock = (typed?: string) => {
     const pin = readObject<string>(PIN_KEY, DEFAULT_PIN)
-    if (pinInput.trim() !== pin) {
+    const got = (typed ?? pinInput).trim()
+    if (got !== pin) {
       Taro.showToast({ title: '密码不对', icon: 'none' })
+      setPinInput('')
       return
     }
     setUnlocked(true)
@@ -386,11 +394,21 @@ function Parent() {
           password
           maxlength={4}
           value={pinInput}
-          onInput={(e) => setPinInput(e.detail.value)}
-          onConfirm={tryUnlock}
+          onInput={(e) => {
+            const v = String(e.detail.value)
+            setPinInput(v)
+            /*
+              输满 4 位就自己进 —— 密码本来就是定长的,
+              还要再点一次「进入」纯属多一步。
+              放到下一帧执行,让输入框先把第 4 位画出来再跳,
+              否则家长会觉得「我最后一位还没按上去就跳了」。
+            */
+            if (v.length === 4) setTimeout(() => tryUnlock(v), 120)
+          }}
+          onConfirm={() => tryUnlock()}
           placeholder='••••'
         />
-        <View className='pa__btn' onClick={tryUnlock}>
+        <View className='pa__btn' onClick={() => tryUnlock()}>
           <Text className='pa__btnT'>进入</Text>
         </View>
       </View>

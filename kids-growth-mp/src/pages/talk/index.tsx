@@ -411,6 +411,16 @@ function Talk() {
       <View className={recording ? 'tool tool--rec' : 'tool'} onClick={() => toggleRecord(sentence)}>
         <Text className='tool__t'>{recording ? '⏹ 停止' : '🎙 录我的'}</Text>
       </View>
+      {/*
+        回放要看**存档**,不是这次会话的临时状态。
+        v47 起孩子的录音是存下来的,但界面一直只看 recPath ——
+        退出再进来按钮就没了,用户的感受就是「没有回放功能」。
+      */}
+      {recPath || getMyVoice(sentence, 'kid') ? (
+        <View className='tool' onClick={() => playFile(recPath || getMyVoice(sentence, 'kid'))}>
+          <Text className='tool__t'>▶️ 回放</Text>
+        </View>
+      ) : null}
       {recPath ? (
         <View className='tool' onClick={() => compareAB(sentence)}>
           <Text className='tool__t'>🆚 对比</Text>

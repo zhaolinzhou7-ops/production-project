@@ -189,7 +189,15 @@ function Session() {
         「点了没声音」。提前拉好,后面每一题都是秒响。
       */
       try {
-        prefetchAudio(list.map((x) => x.card.audioText ?? x.card.front).slice(0, 12))
+        /*
+          prefetchAudio 是**一次一句**的,而且要告诉它是中文还是英文 ——
+          原先这里传了一个数组、也没传语言,等于这段预取从来没真正生效过。
+          (tsc 抓到的;之前 tsc 因为配置报错直接退出,所以没拦住。)
+        */
+        const lang = (d?.itemType ?? 'word') === 'word' ? 'en' : 'zh'
+        for (const x of list.slice(0, 12)) {
+          prefetchAudio(x.card.audioText ?? x.card.front, lang)
+        }
       } catch {
         /* 预取失败不影响做题 */
       }
@@ -468,8 +476,22 @@ function Session() {
     }
   }
 
+  /*
+    换题后的**防误点锁**。
+
+    选中一个答案后要停 0.5 秒左右让孩子看到对错,然后才换下一题。
+    问题在于:如果他在这半秒里又戳了一下同一个位置,那一下会正好落在
+    **刚渲染出来的下一题**的选项上 —— 题目他连看都没看到就被判了。
+    4 岁半的孩子手快、爱连点,这事几乎每次都会发生。
+
+    所以换题之后的 400 毫秒内,选项一律不响应。
+  */
+  const lockRef = useRef(0)
+  const locked = () => Date.now() < lockRef.current
+
   const advance = (wasCorrect: boolean) => {
     if (!current) return
+    lockRef.current = Date.now() + 400
     // 「再练一遍」不写 SRS —— 只是练手,不该改变复习计划
     if (!freePractice) applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     if (wasCorrect) {
@@ -766,7 +788,7 @@ function Session() {
               const isRight = opt === answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={`${cls}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === answer), 550) }}>
+                <View key={opt} className={`${cls}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked || locked()) return; setPicked(opt); setTimeout(() => advance(opt === answer), 550) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -860,8 +882,15 @@ function Session() {
             <View className='chip' onClick={playCurrent}><Text className='chip__t'>🔊 范读</Text></View>
             <View className='chip' onClick={playSlow}><Text className='chip__t'>🐢 慢速</Text></View>
             <View className='chip' onClick={toggleRecord}><Text className='chip__t'>{recording ? '⏹ 停止' : '🔴 录我读的'}</Text></View>
-            {recPath ? <View className='chip' onClick={() => playFile(recPath)}><Text className='chip__t'>▶️ 回放</Text></View> : null}
-            {recPath ? <View className='chip chip--ab' onClick={compareAB}><Text className='chip__t'>🆚 对比</Text></View> : null}
+            {/* 回放按**存档**判断 —— 退出重进也该还在(录音从 v47 起就是持久化的) */}
+            {recPath || getMyVoice(current.card.front, 'kid') ? (
+              <View className='chip' onClick={() => playFile(recPath || getMyVoice(current.card.front, 'kid'))}>
+                <Text className='chip__t'>▶️ 回放</Text>
+              </View>
+            ) : null}
+            {recPath || getMyVoice(current.card.front, 'kid') ? (
+              <View className='chip chip--ab' onClick={compareAB}><Text className='chip__t'>🆚 对比</Text></View>
+            ) : null}
           </View>
           <View className={listening ? 'mic mic--on' : 'mic'} onClick={toggleSpeak}><Text className='mic__t'>{listening ? '🎙 读完了' : '🎤 跟读打分'}</Text></View>
           {stars >= 0 ? <Text className='stars'>{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</Text> : null}
@@ -963,6 +992,7 @@ function Session() {
                   className={`${cls} opt--hz`}
                   onClick={() => {
                     if (picked) return
+                    if (picked || locked()) return
                     setPicked(opt)
                     if (opt === answer) void playText(answer, 'zh_CN')
                     setTimeout(() => advance(opt === answer), 550)
@@ -1018,7 +1048,7 @@ function Session() {
               const isRight = opt === blank.answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={cls} onClick={() => { if (picked) return; setPicked(opt); setTimeout(() => advance(opt === blank.answer), 650) }}>
+                <View key={opt} className={cls} onClick={() => { if (picked || locked()) return; setPicked(opt); setTimeout(() => advance(opt === blank.answer), 650) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -1066,6 +1096,7 @@ function Session() {
                   className={cls}
                   onClick={() => {
                     if (picked) return
+                    if (picked || locked()) return
                     setPicked(opt)
                     if (opt === answer) playPic(current.card)
                     setTimeout(() => advance(opt === answer), 550)
@@ -1101,6 +1132,7 @@ function Session() {
                   className={cls}
                   onClick={() => {
                     if (picked) return
+                    if (picked || locked()) return
                     setPicked(opt)
                     setTimeout(() => advance(opt === answer), 550)
                   }}
@@ -1128,6 +1160,7 @@ function Session() {
                   className={cls}
                   onClick={() => {
                     if (picked) return
+                    if (picked || locked()) return
                     setPicked(opt)
                     setTimeout(() => advance(opt === answer), 550)
                   }}

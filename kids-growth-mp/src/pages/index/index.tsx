@@ -473,11 +473,19 @@ function Index() {
         一个 4 岁半的孩子如果从这套系统里学会的第一件事是「我不行」,
         那前面做的所有内容都白搭。
       */}
+      {/* 点进去是完整的今日评分(分项 + 点评 + 学习足迹) */}
       {card && card.stars > 0 ? (
-        <View className='dcard'>
+        <View className='dcard' onClick={() => openPage('/pages/score/index')}>
           <Text className='dcard__s'>{'⭐'.repeat(card.stars)}{'☆'.repeat(5 - card.stars)}</Text>
           <Text className='dcard__c'>{card.cheer}</Text>
-          {card.trend > 0 ? <Text className='dcard__up'>比昨天进步了</Text> : null}
+          <Text className='dcard__go'>今日评分 ›</Text>
+        </View>
+      ) : null}
+      {card && card.stars === 0 ? (
+        <View className='dcard' onClick={() => openPage('/pages/score/index')}>
+          <Text className='dcard__s'>☆☆☆☆☆</Text>
+          <Text className='dcard__c'>今天还没开始</Text>
+          <Text className='dcard__go'>今日评分 ›</Text>
         </View>
       ) : null}
 

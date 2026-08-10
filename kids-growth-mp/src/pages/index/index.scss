@@ -642,3 +642,10 @@
   padding: 16px;
   margin: -8px 0 20px;
 }
+
+/* 评分卡是可点的:点进去是分项、点评和学习足迹 */
+.dcard__go {
+  font-size: 22px;
+  color: #b45309;
+  white-space: nowrap;
+}

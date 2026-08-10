@@ -1,0 +1,42 @@
+.sc {
+  min-height: 100vh;
+  padding: 28px 24px 60px;
+  box-sizing: border-box;
+
+  &__hero {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  &__n { font-size: 120px; font-weight: bold; color: #f9497a; line-height: 1; }
+  &__u { font-size: 32px; color: #9ca3af; margin-left: 10px; }
+
+  &__stars { display: block; text-align: center; font-size: 40px; margin-top: 18px; letter-spacing: 4px; }
+  &__cheer { display: block; text-align: center; font-size: 32px; color: #374151; font-weight: bold; margin-top: 14px; }
+  &__up { display: block; text-align: center; font-size: 24px; color: #059669; margin-top: 10px; }
+  &__flat { display: block; text-align: center; font-size: 23px; color: #9ca3af; margin-top: 10px; }
+
+  &__sec {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 26px;
+    padding: 24px;
+    margin-top: 26px;
+  }
+  &__t { display: block; font-size: 28px; font-weight: bold; color: #374151; margin-bottom: 12px; }
+  &__note { display: block; margin-top: 14px; font-size: 23px; color: #6b7280; line-height: 1.7; }
+  &__mark { display: block; font-size: 23px; color: #6b7280; line-height: 1.9; }
+  &__tip { display: block; margin-top: 28px; font-size: 21px; color: #9ca3af; line-height: 1.7; }
+}
+
+.sar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+
+  &__n { width: 180px; font-size: 24px; color: #374151; }
+  &__track { flex: 1; height: 18px; background: #f1f1f4; border-radius: 999px; overflow: hidden; }
+  &__fill { height: 100%; background: linear-gradient(90deg, #ffb26b, #f9497a); border-radius: 999px; }
+  &__v { width: 190px; text-align: right; font-size: 21px; color: #9ca3af; }
+}
