@@ -21,6 +21,7 @@ import {
   getDailyGoal,
   todayAnswered,
   deckSignals,
+  deckLevel,
   todayByArea,
   yesterdayScore,
   recordTodayScore,
@@ -233,6 +234,8 @@ function Index() {
               name: r.deck.name,
               due: r.due,
               reason: reasonOf.get(r.deck.id),
+              // 难度档决定这一步用哪个练法、出几题
+              level: deckLevel(r.deck.id),
             })),
             getStage(),
           )
@@ -396,9 +399,16 @@ function Index() {
         <View className='home__stat'>
           <Text className='home__xp'>成长值 {xp}</Text>
           {streak > 0 ? <Text className='home__streak'>🔥 {streak} 天</Text> : null}
-          <Text className='home__sync' onClick={() => void sync()}>
-            {isCloudConfigured() ? '☁️ 同步' : '☁️'}
-          </Text>
+          {/*
+            云同步没配置时**根本不显示这个按钮**。
+            原先没配也画一个 ☁️,点了什么都不会发生 —— 假按钮比没按钮糟:
+            用户会以为同步过了,直到丢数据那天才发现。
+          */}
+          {isCloudConfigured() ? (
+            <Text className='home__sync' onClick={() => void sync()}>
+              ☁️ 同步
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -696,11 +706,25 @@ function Index() {
         </View>
       </View>
 
+      {/*
+        成长档案、内容库、声音自检都是**家长**用的,幼儿段收进「更多」。
+        孩子首页原先有 9 个入口,其中一多半他一辈子也不会点。
+      */}
+      {getStage() !== 'toddler' || showMore ? (
       <View className='entries'>
+        <View className='entry entry--sound' onClick={() => void checkSound()}>
+          <Text className='entry__icon'>🔎</Text>
+          <Text className='entry__t'>声音自检</Text>
+        </View>
         <View className='entry entry--archive' onClick={() => openPage('/pages/archive/index')}>
           <Text className='entry__icon'>🌱</Text>
           <Text className='entry__t'>成长档案</Text>
         </View>
+      </View>
+      ) : null}
+
+      {getStage() !== 'toddler' || showMore ? (
+      <View className='entries'>
         <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
           <Text className='entry__icon'>📚</Text>
           <Text className='entry__t'>内容库</Text>
@@ -709,11 +733,8 @@ function Index() {
           <Text className='entry__icon'>👨‍👩‍👧</Text>
           <Text className='entry__t'>家长中心</Text>
         </View>
-        <View className='entry entry--sound' onClick={() => void checkSound()}>
-          <Text className='entry__icon'>🔊</Text>
-          <Text className='entry__t'>{checking ? `检测中 ${progress}%` : '声音自检'}</Text>
-        </View>
       </View>
+      ) : null}
 
       {diag.length > 0 ? (
         <View className='diag'>

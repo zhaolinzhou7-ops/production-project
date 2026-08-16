@@ -77,3 +77,38 @@ export function nextLevel(level: number, adjust: Adjust): number {
 }
 
 export const LEVEL_COUNT = LEVELS.length
+
+
+/**
+ * 练法阶梯 —— 难度真正被感觉到的地方。
+ *
+ * 原先难度档只调「一组几题」和「几个选项」。孩子的感受是:
+ * **每次都一样**。因为对他来说,题目长得一模一样,只是少了一个选项。
+ *
+ * 真正的难度是**认知方式**在变:
+ *   听中文点图(不用认字) → 看图选中文 → 看图选英文 → 自己说出来
+ * 这四步一步比一步难,而且孩子一眼就能感觉到「变了」。
+ *
+ * 最后一档是**产出** —— 四选一有 25% 蒙对率,而说出来没有。
+ * 一个内容真正学会的标志,是他能说出来,不是能认出来。
+ */
+export function modeLadder(itemType: string, level: number): string | undefined {
+  const l = Math.max(0, Math.min(LEVELS.length - 1, Math.round(level)))
+  if (itemType === 'pic') {
+    /*
+      五档要**平滑**:中间不能出现断崖。
+      原先第 2 档直接是「看图选英文」,而新卡组默认就在第 2 档 ——
+      一个刚开始的孩子上来就要认英文单词,太跳了。
+      现在英语是分两步进来的:先「听英文点图」(只要听得懂),
+      再「看图选英文」(要认得出),最后才是「读出来」。
+    */
+    return ['listenPic', 'picChoose', 'listenPicEn', 'picChooseEn', 'speakEn'][l]
+  }
+  if (itemType === 'hanzi') {
+    return ['listenChoose', 'listenChoose', 'recognize', 'recognize', 'sayIt'][l]
+  }
+  if (itemType === 'word') {
+    return ['listenChoose', 'listenChoose', 'recognize', 'speak', 'spell'][l]
+  }
+  return undefined
+}

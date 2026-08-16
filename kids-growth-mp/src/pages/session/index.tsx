@@ -187,6 +187,11 @@ function Session() {
         计划里指定了题量时以计划为准 —— 那是家长/轻量档明确要的。
       */
       const spec = specOf(deckLevel(deckId))
+      /*
+        计划里带来的题量**就是**按难度档算好的(见 core/dailyPlan),
+        所以直接用它;只有「今天不想学·3 题」这种明确的小数量才算覆盖。
+        原先这里无条件让 limit 覆盖 spec,导致难度档的题量在主路径上从没生效过。
+      */
       const useLimit = Number.isFinite(limitParam) && limitParam > 0 ? cardLimit : spec.size
       setOptCount(spec.choices)
       const list = getSessionCards(cid, deckId, useLimit, freePractice)
@@ -906,6 +911,47 @@ function Session() {
               <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>检查</Text></View>
             </View>
           )}
+        </View>
+      )}
+
+      {/*
+        英语·跟我读 —— 「读单词」那一环。
+
+        原先整套系统里,英语单词只有「听」和「选」,**没有一个地方让他开口读**。
+        而语音是要靠肌肉记忆的:听一百遍不如自己读十遍。
+
+        流程刻意做短:范读 → 他读 → 家长判。中间可以录下来回放,
+        但不强制 —— 录音是给他听自己进步用的,不该变成练习的门槛。
+        判定同样交给家长:语音识别对 4 岁半的英语发音基本不可用,
+        会把对的判成错,而那是最打击人的一种错。
+      */}
+      {mode === 'speakEn' && (
+        <View className='card card--say'>
+          <Text className='say__e'>{(current.card.extra as { emoji?: string } | undefined)?.emoji ?? '🔤'}</Text>
+          <Text className='say__en'>{(current.card.extra as { en?: string } | undefined)?.en ?? current.card.back}</Text>
+          <Text className='say__zh'>{current.card.front}</Text>
+          <View className='row row--wrap'>
+            <View className='chip' onClick={() => playWordAudio((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)}>
+              <Text className='chip__t'>🔊 听范读</Text>
+            </View>
+            <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
+              <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
+            </View>
+            {recPath || getMyVoice(current.card.front, 'kid') ? (
+              <View className='chip' onClick={() => playFile(recPath || getMyVoice(current.card.front, 'kid'))}>
+                <Text className='chip__t'>▶️ 回放</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text className='say__hint'>下面由家长点</Text>
+          <View className='row'>
+            <View className='btn btn--gray' onClick={() => advance(false)}>
+              <Text className='btn__t'>再试试</Text>
+            </View>
+            <View className='btn btn--mint' onClick={() => advance(true)}>
+              <Text className='btn__t'>读对了</Text>
+            </View>
+          </View>
         </View>
       )}
 

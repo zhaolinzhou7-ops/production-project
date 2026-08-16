@@ -26,6 +26,8 @@ export type PracticeMode =
   | 'pinyin'
   // 说给我听:他说,家长判 —— 补上「产出」这一环
   | 'sayIt'
+  // 英语·跟我读:听范读 → 他读出来 → 家长判(这是「读单词」那一环)
+  | 'speakEn'
   // 常识问答(fact)
   | 'quiz'
 

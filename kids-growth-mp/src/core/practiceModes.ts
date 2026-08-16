@@ -52,6 +52,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true, repeat: true },
     { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播,不用操作', lowAgeFriendly: true, repeat: true },
     { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '看图说出来,家长判对错', lowAgeFriendly: true, repeat: true },
+    { mode: 'speakEn', label: '英语·跟我读', icon: '🎙️', desc: '听一遍,再读给爸爸妈妈听', lowAgeFriendly: true, repeat: true },
   ],
 }
 

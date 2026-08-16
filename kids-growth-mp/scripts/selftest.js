@@ -613,7 +613,32 @@ function run() {
   ]
   const tPlan = dp.buildPlan(fakeDecks, 'toddler')
   ok(tPlan.length >= 3 && tPlan.length <= 4, '幼儿段应排出 3–4 步')
-  eq(tPlan[0].mode, 'listenPic', '第一步该是「听」—— 不用认字,进入状态最快')
+  /*
+    第一步用的是**这个卡组当前难度**对应的练法(见 core/adaptive 的阶梯),
+    而不是写死一个 —— 写死就是用户说的「做了很多次,每一次还是这样」。
+  */
+  eq(
+    dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 0 })), 'toddler')[0].mode,
+    'listenPic',
+    '最低档第一步该是「听中文点图」—— 不用认字',
+  )
+  eq(
+    dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 4 })), 'toddler')[0].mode,
+    'speakEn',
+    '最高档第一步该是「读出来」—— 产出才是真会了',
+  )
+  ok(
+    dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 0 })), 'toddler')[0].limit <
+      dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 4 })), 'toddler')[0].limit,
+    '低档的题量应少于高档 —— 难度档必须真的影响题量',
+  )
+  // 阶梯必须平滑:相邻两档不能是同一个,也不能跳过中间环节
+  const adMod = L('core/adaptive.js')
+  const ladder = [0, 1, 2, 3, 4].map((l) => adMod.modeLadder('pic', l))
+  eq(ladder.filter(Boolean).length, 5, '五档都要有对应的练法')
+  eq(new Set(ladder).size, 5, '五档的练法不该重复 —— 重复就等于那一档白设')
+  eq(adMod.modeLadder('pic', -3), 'listenPic', '档位越界应夹到最低档')
+  eq(adMod.modeLadder('pic', 99), 'speakEn', '档位越界应夹到最高档')
   eq(tPlan[tPlan.length - 1].mode, 'earTrain', '最后一步该是磨耳朵 —— 收尾要轻松')
   ok(
     tPlan.every((s) => s.limit <= 8),

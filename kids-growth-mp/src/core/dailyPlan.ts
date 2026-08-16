@@ -1,4 +1,5 @@
 import type { AgeStage, CardItemType, PracticeMode } from '../types'
+import { modeLadder, specOf } from './adaptive'
 
 /**
  * 「今天就做这个」—— 一条排好的路,孩子不需要做任何选择。
@@ -33,6 +34,8 @@ export interface PlanDeck {
   due: number
   /** 为什么推荐它(来自 core/recommend);没有就不显示 */
   reason?: string
+  /** 这个卡组当前的难度档 0–4(见 core/adaptive) */
+  level?: number
 }
 
 /** 幼儿段一步几题 —— 4 岁半的专注力撑不了 12 题一组 */
@@ -62,13 +65,29 @@ export function buildPlan(decks: PlanDeck[], stage: AgeStage): PlanStep[] {
   }
 
   if (stage === 'toddler') {
-    // 1) 先听:不用认字,进入状态最快
-    push(pics[0], 'listenPic', `听声音点图片 · ${pics[0]?.name ?? ''}`, TODDLER_LIMIT)
-    // 2) 中间放最费神的:看图选词(要真的想一下)
-    push(pics[1] ?? pics[0], 'picChoose', `看图选一选 · ${(pics[1] ?? pics[0])?.name ?? ''}`, TODDLER_LIMIT)
-    // 3) 认字放这里 —— 有就练,没有就跳过,不硬凑
-    push(hanzi[0], 'recognize', `认字 · ${hanzi[0]?.name ?? ''}`, TODDLER_LIMIT)
-    // 4) 收尾一定是轻松的:磨耳朵不用操作,躺着听就行
+    /*
+      练法**跟着这个卡组的难度档走**,不再写死。
+
+      原先四步是固定的:听音选图 → 看图选一选 → 认字 → 磨耳朵。
+      于是不管孩子练了多少次、答得多好,看到的永远是同一套题 ——
+      用户的原话是「做了很多次,每一次还是这样」。
+      现在低档给「听中文点图」(不用认字),练熟了自动升到「看图选英文」,
+      再往上是「读出来」。难度的变化他一眼就能感觉到。
+    */
+    const modeOf = (d: PlanDeck | undefined, fallback: PracticeMode): PracticeMode =>
+      (d ? (modeLadder(d.itemType, d.level ?? 2) as PracticeMode) : undefined) ?? fallback
+    const sizeOf = (d: PlanDeck | undefined) => (d ? specOf(d.level ?? 2).size : TODDLER_LIMIT)
+
+    // 1) 第一步用**当前难度**的主练法 —— 状态最好的时候做最该做的
+    const d1 = pics[0]
+    push(d1, modeOf(d1, 'listenPic'), `${d1?.name ?? ''}`, sizeOf(d1))
+    // 2) 换一个卡组,同样按它自己的难度档
+    const d2 = pics[1] ?? pics[0]
+    push(d2, modeOf(d2, 'picChoose'), `${d2?.name ?? ''}`, sizeOf(d2))
+    // 3) 认字有就练,没有就跳过,不硬凑
+    const d3 = hanzi[0]
+    push(d3, modeOf(d3, 'recognize'), `认字 · ${d3?.name ?? ''}`, sizeOf(d3))
+    // 4) 收尾一定是轻松的:磨耳朵不用操作,躺着听就行(这一步不随难度变)
     push(pics[0], 'earTrain', `磨耳朵 · ${pics[0]?.name ?? ''}`, TODDLER_LIMIT)
     return steps.slice(0, 4)
   }
