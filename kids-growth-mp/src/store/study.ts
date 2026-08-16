@@ -1,6 +1,6 @@
 import { KEYS, readTable, writeTable, readObject, writeObject } from './db'
 import { newId } from '../core/id'
-import { initialSrs, gradeCard, isDue } from '../core/srs'
+import { initialSrs, gradeCard, isDue, tuningFor } from '../core/srs'
 import { getPackMeta } from '../core/learningContent'
 import type {
   BuiltinCard,
@@ -14,6 +14,7 @@ import { todayISO } from '../core/dateUtils'
 import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
 import { dailyPointCap, allowedAward } from '../core/pointCap'
 import type { DeckSignal } from '../core/recommend'
+import { adjustFor, nextLevel, type Adjust } from '../core/adaptive'
 import { getProfile, saveProfile } from './records'
 import { computeStreak } from '../core/streak'
 import type {
@@ -659,7 +660,8 @@ export function applyGrade(stateId: string, grade: ReviewGrade): void {
   const states = readTable<StudyState>(KEYS.states)
   const idx = states.findIndex((s) => s.id === stateId)
   if (idx < 0) return
-  const upd = gradeCard(states[idx], grade)
+  // 幼儿档用更短的间隔 —— 8 天后再见面对他等于新词(见 core/srs 的说明)
+  const upd = gradeCard(states[idx], grade, tuningFor(getStage()))
   states[idx] = { ...states[idx], ...upd, lastReviewed: Date.now() }
   writeTable(KEYS.states, states)
 }
@@ -1244,4 +1246,52 @@ export function addCustomCards(
   writeTable(KEYS.cards, cards)
   writeTable(KEYS.states, states)
   return added
+}
+
+/**
+ * 每个卡组的难度档(0–4)。
+ *
+ * 存在卡组上而不是全局:识字可能已经很熟,英语还在入门 ——
+ * 一个全局难度会同时把两边都调错。
+ */
+export function deckLevel(deckId: string): number {
+  const map = readObject<Record<string, number>>('deckLevel', {})
+  const v = map && typeof map === 'object' ? map[deckId] : undefined
+  return typeof v === 'number' ? v : 2 // 默认从「正常」起步
+}
+
+function setDeckLevel(deckId: string, level: number): void {
+  const map = readObject<Record<string, number>>('deckLevel', {})
+  writeObject('deckLevel', { ...(map && typeof map === 'object' ? map : {}), [deckId]: level })
+}
+
+/**
+ * 一组做完之后,按最近几组的正确率决定升降档。
+ * 返回变化方向,供界面告诉家长「变难了 / 变简单了」。
+ */
+export function tuneDeckLevel(childId: string, deckId: string): Adjust {
+  /*
+    「最近几组」按**写入顺序**取,不按 createdAt 排序。
+
+    同一毫秒完成两组时 createdAt 会打平,排序就成了随机的 —— 那样
+    「最近一组」可能取到更早的那一组,难度会朝反方向调。
+    会话是顺序追加的,所以倒着数天然就是从新到旧,不需要任何时间戳。
+  */
+  const all = readTable<{
+    childId: string
+    deckId: string
+    total: number
+    correct: number
+    free?: boolean
+  }>(KEYS.sessions)
+  const recent: Array<{ total: number; correct: number }> = []
+  for (let i = all.length - 1; i >= 0 && recent.length < 4; i--) {
+    const r = all[i]
+    if (!r || r.childId !== childId || r.deckId !== deckId || r.free) continue
+    recent.push({ total: r.total || 0, correct: r.correct || 0 })
+  }
+
+  const adjust = adjustFor(recent)
+  if (adjust !== 'keep') setDeckLevel(deckId, nextLevel(deckLevel(deckId), adjust))
+  return adjust
 }

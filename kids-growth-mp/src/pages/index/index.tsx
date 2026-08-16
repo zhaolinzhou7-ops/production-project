@@ -642,7 +642,8 @@ function Index() {
         ) : null}
       </View>
 
-      {/* 等级:成长值攒到下一级还差多少,一眼可见 */}
+      {/* 等级对 4 岁半是抽象符号(「Lv.7」他理解不了),幼儿段收进「更多」 */}
+      {getStage() !== 'toddler' || showMore ? (
       <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>
         <Text className='lvbar__e'>{level.cur.emoji}</Text>
         <View className='lvbar__meta'>
@@ -655,8 +656,13 @@ function Index() {
         </View>
         <Text className='lvbar__h'>{level.next ? `再 ${level.toNext} 升级` : '满级'}</Text>
       </View>
+      ) : null}
 
-      {/* 今日挑战:一眼看到还差几组,给孩子一个明确的小目标 */}
+      {/*
+        今日挑战和上面的「今日目标」说的是同一件事(今天做够没有),
+        两条进度条并排放着是重复。幼儿段只留今日目标那一条。
+      */}
+      {getStage() !== 'toddler' || showMore ? (
       <View className='chalbar' onClick={() => openPage('/pages/fun/index')}>
         <Text className='chalbar__t'>
           {challenge.done >= challenge.goal
@@ -670,6 +676,7 @@ function Index() {
           />
         </View>
       </View>
+      ) : null}
 
       <View className='entries'>
         <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>

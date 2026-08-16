@@ -24,6 +24,8 @@ export type PracticeMode =
   | 'listenPicEn'
   | 'earTrain'
   | 'pinyin'
+  // 说给我听:他说,家长判 —— 补上「产出」这一环
+  | 'sayIt'
   // 常识问答(fact)
   | 'quiz'
 

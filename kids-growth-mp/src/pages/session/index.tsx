@@ -27,6 +27,8 @@ import { awardSticker, feedPetDetailed, bumpChallenge, type FeedResult } from '.
 import type { StickerDef } from '../../core/stickers'
 import type { LearnCard, LearnDeck, PracticeMode } from '../../types'
 import { saveMyVoice, getMyVoice } from '../../store/voice'
+import { deckLevel, tuneDeckLevel } from '../../store/study'
+import { specOf } from '../../core/adaptive'
 import { advancePlan } from '../../store/plan'
 import { noteUsage } from '../../store/usage'
 import { reportCard } from '../../store/reports'
@@ -118,6 +120,10 @@ function Session() {
   const [earIdx, setEarIdx] = useState(0)
   const [earOn, setEarOn] = useState(false)
   const [ready, setReady] = useState(false)
+  /** 这一组给几个选项 —— 由难度档决定(四选一变二选一,难度差比换词大得多) */
+  const [optCount, setOptCount] = useState(4)
+  /** 这一组结束后难度有没有变,结算页要说一声 */
+  const [levelMoved, setLevelMoved] = useState<'up' | 'down' | 'keep'>('keep')
 
   /*
     卸载时要记「半途退出」,而卸载回调拿到的是**第一次渲染时**的那份状态。
@@ -143,6 +149,16 @@ function Session() {
    * 变成「会不会打字」——门槛完全跑偏了。
    */
   const useLetters = mode === 'spell' && getStage() === 'toddler'
+  /*
+    幼儿段的结算页只留三样:星星、宠物长了一口、继续。
+
+    原先一屏塞了八样反馈(星级、评语、积分、贴纸、宠物、每日挑战、成就、升级)。
+    对 4 岁半来说这不是激励,是**噪音** —— 而且 15 分钟里真正做题只占 3 分钟,
+    剩下的时间大半消耗在这类过场上。等级、成就、贴纸这些抽象符号
+    ("Lv.7"、"徽章")他根本理解不了,占着屏幕纯属浪费。
+    大孩子照旧全都看得到。
+  */
+  const simpleSummary = getStage() === 'toddler'
   const isWord = itemType === 'word'
   const isPic = itemType === 'pic'
   const isFact = itemType === 'fact'
@@ -166,7 +182,14 @@ function Session() {
   useEffect(() => {
     try {
       const cid = getCurrentChildId()
-      const list = getSessionCards(cid, deckId, cardLimit, freePractice)
+      /*
+        题量与选项数跟着**这个卡组的难度档**走(见 core/adaptive)。
+        计划里指定了题量时以计划为准 —— 那是家长/轻量档明确要的。
+      */
+      const spec = specOf(deckLevel(deckId))
+      const useLimit = Number.isFinite(limitParam) && limitParam > 0 ? cardLimit : spec.size
+      setOptCount(spec.choices)
+      const list = getSessionCards(cid, deckId, useLimit, freePractice)
       const d = getDeck(deckId) ?? null
       const all = getDeckCards(deckId)
       setChildId(cid)
@@ -314,7 +337,7 @@ function Session() {
     if (!current || mode !== 'listenChoose') return []
     const answer = isHanzi ? current.card.front : current.card.back
     const src = isHanzi ? poolFront : poolBack
-    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, 3)
+    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, poolBack, poolFront, isHanzi])
 
@@ -325,7 +348,7 @@ function Session() {
     const hideIdx = Math.floor(Math.random() * lines.length)
     const answer = lines[hideIdx]
     const own = new Set(lines)
-    const distractors = shuffle(linePool.filter((l) => !own.has(l) && l.length === answer.length)).slice(0, 3)
+    const distractors = shuffle(linePool.filter((l) => !own.has(l) && l.length === answer.length)).slice(0, optCount - 1)
     return { lines, hideIdx, answer, options: shuffle([answer, ...distractors]) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, mode, linePool, idx])
@@ -335,7 +358,7 @@ function Session() {
     if (!current || (mode !== 'picChoose' && mode !== 'picChooseEn')) return []
     const pick = (c: LearnCard) => (mode === 'picChooseEn' ? c.back : c.front)
     const answer = pick(current.card)
-    const distractors = shuffle(allCards.filter((c) => pick(c) !== answer).map(pick)).slice(0, 3)
+    const distractors = shuffle(allCards.filter((c) => pick(c) !== answer).map(pick)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
 
@@ -344,7 +367,7 @@ function Session() {
     if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
     const emojiOf = (c: LearnCard) => (c.extra as { emoji?: string } | undefined)?.emoji ?? '❓'
     const answer = emojiOf(current.card)
-    const distractors = shuffle(allCards.filter((c) => emojiOf(c) !== answer).map(emojiOf)).slice(0, 3)
+    const distractors = shuffle(allCards.filter((c) => emojiOf(c) !== answer).map(emojiOf)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
 
@@ -352,7 +375,7 @@ function Session() {
   const pinyinOptions = useMemo(() => {
     if (!current || mode !== 'pinyin') return []
     const answer = current.card.front
-    const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, 3)
+    const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
 
@@ -379,7 +402,7 @@ function Session() {
   const quizOptions = useMemo(() => {
     if (!current || mode !== 'quiz') return []
     const answer = current.card.back
-    const distractors = shuffle(allCards.filter((c) => c.back !== answer).map((c) => c.back)).slice(0, 3)
+    const distractors = shuffle(allCards.filter((c) => c.back !== answer).map((c) => c.back)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards])
 
@@ -421,6 +444,14 @@ function Session() {
     // 走计划时,做完这一组就把进度推一格,并记下一步是什么
     if (inPlan) setNextStep(advancePlan() ?? null)
     noteUsage('finish', deck?.name ?? deckId, mode, total, total)
+    // 按最近几组的正确率升降难度 —— 让他一直待在「刚好够得着」的地方
+    if (!freePractice) {
+      try {
+        setLevelMoved(tuneDeckLevel(childId, deckId))
+      } catch {
+        /* 忽略 */
+      }
+    }
     const durationSec = Math.round((Date.now() - startedAt) / 1000)
     addStudyTime(durationSec)
     const res = finishSession({
@@ -617,14 +648,14 @@ function Session() {
           <View className='result__cell'><Text className='result__num'>{summary.correct}/{summary.total}</Text><Text className='result__lab'>答对</Text></View>
           <View className='result__cell'><Text className='result__num result__num--sun'>+{summary.points}</Text><Text className='result__lab'>积分</Text></View>
         </View>
-        {gotSticker ? (
+        {!simpleSummary && gotSticker ? (
           <View className='reward'>
             <Text className='reward__e'>{gotSticker.emoji}</Text>
             <Text className='reward__t'>获得新贴纸「{gotSticker.name}」!</Text>
           </View>
         ) : null}
-        {leveledTo ? <Text className='reward__line'>🎉 升级啦!现在是 {leveledTo}</Text> : null}
-        {newBadges.length > 0 ? (
+        {!simpleSummary && leveledTo ? <Text className='reward__line'>🎉 升级啦!现在是 {leveledTo}</Text> : null}
+        {!simpleSummary && newBadges.length > 0 ? (
           <View className='badges'>
             {newBadges.map((code) => {
               const a = getAchievement(code)
@@ -670,12 +701,18 @@ function Session() {
             <Text className='petbox__h'>每答对一题就喂它一口 —— 你学得越多,它长得越快。</Text>
           </View>
         ) : null}
-        {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
+        {!simpleSummary && challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
         {/*
           撞上每日上限时要**说出来**。
           默默不加分,孩子只会觉得「这次怎么没涨」—— 那比不给分更伤。
           措辞也不能带责备:他没做错任何事,只是今天已经很够了。
         */}
+        {levelMoved === 'up' ? (
+          <Text className='reward__line'>📈 做得很稳,下次会难一点点</Text>
+        ) : null}
+        {levelMoved === 'down' ? (
+          <Text className='reward__line'>🌤️ 这组有点难,下次我调简单一些</Text>
+        ) : null}
         {capped ? (
           <Text className='reward__line'>🌙 今天的成长值已经拿满啦,明天再来接着涨</Text>
         ) : null}
@@ -869,6 +906,52 @@ function Session() {
               <View className='btn btn--primary' onClick={() => setPhase('reveal')}><Text className='btn__t'>检查</Text></View>
             </View>
           )}
+        </View>
+      )}
+
+      {/*
+        说给我听 —— 补上「产出」这一环。
+
+        原先幼儿段五种练法里有四种是四选一,一种是被动听:**没有一个需要他产出**。
+        而四选一有 25% 的蒙对率,答对不等于会;认知科学里最稳的结论之一是
+        「主动想出来」的留存远高于「认出来」。
+
+        判定交给家长而不是语音识别 —— 4 岁半的发音识别准确率极低,
+        会把对的判成错;而家长一秒就知道。这同时把家长拉进了学习过程,
+        这个年纪最有效的学习本来就是亲子互动,不是孩子对着屏幕。
+      */}
+      {mode === 'sayIt' && (
+        <View className='card card--say'>
+          {isPic ? (
+            <Text className='say__e'>{(current.card.extra as { emoji?: string } | undefined)?.emoji ?? '🖼️'}</Text>
+          ) : null}
+          {!isPic ? <Text className='say__w'>{current.card.front}</Text> : null}
+          <Text className='say__ask'>这是什么?说给爸爸妈妈听</Text>
+          {phase === 'reveal' ? (
+            <View className='say__ans'>
+              <Text className='say__a'>{current.card.front}</Text>
+              {current.card.back ? <Text className='say__b'>{current.card.back}</Text> : null}
+            </View>
+          ) : null}
+          <View className='row row--wrap'>
+            <View className='chip' onClick={playCurrent}>
+              <Text className='chip__t'>🔊 听一遍</Text>
+            </View>
+            {phase === 'prompt' ? (
+              <View className='chip' onClick={() => setPhase('reveal')}>
+                <Text className='chip__t'>👀 看答案</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text className='say__hint'>下面由家长点</Text>
+          <View className='row'>
+            <View className='btn btn--gray' onClick={() => advance(false)}>
+              <Text className='btn__t'>差一点</Text>
+            </View>
+            <View className='btn btn--mint' onClick={() => advance(true)}>
+              <Text className='btn__t'>说对了</Text>
+            </View>
+          </View>
         </View>
       )}
 

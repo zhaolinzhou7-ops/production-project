@@ -713,3 +713,27 @@
   margin-top: 10px;
   line-height: 1.5;
 }
+
+/* 说给我听:图要大,判定按钮要明确分开(误点代价高) */
+.card--say { align-items: center; }
+.say {
+  &__e { font-size: 180px; line-height: 1.1; }
+  &__w { font-size: 110px; font-weight: bold; color: #374151; }
+  &__ask { display: block; margin-top: 18px; font-size: 30px; color: #6b7280; }
+  &__ans {
+    margin-top: 20px;
+    padding: 20px 28px;
+    background: rgba(52, 211, 153, 0.12);
+    border-radius: 20px;
+    text-align: center;
+  }
+  &__a { display: block; font-size: 40px; font-weight: bold; color: #059669; }
+  &__b { display: block; margin-top: 6px; font-size: 28px; color: #6b7280; }
+  &__hint {
+    display: block;
+    margin: 24px 0 10px;
+    font-size: 21px;
+    color: #9ca3af;
+    text-align: center;
+  }
+}

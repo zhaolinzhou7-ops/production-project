@@ -37,6 +37,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
   hanzi: [
     { mode: 'recognize', label: '认字', icon: '👀', desc: '看字读音组词', lowAgeFriendly: true, repeat: true },
     { mode: 'listenChoose', label: '听音选字', icon: '👂', desc: '听读音选汉字', lowAgeFriendly: true, repeat: true },
+    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '看字读出来,家长判对错', lowAgeFriendly: true, repeat: true },
     { mode: 'pinyin', label: '看拼音选字', icon: '🅿️', desc: '照着拼音找汉字', lowAgeFriendly: true },
   ],
   wrong: [{ mode: 'review', label: '重做', icon: '🔁', desc: '回想再自评', lowAgeFriendly: true, repeat: true }],
@@ -50,6 +51,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'picChooseEn', label: '英语·看图选词', icon: '🅰️', desc: '看图选英语单词', lowAgeFriendly: true },
     { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true, repeat: true },
     { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播,不用操作', lowAgeFriendly: true, repeat: true },
+    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '看图说出来,家长判对错', lowAgeFriendly: true, repeat: true },
   ],
 }
 

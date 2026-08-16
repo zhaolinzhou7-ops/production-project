@@ -1062,6 +1062,107 @@ function run() {
   eq(ag.nextStageOf('toddler'), 'primary', '幼儿园的下一段是小学')
   eq(ag.nextStageOf('senior'), undefined, '高中没有下一段')
 
+  /*
+    ---- 幼儿档的间隔参数 ----
+    原先所有年龄共用 SM-2 的原始参数(给成年人背单词调的)。
+    4–6 岁的遗忘曲线陡得多:一个词隔 8 天再见面,对他等于新词。
+  */
+  const srsm = L('core/srs.js')
+  const s0 = { interval: 0, ease: 2.5, reps: 0, lapses: 0 }
+  const kidFirst = srsm.gradeCard(s0, 'good', srsm.TUNING_TODDLER)
+  const adultFirst = srsm.gradeCard(s0, 'good', srsm.TUNING_ADULT)
+  eq(kidFirst.interval, 1, '第一次答对都是隔天')
+  const kidSecond = srsm.gradeCard(kidFirst, 'good', srsm.TUNING_TODDLER)
+  const adultSecond = srsm.gradeCard(adultFirst, 'good', srsm.TUNING_ADULT)
+  eq(kidSecond.interval, 2, '幼儿第二次应是 2 天')
+  eq(adultSecond.interval, 3, '成人第二次仍是 3 天')
+  ok(kidSecond.interval < adultSecond.interval, '幼儿的间隔必须比成人短')
+  // 第三次开始按难度系数涨,幼儿的上限被压到 2.0
+  const kidThird = srsm.gradeCard(kidSecond, 'good', srsm.TUNING_TODDLER)
+  const adultThird = srsm.gradeCard(adultSecond, 'good', srsm.TUNING_ADULT)
+  ok(kidThird.interval < adultThird.interval, '第三次幼儿的间隔也该更短')
+  ok(kidThird.interval <= kidSecond.interval * 2, '幼儿的难度系数上限应是 2.0')
+  eq(srsm.tuningFor('toddler').maxEase, 2, '幼儿档上限 2.0')
+  eq(srsm.tuningFor('primary').maxEase, 2.5, '其余学段仍是 2.5')
+  // 答错不受调参影响:一律次日重来
+  eq(srsm.gradeCard(kidThird, 'again', srsm.TUNING_TODDLER).interval, 1, '答错永远是次日重来')
+
+  /*
+    ---- 难度自适应 ----
+    间隔重复只管「什么时候再见」,不管「难不难」。
+    学习效率最高的是**刚好够得着**的那一档。
+  */
+  const ad = L('core/adaptive.js')
+  eq(ad.adjustFor([]), 'keep', '没有数据时不该乱动难度')
+  eq(ad.adjustFor([{ total: 2, correct: 2 }]), 'keep', '只做两题的样本太小,不作数')
+  eq(ad.adjustFor([{ total: 8, correct: 3 }]), 'down', '一组不到五成就该降 —— 太难的伤害比太简单大得多')
+  eq(
+    ad.adjustFor([{ total: 8, correct: 8 }]),
+    'keep',
+    '只有一组满分还不能升 —— 免得蒙对一组就被推上去',
+  )
+  eq(
+    ad.adjustFor([{ total: 8, correct: 8 }, { total: 6, correct: 6 }]),
+    'up',
+    '连着两组九成以上才升',
+  )
+  eq(
+    ad.adjustFor([{ total: 8, correct: 8 }, { total: 6, correct: 3 }]),
+    'keep',
+    '上一组不好就不升',
+  )
+  // 降档要比升档更敏感:最近一组很差,即使前一组很好也要降
+  eq(
+    ad.adjustFor([{ total: 8, correct: 2 }, { total: 8, correct: 8 }]),
+    'down',
+    '最近一组很差就该降,不管之前多好',
+  )
+  // 档位规格
+  for (let i = 0; i < ad.LEVEL_COUNT; i++) {
+    const sp = ad.specOf(i)
+    ok(sp.size >= 4 && sp.size <= 12, `第 ${i} 档的题量要在合理范围`)
+    ok(sp.choices >= 2 && sp.choices <= 5, `第 ${i} 档的选项数要在合理范围`)
+  }
+  ok(ad.specOf(0).choices < ad.specOf(4).choices, '低档的选项应更少(二选一比四选一简单得多)')
+  ok(ad.specOf(0).size < ad.specOf(4).size, '低档的题量应更少')
+  eq(ad.specOf(-5).label, ad.specOf(0).label, '档位越界应夹到最低档')
+  eq(ad.specOf(99).label, ad.specOf(ad.LEVEL_COUNT - 1).label, '档位越界应夹到最高档')
+  eq(ad.nextLevel(0, 'down'), 0, '已经在最低档不该再降')
+  eq(ad.nextLevel(ad.LEVEL_COUNT - 1, 'up'), ad.LEVEL_COUNT - 1, '已经在最高档不该再升')
+  eq(ad.nextLevel(2, 'keep'), 2, 'keep 就是不动')
+
+  /*
+    ---- 说给我听 ----
+    补上「产出」这一环:原先幼儿五种练法里四种是四选一、一种是被动听,
+    没有一个需要他说出来。而四选一有 25% 蒙对率,答对不等于会。
+  */
+  const pmodSay = L('core/practiceModes.js')
+  const picModes = pmodSay.modesFor('pic', true).map((m) => m.mode)
+  ok(picModes.includes('sayIt'), '看图包应有「说给我听」')
+  const hanziModes = pmodSay.modesFor('hanzi', true).map((m) => m.mode)
+  ok(hanziModes.includes('sayIt'), '识字包也应有「说给我听」')
+
+  /*
+    ---- 卡组难度是分开记的 ----
+    识字可能已经很熟、英语还在入门,一个全局难度会同时把两边调错。
+  */
+  reset()
+  const cidAd = study.getCurrentChildId()
+  const adDeckA = study.ensureBuiltinDeck(cidAd, 'enlight-colors')
+  const adDeckB = study.ensureBuiltinDeck(cidAd, 'hanzi-toddler')
+  eq(study.deckLevel(adDeckA), 2, '默认从「正常」档起步')
+  // 连着两组满分 → 升
+  for (let i = 0; i < 2; i++) {
+    study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChoose', total: 8, correct: 8, durationSec: 60 })
+  }
+  eq(study.tuneDeckLevel(cidAd, adDeckA), 'up', '连着两组满分应升档')
+  eq(study.deckLevel(adDeckA), 3, '升档后应是 3')
+  eq(study.deckLevel(adDeckB), 2, '另一个卡组的难度不该被带着动')
+  // 一组很差 → 降
+  study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChoose', total: 8, correct: 2, durationSec: 60 })
+  eq(study.tuneDeckLevel(cidAd, adDeckA), 'down', '一组很差应降档')
+  eq(study.deckLevel(adDeckA), 2, '降回 2')
+
   // ---- 「再练一遍」放的是哪两个模式 ----
   const pmod = L('core/practiceModes.js')
   for (const t of ['word', 'poem', 'hanzi', 'wrong', 'fact', 'pic']) {
