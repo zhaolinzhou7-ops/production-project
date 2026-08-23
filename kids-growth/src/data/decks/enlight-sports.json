@@ -1,1 +1,200 @@
-{"key":"enlight-sports","name":"运动与玩具","subject":"启蒙","itemType":"pic","source":"常识性看图词汇,配 emoji 大图","count":22,"cards":[{"front":"足球","en":"soccer","emoji":"⚽"},{"front":"篮球","en":"basketball","emoji":"🏀"},{"front":"排球","en":"volleyball","emoji":"🏐"},{"front":"棒球","en":"baseball","emoji":"⚾"},{"front":"网球","en":"tennis","emoji":"🎾"},{"front":"乒乓球","en":"ping-pong","emoji":"🏓"},{"front":"羽毛球","en":"badminton","emoji":"🏸"},{"front":"橄榄球","en":"football","emoji":"🏈"},{"front":"游泳","en":"swimming","emoji":"🏊"},{"front":"跑步","en":"running","emoji":"🏃"},{"front":"骑车","en":"cycling","emoji":"🚴"},{"front":"滑冰","en":"skating","emoji":"⛸️"},{"front":"滑雪","en":"skiing","emoji":"⛷️"},{"front":"体操","en":"gymnastics","emoji":"🤸"},{"front":"积木","en":"blocks","emoji":"🧱"},{"front":"拼图","en":"puzzle","emoji":"🧩"},{"front":"娃娃","en":"doll","emoji":"🪆"},{"front":"风筝","en":"kite","emoji":"🪁"},{"front":"气球","en":"balloon","emoji":"🎈"},{"front":"泰迪熊","en":"teddy bear","emoji":"🧸"},{"front":"魔方","en":"puzzle cube","emoji":"🧊"},{"front":"溜溜球","en":"yo-yo","emoji":"🪀"}]}
+{
+  "key": "enlight-sports",
+  "name": "运动与玩具",
+  "subject": "启蒙",
+  "itemType": "pic",
+  "source": "常识性看图词汇,配 emoji 大图",
+  "count": 38,
+  "cards": [
+    {
+      "front": "足球",
+      "en": "soccer",
+      "emoji": "⚽"
+    },
+    {
+      "front": "篮球",
+      "en": "basketball",
+      "emoji": "🏀"
+    },
+    {
+      "front": "排球",
+      "en": "volleyball",
+      "emoji": "🏐"
+    },
+    {
+      "front": "棒球",
+      "en": "baseball",
+      "emoji": "⚾"
+    },
+    {
+      "front": "网球",
+      "en": "tennis",
+      "emoji": "🎾"
+    },
+    {
+      "front": "乒乓球",
+      "en": "ping-pong",
+      "emoji": "🏓"
+    },
+    {
+      "front": "羽毛球",
+      "en": "badminton",
+      "emoji": "🏸"
+    },
+    {
+      "front": "橄榄球",
+      "en": "football",
+      "emoji": "🏈"
+    },
+    {
+      "front": "游泳",
+      "en": "swimming",
+      "emoji": "🏊"
+    },
+    {
+      "front": "跑步",
+      "en": "running",
+      "emoji": "🏃"
+    },
+    {
+      "front": "骑车",
+      "en": "cycling",
+      "emoji": "🚴"
+    },
+    {
+      "front": "滑冰",
+      "en": "skating",
+      "emoji": "⛸️"
+    },
+    {
+      "front": "滑雪",
+      "en": "skiing",
+      "emoji": "⛷️"
+    },
+    {
+      "front": "体操",
+      "en": "gymnastics",
+      "emoji": "🤸"
+    },
+    {
+      "front": "积木",
+      "en": "blocks",
+      "emoji": "🧱"
+    },
+    {
+      "front": "拼图",
+      "en": "puzzle",
+      "emoji": "🧩"
+    },
+    {
+      "front": "娃娃",
+      "en": "doll",
+      "emoji": "🪆"
+    },
+    {
+      "front": "风筝",
+      "en": "kite",
+      "emoji": "🪁"
+    },
+    {
+      "front": "气球",
+      "en": "balloon",
+      "emoji": "🎈"
+    },
+    {
+      "front": "泰迪熊",
+      "en": "teddy bear",
+      "emoji": "🧸"
+    },
+    {
+      "front": "魔方",
+      "en": "puzzle cube",
+      "emoji": "🧊"
+    },
+    {
+      "front": "溜溜球",
+      "en": "yo-yo",
+      "emoji": "🪀"
+    },
+    {
+      "front": "跳舞",
+      "en": "dancing",
+      "emoji": "💃"
+    },
+    {
+      "front": "举重",
+      "en": "weightlifting",
+      "emoji": "🏋️"
+    },
+    {
+      "front": "攀岩",
+      "en": "climbing",
+      "emoji": "🧗"
+    },
+    {
+      "front": "冲浪",
+      "en": "surfing",
+      "emoji": "🏄"
+    },
+    {
+      "front": "划船",
+      "en": "rowing",
+      "emoji": "🚣"
+    },
+    {
+      "front": "射箭",
+      "en": "archery",
+      "emoji": "🏹"
+    },
+    {
+      "front": "钓鱼",
+      "en": "fishing",
+      "emoji": "🎣"
+    },
+    {
+      "front": "保龄球",
+      "en": "bowling",
+      "emoji": "🎳"
+    },
+    {
+      "front": "高尔夫",
+      "en": "golf",
+      "emoji": "⛳"
+    },
+    {
+      "front": "拳击",
+      "en": "boxing",
+      "emoji": "🥊"
+    },
+    {
+      "front": "空手道",
+      "en": "karate",
+      "emoji": "🥋"
+    },
+    {
+      "front": "跳绳",
+      "en": "jump rope",
+      "emoji": "🪢"
+    },
+    {
+      "front": "滑板",
+      "en": "skateboard",
+      "emoji": "🛹"
+    },
+    {
+      "front": "曲棍球",
+      "en": "hockey",
+      "emoji": "🏒"
+    },
+    {
+      "front": "飞盘",
+      "en": "frisbee",
+      "emoji": "🥏"
+    },
+    {
+      "front": "奖牌",
+      "en": "medal",
+      "emoji": "🥇"
+    }
+  ]
+}

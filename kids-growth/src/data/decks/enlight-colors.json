@@ -1,1 +1,105 @@
-{"key":"enlight-colors","name":"认识颜色","subject":"启蒙","itemType":"pic","source":"常识性看图词汇(颜色),配 emoji 大图","count":12,"cards":[{"front":"红色","en":"red","emoji":"🔴"},{"front":"橙色","en":"orange","emoji":"🟠"},{"front":"黄色","en":"yellow","emoji":"🟡"},{"front":"绿色","en":"green","emoji":"🟢"},{"front":"蓝色","en":"blue","emoji":"🔵"},{"front":"紫色","en":"purple","emoji":"🟣"},{"front":"黑色","en":"black","emoji":"⚫"},{"front":"白色","en":"white","emoji":"⚪"},{"front":"棕色","en":"brown","emoji":"🟤"},{"front":"粉色","en":"pink","emoji":"🩷"},{"front":"灰色","en":"gray","emoji":"🩶"},{"front":"金色","en":"gold","emoji":"🟨"}]}
+{
+  "key": "enlight-colors",
+  "name": "认识颜色",
+  "subject": "启蒙",
+  "itemType": "pic",
+  "source": "常识性看图词汇(颜色),配 emoji 大图",
+  "count": 19,
+  "cards": [
+    {
+      "front": "红色",
+      "en": "red",
+      "emoji": "🔴"
+    },
+    {
+      "front": "橙色",
+      "en": "orange",
+      "emoji": "🟠"
+    },
+    {
+      "front": "黄色",
+      "en": "yellow",
+      "emoji": "🟡"
+    },
+    {
+      "front": "绿色",
+      "en": "green",
+      "emoji": "🟢"
+    },
+    {
+      "front": "蓝色",
+      "en": "blue",
+      "emoji": "🔵"
+    },
+    {
+      "front": "紫色",
+      "en": "purple",
+      "emoji": "🟣"
+    },
+    {
+      "front": "黑色",
+      "en": "black",
+      "emoji": "⚫"
+    },
+    {
+      "front": "白色",
+      "en": "white",
+      "emoji": "⚪"
+    },
+    {
+      "front": "棕色",
+      "en": "brown",
+      "emoji": "🟤"
+    },
+    {
+      "front": "粉色",
+      "en": "pink",
+      "emoji": "🩷"
+    },
+    {
+      "front": "灰色",
+      "en": "gray",
+      "emoji": "🩶"
+    },
+    {
+      "front": "金色",
+      "en": "gold",
+      "emoji": "🟨"
+    },
+    {
+      "front": "天蓝色",
+      "en": "sky blue",
+      "emoji": "🩵"
+    },
+    {
+      "front": "深蓝色",
+      "en": "navy blue",
+      "emoji": "🔷"
+    },
+    {
+      "front": "浅绿色",
+      "en": "light green",
+      "emoji": "🍏"
+    },
+    {
+      "front": "深绿色",
+      "en": "dark green",
+      "emoji": "🟩"
+    },
+    {
+      "front": "深红色",
+      "en": "dark red",
+      "emoji": "🟥"
+    },
+    {
+      "front": "彩虹色",
+      "en": "rainbow",
+      "emoji": "🌈"
+    },
+    {
+      "front": "银色",
+      "en": "silver",
+      "emoji": "🥈"
+    }
+  ]
+}

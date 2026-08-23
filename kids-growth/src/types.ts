@@ -394,3 +394,43 @@ export interface VoiceClip {
   blob: Blob
   at: number
 }
+
+/**
+ * 错题「怎么重做」。
+ *
+ * 原先错题重做只有一种形式:看题干 → 回想 → 自己点「会 / 不会」。
+ * 那对一个 4 岁半、不识字的孩子等于没有 —— 他既读不了题干,
+ * 也不可能诚实地评判自己。**自评是成年人才做得到的事。**
+ *
+ * 所以错题要以**它当初被答错的那种形式**回来:
+ * - 选择题错的 → 还是选择题(A–E 五个选项)
+ * - 算术算错的 → 还是让他算,输入答案
+ * 这样「重做」才真的是重做,而不是看一眼答案。
+ */
+export type RedoSpec =
+  | {
+      type: 'choice'
+      /** 选项文本,2–5 个;第一个不一定是答案,存的时候已经打乱 */
+      options: string[]
+      /** 正确选项的文本(比存下标稳:选项顺序将来变了也不会错位) */
+      answer: string
+      /** 题面上要显示的大图(emoji),没有就不显示 */
+      emoji?: string
+      /** 点「再听一遍」时读什么 */
+      audio?: string
+      /** 读的是中文还是英文 */
+      lang?: 'zh' | 'en'
+    }
+  | {
+      type: 'input'
+      answer: number
+      /** 数形结合图示(口算错题带过来的) */
+      visual?: MathVisual
+    }
+
+/** 数形结合图示(与 core/mathDrill 的同名类型一致,放这里避免类型层反向依赖) */
+export interface MathVisual {
+  groups: Array<{ emoji: string; n: number }>
+  ops: string[]
+  strike?: number
+}

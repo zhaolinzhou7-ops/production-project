@@ -1,4 +1,4 @@
-import type { AgeStage } from '../types'
+import type { AgeStage, MathVisual } from '../types'
 
 /** 口算题型 */
 export type MathKind = 'add' | 'sub' | 'mul' | 'div' | 'mulTable' | 'mixed'
@@ -7,6 +7,36 @@ export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
   text: string
   answer: number
+  /**
+   * 数形结合的图示 —— 把算式配上看得见的实物。
+   *
+   * 「5 + 5 = ?」对一个 5 岁的孩子是**两个抽象符号**,他只能靠背。
+   * 而「🍬×5 和 🍬×5 一共几颗糖」他能**数出来** ——
+   * 数出来的答案是他自己得到的,背下来的答案是别人给的。
+   *
+   * 数学教育里这叫「具体—表象—抽象」:实物 → 图示 → 符号。
+   * 跳过前两步直接练符号,算得快也走不远,一遇到应用题就不会列式。
+   * 所以图示和算式**同时出现**,不是二选一。
+   *
+   * 数目太大(超过 20 个)就不给图:一排二十几个 emoji 在手机上要换行三次,
+   * 孩子数到一半就乱了,那时候图反而是干扰。
+   */
+  visual?: MathVisual
+}
+
+/** 图示里用的实物 —— 都是孩子认得、且一眼能数清的 */
+const COUNTABLES = ['🍬', '🍎', '⭐', '🐟', '🎈', '🍪', '🐤', '🍓']
+
+const VISUAL_MAX = 20
+
+function visualOf(
+  groups: Array<{ emoji: string; n: number }>,
+  ops: string[],
+  strike?: number,
+): MathVisual | undefined {
+  const total = groups.reduce((n, g) => n + g.n, 0)
+  if (total <= 0 || total > VISUAL_MAX) return undefined
+  return { groups, ops, strike }
 }
 
 export interface MathKindDef {
@@ -48,21 +78,44 @@ function genAdd(stage: AgeStage): MathProblem {
   const max = addSubMax(stage)
   const a = randInt(1, max)
   const b = randInt(1, max)
-  return { text: `${a} + ${b} =`, answer: a + b }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} + ${b} =`,
+    answer: a + b,
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+']),
+  }
 }
 
 function genSub(stage: AgeStage): MathProblem {
   const max = addSubMax(stage)
   const a = randInt(1, max)
   const b = randInt(0, a) // 保证不为负
-  return { text: `${a} − ${b} =`, answer: a - b }
+  // 减法的图示是「画出来再划掉几个」,比另起一排更接近「拿走」这个动作
+  return {
+    text: `${a} − ${b} =`,
+    answer: a - b,
+    visual: visualOf([{ emoji: pick(COUNTABLES), n: a }], [], b),
+  }
 }
 
 /** 九九乘法表:1..9 × 1..9 */
 function genMulTable(): MathProblem {
   const a = randInt(1, 9)
   const b = randInt(1, 9)
-  return { text: `${a} × ${b} =`, answer: a * b }
+  const e = pick(COUNTABLES)
+  /*
+    乘法最该配图:`3 × 4` 的意思是**三组、每组四个**。
+    背下九九表却说不出「3×4 是什么意思」的孩子非常多,
+    而摆成三堆之后这件事不用讲他就看懂了。
+  */
+  return {
+    text: `${a} × ${b} =`,
+    answer: a * b,
+    visual: visualOf(
+      Array.from({ length: a }, () => ({ emoji: e, n: b })),
+      Array.from({ length: Math.max(0, a - 1) }, () => '+'),
+    ),
+  }
 }
 
 function genMul(stage: AgeStage): MathProblem {

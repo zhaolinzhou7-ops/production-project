@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Trash2, Camera, Play, X } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { addErrorCard, deleteCard } from '../db/study'
+import { addErrorCard, deleteCard, graduateErrorCards } from '../db/study'
 import { isDue } from '../lib/srs'
 import { compressImageFile } from '../lib/image'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
@@ -41,6 +41,23 @@ export function ErrorBookPage() {
         : Promise.resolve([]),
     [errorDeck?.id, currentChildId],
   )
+
+  /*
+    进页面时先让「已经连对两次」的错题毕业。
+
+    原先错题只进不出。一个每天做题的孩子两个月就能攒出两三百道 ——
+    家长打开一看,再也不会点第二次。**一个只增不减的错题本最后一定会被放弃**,
+    那前面自动收集做得再好也没用。
+    放在进页面时做而不是答对时做:答对的那一刻孩子还在做题,
+    让题目从列表里消失是家长的事,不该打断他。
+  */
+  const [graduated, setGraduated] = useState(0)
+  useEffect(() => {
+    if (!currentChildId) return
+    void graduateErrorCards(currentChildId).then((n) => {
+      if (n > 0) setGraduated(n)
+    })
+  }, [currentChildId])
 
   const [showForm, setShowForm] = useState(false)
   const [front, setFront] = useState('')
@@ -205,8 +222,20 @@ export function ErrorBookPage() {
         </div>
       )}
 
+      {/*
+        毕业提示。错题本能长期用下去的前提是它**会变短** ——
+        家长要看得见「消化掉了几道」,否则只看到越攒越多,很快就不点了。
+      */}
+      {graduated > 0 && (
+        <p className="mt-3 text-xs text-mint-600">
+          🎓 有 {graduated} 道已经连着做对两次,移出错题本了
+        </p>
+      )}
+
       <p className="mt-4 text-[11px] text-gray-400">
-        错题按间隔重复(SRS)排期:重做答对则拉长下次出现间隔,答错则很快再现,直到真正掌握。
+        错题按间隔重复(SRS)排期:重做答对则拉长下次出现间隔,答错则很快再现。
+        选择题错的还是选择题(A–E),算错的算术题还是让他算一遍 ——
+        重做是真的再做一次,不是看一眼答案。连着做对两次就自动毕业。
       </p>
 
       <ConfirmDialog

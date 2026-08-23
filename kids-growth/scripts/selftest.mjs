@@ -10,7 +10,7 @@
  * 用法:npm run selftest
  */
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -34,6 +34,9 @@ mkdirSync(OUT, { recursive: true })
 writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ type: 'commonjs' }))
 
 const MODULES = [
+  'examples',
+  'redo',
+  'mathDrill',
   'adaptive',
   'scoreCard',
   'recommend',
@@ -75,6 +78,9 @@ const pointCap = await load('pointCap')
 const voiceKey = await load('voiceKey')
 const voicePriority = await load('voicePriority')
 const srs = await load('srs')
+const examples = await load('examples')
+const redoM = await load('redo')
+const mathDrill = await load('mathDrill')
 
 let checks = 0
 let failed = 0
@@ -259,6 +265,141 @@ eq(wrong.lapses, t3.lapses + 1, '答错要记一次 lapse')
 eq(wrong.status, 'learning', '答错回到 learning')
 // 新卡今天就该出现
 ok(srs.isDue({ due: '2999-01-01', status: 'new' }), '新卡视为到期')
+
+// ---------------------------------------------------------------- 例句
+
+// 冠词:a/an 是这类生成里最容易错、也最容易被家长一眼看穿的地方
+eq(examples.articleFor('apple'), 'an', 'apple 用 an')
+eq(examples.articleFor('cat'), 'a', 'cat 用 a')
+eq(examples.articleFor('umbrella'), 'an', 'umbrella 用 an')
+eq(examples.articleFor('x-ray'), 'an', 'x-ray 读作 ex-ray,用 an')
+
+// 复数:不规则的必须走表,规则的必须按后缀走
+eq(examples.pluralOf('cat'), 'cats', '规则复数 +s')
+eq(examples.pluralOf('box'), 'boxes', '-x 结尾 +es')
+eq(examples.pluralOf('baby'), 'babies', '辅音+y → -ies')
+eq(examples.pluralOf('mouse'), 'mice', 'mouse → mice')
+eq(examples.pluralOf('tooth'), 'teeth', 'tooth → teeth')
+eq(examples.pluralOf('fish'), 'fish', 'fish 单复数同形')
+eq(examples.pluralOf('leaf'), 'leaves', 'leaf → leaves')
+eq(examples.pluralOf('tomato'), 'tomatoes', '辅音+o → -es')
+
+// 各词类的句型
+eq(examples.examplesFor('cat', 'enlight-animals')[0], 'a cat', '可数名词先给组词')
+ok(examples.examplesFor('cat', 'enlight-animals').includes('I see a cat.'), '可数名词要有完整句子')
+eq(examples.pluralPhrase('cat', 'enlight-animals'), 'two cats', '可数名词额外给复数组词')
+eq(examples.pluralPhrase('rice', 'enlight-food'), undefined, '不可数名词没有复数组词')
+eq(examples.examplesFor('rice', 'enlight-food')[0], 'some rice', '不可数名词用 some')
+eq(examples.examplesFor('happy', 'enlight-feelings')[0], 'I am happy.', '形容人的形容词用 I am')
+eq(examples.examplesFor('red', 'enlight-colors')[0], 'It is red.', '形容物的形容词用 It is')
+eq(examples.examplesFor('run', 'enlight-actions')[0], 'I can run.', '动词用 I can')
+ok(examples.examplesFor('doctor', 'enlight-family').includes('I want to be a doctor.'), '职业要出「我想当…」')
+eq(examples.examplesFor('mom', 'enlight-family')[0], 'my mom', '家人用 my')
+eq(examples.examplesFor('pants', 'enlight-clothes')[0], 'my pants', '只有复数形式的用 my')
+ok(examples.examplesFor('hand', 'enlight-body').includes('Touch your hand.'), '身体部位要能做出动作')
+eq(examples.examplesFor('A a', 'enlight-abc', 'Apple')[0], 'A is for Apple.', '字母卡用 X is for Y')
+
+/*
+  「拿不准就不出」—— 这条规矩比多几条例句重要得多。
+  这套系统是孩子唯一的英语来源,少一条例句没有损失,错一条例句是在教错。
+*/
+eq(examples.examplesFor('sky blue', 'enlight-colors').length, 0, '说不清的词组不出例句')
+eq(examples.examplesFor('cat', 'no-such-pack').length, 0, '不认识的内容包不出例句')
+eq(examples.examplesFor('', 'enlight-animals').length, 0, '空词不出例句')
+
+// 全量扫一遍所有看图内容包:凡是出了例句的,冠词不能错、句子必须有句号
+{
+  const decksDir = path.join(ROOT, 'src', 'data', 'decks')
+  let scanned = 0
+  let withEx = 0
+  const problems = []
+  for (const file of readdirSync(decksDir)) {
+    const pack = JSON.parse(readFileSync(path.join(decksDir, file), 'utf8'))
+    if (pack.itemType !== 'pic') continue
+    const key = file.replace('.json', '')
+    for (const c of pack.cards) {
+      const word = key === 'enlight-abc' ? c.front : c.en
+      if (!word) continue
+      scanned += 1
+      const list = examples.examplesFor(word, key, c.en)
+      if (list.length > 0) withEx += 1
+      for (const line of list) {
+        if (/\ba [aeiou]/.test(line)) problems.push(`${word}: ${line}`)
+        if (/\ban [^aeiou ]/.test(line) && !/an (hour|x-ray|umbrella)/.test(line)) problems.push(`${word}: ${line}`)
+        if (line.includes('  ')) problems.push(`${word}: 双空格 ${line}`)
+        // 句子以大写开头;组词("a hot air balloon")本来就不该有句号
+        if (/^[A-Z]/.test(line) && !/[.!?]$/.test(line)) problems.push(`${word}: 句子没有句号 ${line}`)
+      }
+    }
+  }
+  eq(problems.length, 0, `例句全量扫描不应有语法问题(${problems.slice(0, 3).join(' / ')})`)
+  ok(scanned > 500, '看图包应扫到 500 个以上的词')
+  ok(withEx / scanned > 0.9, `例句覆盖率应高于 90%(实际 ${((withEx / scanned) * 100).toFixed(1)}%)`)
+}
+
+// ---------------------------------------------------------------- 错题重做
+
+eq(redoM.OPTION_LETTERS.join(''), 'ABCDE', '选项字母是 A–E')
+{
+  const pool = [
+    { front: '猫', back: 'cat', emoji: '🐱', en: 'cat' },
+    { front: '狗', back: 'dog', emoji: '🐶', en: 'dog' },
+    { front: '鱼', back: 'fish', emoji: '🐟', en: 'fish' },
+    { front: '鸟', back: 'bird', emoji: '🐦', en: 'bird' },
+    { front: '马', back: 'horse', emoji: '🐴', en: 'horse' },
+    { front: '牛', back: 'cow', emoji: '🐮', en: 'cow' },
+  ]
+  const card = pool[0]
+
+  const rc = redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool })
+  eq(rc.type, 'choice', '看图选一选错了 → 还是选择题')
+  eq(rc.options.length, 5, '选择题给 5 个选项(A–E)')
+  ok(rc.options.includes(rc.answer), '正确答案必须在选项里')
+  eq(new Set(rc.options).size, rc.options.length, '选项不能重复')
+  eq(rc.emoji, '🐱', '看图题重做时要带上原来那张图')
+
+  const re = redoM.buildRedo({ mode: 'picChooseEn', itemType: 'pic', card, pool })
+  eq(re.answer, 'cat', '英语题的答案是英文')
+  eq(re.lang, 'en', '英语题按英文朗读')
+  ok(re.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语重做题的选项必须全是英文')
+
+  const rw = redoM.buildRedo({
+    mode: 'speakEn',
+    itemType: 'word',
+    card: { front: 'cat', back: '猫' },
+    pool: [
+      { front: 'dog', back: '狗' },
+      { front: 'cap', back: '帽' },
+      { front: 'cut', back: '切' },
+      { front: 'cow', back: '牛' },
+    ],
+  })
+  eq(rw.answer, 'cat', '没有现成选项的练法也要能退回选择题')
+  ok(rw.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
+
+  // 池子太小时不该造出一个「只有正确答案」的假选择题
+  eq(redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool: [card] }), undefined, '凑不出干扰项时不生成选择题')
+}
+
+// ---------------------------------------------------------------- 数形结合
+
+{
+  let checked = 0
+  for (let i = 0; i < 400; i++) {
+    for (const kind of ['add', 'sub', 'mulTable']) {
+      const p = mathDrill.generateProblem(kind, 'toddler')
+      if (!p.visual) continue
+      checked += 1
+      const total = p.visual.groups.reduce((n, g) => n + g.n, 0)
+      ok(total > 0 && total <= 20, '图示总数要在 20 个以内,多了孩子数不清')
+      eq(p.visual.ops.length, Math.max(0, p.visual.groups.length - 1), '连接符个数比组数少一个')
+      // 图上的东西数出来就是答案 —— 数得出来才叫数形结合
+      if (kind === 'add' || kind === 'mulTable') eq(total, p.answer, `${kind}:图上的总数应等于答案`)
+      if (kind === 'sub') eq(total - (p.visual.strike || 0), p.answer, 'sub:减掉划去的应等于答案')
+    }
+  }
+  ok(checked > 500, `应抽查到足够多的带图算式(实际 ${checked})`)
+}
 
 rmSync(OUT, { recursive: true, force: true })
 

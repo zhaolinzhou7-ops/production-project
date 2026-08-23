@@ -95,7 +95,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🌈',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 4, // 批次35 形状拆成独立卡组
+    rev: 5, // 内容与小程序对齐(原:批次35 形状拆成独立卡组)
     load: () => import('../data/decks/enlight-colors.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -105,6 +105,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🔷',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-shapes.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -114,7 +115,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🔢',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 2, // 批次25 起 en 字段改为真实英文,老卡组需刷新
+    rev: 3, // 内容与小程序对齐(原:批次25 起 en 字段改为真实英文,老卡组需刷新)
     load: () => import('../data/decks/enlight-numbers.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -124,7 +125,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🖐️',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 2, // 批次33 扩充词汇量
+    rev: 3, // 内容与小程序对齐(原:批次33 扩充词汇量)
     load: () => import('../data/decks/enlight-body.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -134,7 +135,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🚗',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 2, // 批次33 扩充词汇量
+    rev: 3, // 内容与小程序对齐(原:批次33 扩充词汇量)
     load: () => import('../data/decks/enlight-transport.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -154,7 +155,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '⛅',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 2, // 批次33 扩充词汇量
+    rev: 3, // 内容与小程序对齐(原:批次33 扩充词汇量)
     load: () => import('../data/decks/enlight-weather.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -164,6 +165,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '👨‍👩‍👧',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-family.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -173,6 +175,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '👕',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-clothes.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -182,6 +185,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '✏️',
     itemType: 'pic',
     stages: ['toddler', 'primary'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-school.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -191,6 +195,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🏠',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-home.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -200,6 +205,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '⚽',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-sports.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -209,6 +215,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🐠',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-sea.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -218,6 +225,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🌳',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-nature.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -227,6 +235,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '😄',
     itemType: 'pic',
     stages: ['toddler'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/enlight-feelings.json').then((m) => m.default as BuiltinPackData),
   },
   // ---- 英语入门(幼儿 + 小学低年级通用) ----
@@ -246,6 +255,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🧩',
     itemType: 'pic',
     stages: ['toddler', 'primary'],
+    rev: 2, // 内容与小程序对齐,扩充词汇量
     load: () => import('../data/decks/phonics-cvc.json').then((m) => m.default as BuiltinPackData),
   },
   {
@@ -386,7 +396,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🈷️',
     itemType: 'hanzi',
     stages: ['primary'],
-    rev: 2, // 改名为(一),与(二)(三)成序列
+    rev: 3, // 内容与小程序对齐(原:改名为(一),与(二)(三)成序列)
     load: () => import('../data/decks/hanzi-primary.json').then((m) => m.default as BuiltinPackData),
   },
   {

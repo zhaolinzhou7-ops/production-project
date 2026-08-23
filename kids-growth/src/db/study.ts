@@ -17,7 +17,15 @@ import { getAgeStage } from '../lib/ageStage'
 import { dailyPointCap } from '../lib/pointCap'
 import { adjustFor, nextLevel, type Adjust } from '../lib/adaptive'
 import type { DeckSignal } from '../lib/recommend'
-import type { CardItemType, LearnCard, LearnDeck, PracticeMode, ReviewGrade, StudyState } from '../types'
+import type {
+  CardItemType,
+  LearnCard,
+  LearnDeck,
+  PracticeMode,
+  RedoSpec,
+  ReviewGrade,
+  StudyState,
+} from '../types'
 
 /** 每答对一张卡的积分 */
 const POINTS_PER_CORRECT = 2
@@ -616,7 +624,7 @@ export async function ensureErrorDeck(childId: string): Promise<string> {
 /** 手动录入一道错题(题干/答案,可选学科与照片)。返回 cardId。 */
 export async function addErrorCard(
   childId: string,
-  entry: { front: string; back: string; subject?: string; photo?: string },
+  entry: { front: string; back: string; subject?: string; photo?: string; redo?: RedoSpec },
 ): Promise<string> {
   const deckId = await ensureErrorDeck(childId)
   const count = await db.cards.where('deckId').equals(deckId).count()
@@ -630,6 +638,12 @@ export async function addErrorCard(
       extra: {
         ...(entry.subject ? { subject: entry.subject } : {}),
         ...(entry.photo ? { photo: entry.photo } : {}),
+        /*
+          redo 决定这道错题**将来怎么重做**(选择题 / 输入)。
+          干扰项必须和当初做错时是同一批,所以在这里就存下来 ——
+          等到重做时再现算,那就是另出了一道题。
+        */
+        ...(entry.redo ? { redo: entry.redo } : {}),
       },
       order: count,
     })
@@ -641,7 +655,7 @@ export async function addErrorCard(
 /** 练习答错时自动收进错题本(按题干去重,已有同题不重复加) */
 export async function autoAddErrorCard(
   childId: string,
-  entry: { front: string; back: string; subject?: string },
+  entry: { front: string; back: string; subject?: string; redo?: RedoSpec },
 ): Promise<void> {
   const deckId = await ensureErrorDeck(childId)
   const front = entry.front.trim()
@@ -1082,4 +1096,35 @@ export async function wrongDueToday(childId: string): Promise<number> {
   const today = todayISO()
   const states = await db.studyStates.where('childId').equals(childId).toArray()
   return states.filter((s) => (s.lapses || 0) > 0 && isDue(s, today)).length
+}
+
+/**
+ * 错题「毕业」:重做连着答对两次就移出错题本。
+ *
+ * 为什么必须有:原先错题只进不出。一个每天做题的孩子,两个月就能攒出
+ * 两三百道 —— 家长打开一看,再也不会点第二次。**一个只增不减的错题本,
+ * 最后一定会被放弃**,那前面自动收集做得再好也没用。
+ *
+ * 门槛定在「连对两次」而不是一次:错题里有相当一部分当初就是蒙错的,
+ * 一次答对说明不了什么;连着两次答对(中间还隔着 SRS 安排的天数),
+ * 才算真的记住了。
+ */
+export async function graduateErrorCards(childId: string): Promise<number> {
+  const deckId = await ensureErrorDeck(childId)
+  const states = await db.studyStates.where('[childId+deckId]').equals([childId, deckId]).toArray()
+  const done = states.filter((s) => (s.reps ?? 0) >= 2)
+  if (done.length === 0) return 0
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await db.cards.bulkDelete(done.map((s) => s.cardId))
+    await db.studyStates.bulkDelete(done.map((s) => s.id))
+  })
+  return done.length
+}
+
+/** 今天有多少道错题要重做 —— 首页拿它提示,不然错题本没人会主动点 */
+export async function errorDueToday(childId: string): Promise<number> {
+  const deckId = await ensureErrorDeck(childId)
+  const today = todayISO()
+  const states = await db.studyStates.where('[childId+deckId]').equals([childId, deckId]).toArray()
+  return states.filter((s) => isDue(s, today)).length
 }

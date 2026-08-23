@@ -7,6 +7,7 @@ import { CorrectBurst } from '../components/common/CorrectBurst'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { finishDrill, autoAddErrorCard } from '../db/study'
+import { VisualMath } from '../components/common/VisualMath'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import { MATH_KINDS, generateDrill, type MathKind, type MathProblem } from '../lib/mathDrill'
@@ -117,10 +118,15 @@ export function MathDrillPage() {
       sfxWrong()
       // 算错的题自动进错题本(同题去重)
       if (currentChildId) {
+        /*
+          算错的题以「能重新算一遍」的形式进错题本:带上答案和那张图。
+          看一眼答案,他记住的是答案;自己再算一遍,他练到的才是这道题。
+        */
         void autoAddErrorCard(currentChildId, {
           front: problems[idx].text.trim(),
           back: String(problems[idx].answer),
           subject: '数学',
+          redo: { type: 'input', answer: problems[idx].answer, visual: problems[idx].visual },
         })
       }
     }
@@ -314,6 +320,12 @@ export function MathDrillPage() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center px-4">
+        {/*
+          数形结合:算式上面把实物摆出来,而且可以点着数。
+          他先数出答案,慢慢才把「5 + 5」这个符号和那堆糖对上 ——
+          这个顺序反过来就成了死记硬背。
+        */}
+        {p.visual && <VisualMath visual={p.visual} resetKey={idx} />}
         <div className="flex items-center gap-3 text-5xl font-bold text-gray-800 mb-8">
           <span>{p.text}</span>
           <input

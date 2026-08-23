@@ -17,6 +17,10 @@ import {
   type DueCard,
 } from '../db/study'
 import { specOf, type Adjust } from '../lib/adaptive'
+import { examplesFor } from '../lib/examples'
+import { buildRedo, OPTION_LETTERS } from '../lib/redo'
+import { VisualMath } from '../components/common/VisualMath'
+import { Examples } from '../components/common/Examples'
 import { rateSession } from '../lib/scoreCard'
 import { hasParentVoice } from '../lib/audio'
 import { saveMyVoice } from '../db/voices'
@@ -44,7 +48,7 @@ import { feedPet, type FeedResult } from '../lib/pets'
 import { CorrectBurst } from '../components/common/CorrectBurst'
 import { LevelUpModal } from '../components/points/LevelUpModal'
 import { AchievementUnlockModal } from '../components/points/AchievementUnlockModal'
-import type { Achievement, LearnDeck, LevelStep, PracticeMode } from '../types'
+import type { Achievement, LearnDeck, LevelStep, PracticeMode, RedoSpec } from '../types'
 
 const PRAISE = ['棒!', '真快!', '厉害!', '就是这样!', '太对了!', '哇!']
 /** 幼儿:答对时用语音读出来的夸奖 */
@@ -110,6 +114,9 @@ export function StudySessionPage() {
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
   /** 答对特效计数器:每答对 +1 触发一次花瓣鼓励 */
   const [burst, setBurst] = useState(0)
+  /** 算术错题:重做时输入答案 */
+  const [redoInput, setRedoInput] = useState('')
+  const [redoMark, setRedoMark] = useState<'none' | 'ok' | 'no'>('none')
   /** 这一组做完后难度是升了还是降了 —— 结算页告诉家长一声 */
   const [levelMoved, setLevelMoved] = useState<Adjust>('keep')
   /** 跟我读:他自己的那一遍,录下来可以回放,也存进「孩子的录音」 */
@@ -167,7 +174,41 @@ export function StudySessionPage() {
 
   const current = cards?.[idx]
   const itemType = deck?.itemType ?? 'word'
+  /**
+   * 这道错题的重做规格(答错时就一起存下来的)。
+   * 没有的话说明是手动记的老错题,退回「看题回想」。
+   */
+  const redo = (current?.card.extra as { redo?: RedoSpec } | undefined)?.redo
   const isHanzi = itemType === 'hanzi'
+  const isWord = itemType === 'word'
+  /**
+   * 这个卡组来自哪个内容包 —— 例句要靠它判断词类(见 lib/examples)。
+   * 自建卡组没有 builtinKey,那就不出例句(拿不准就不出)。
+   */
+  const packKey = deck?.builtinKey ?? ''
+
+  /** 重做题的「再听一遍」 */
+  const playRedoAudio = () => {
+    if (!redo || redo.type !== 'choice' || !redo.audio) return
+    if (redo.lang === 'en') void playWordAudio(redo.audio, 2, 1)
+    else speakChinese(redo.audio, 0.85, 1)
+  }
+
+  const submitRedo = () => {
+    if (!redo || redo.type !== 'input' || redoMark !== 'none') return
+    const right = redoInput.trim() !== '' && Number(redoInput.trim()) === redo.answer
+    setRedoMark(right ? 'ok' : 'no')
+    if (right) sfxCorrect()
+    else sfxWrong()
+    setTimeout(
+      () => {
+        setRedoInput('')
+        setRedoMark('none')
+        void advance(right)
+      },
+      right ? 520 : 1200,
+    )
+  }
 
   /** 按学科播放:都优先走网络真人音源,拿不到才用设备合成音。times=2 自动复读一遍。 */
   const playAudio = useCallback(
@@ -228,11 +269,19 @@ export function StudySessionPage() {
   // 听音选(义/字) 4 选项:汉字选正面,单词选释义
   const options = useMemo(() => {
     if (!current || mode !== 'listenChoose') return []
-    const answer = isHanzi ? current.card.front : current.card.back
-    const src = isHanzi ? poolFront : pool
+    /*
+      **英语的听音选题不再出中文选项。**
+
+      原先是「听英文发音 → 在四个中文释义里选」。那练的其实是中译英的对应表,
+      不是听力:他先把声音翻成中文,再去找那个中文。
+      现在选项也是英文 —— 听到 cat 就在 cat / cap / cut 里点出 cat,
+      练的是**听辨**本身,而且全程没有中文。
+    */
+    const answer = isHanzi || isWord ? current.card.front : current.card.back
+    const src = isHanzi || isWord ? poolFront : pool
     const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, pool, poolFront, isHanzi, optCount])
+  }, [current, mode, pool, poolFront, isHanzi, isWord, optCount])
 
   // 补全诗句:随机挖掉一句,4 选项(正确句 + 3 干扰句)
   const blank = useMemo(() => {
@@ -353,12 +402,35 @@ export function StudySessionPage() {
       }
       // 其他学科答错自动进错题本(识字/看图/古诗;英语单词走上面的错词本)
       if (!isFree && !wasCorrect && currentChildId && deck && deck.source !== 'wrong') {
+        /*
+          **把「怎么重做」一起存进去**:干扰项就是他刚才看到的那几个,
+          题面还是那张图、那个音。重做时他面对的是同一道题,而不是
+          「看一眼答案然后自己说会了」—— 后者对 4 岁半的孩子等于没有。
+        */
+        const allForRedo = await db.cards.where('deckId').equals(deck.id).toArray()
+        const redoSpec = buildRedo({
+          mode: mode ?? 'review',
+          itemType: deck.itemType,
+          card: {
+            front: current.card.front,
+            back: current.card.back,
+            emoji: (current.card.extra as { emoji?: string } | undefined)?.emoji,
+            en: (current.card.extra as { en?: string } | undefined)?.en,
+          },
+          pool: allForRedo.map((c) => ({
+            front: c.front,
+            back: c.back,
+            emoji: (c.extra as { emoji?: string } | undefined)?.emoji,
+            en: (c.extra as { en?: string } | undefined)?.en,
+          })),
+        })
         if (deck.itemType === 'hanzi') {
           const word = (current.card.extra as { word?: string })?.word
           await autoAddErrorCard(currentChildId, {
             front: `认字:${current.card.front}`,
             back: `读音 ${current.card.back}${word ? ` · 组词 ${word}` : ''}`,
             subject: '语文',
+            redo: redoSpec,
           })
         } else if (deck.itemType === 'pic') {
           const ex = current.card.extra as { emoji?: string; en?: string }
@@ -366,6 +438,7 @@ export function StudySessionPage() {
             front: `${ex?.emoji ?? ''} 这是什么?`,
             back: `${current.card.front}${ex?.en ? ` (${ex.en})` : ''}`,
             subject: deck.subject,
+            redo: redoSpec,
           })
         } else if (deck.itemType === 'poem') {
           await autoAddErrorCard(currentChildId, {
@@ -378,6 +451,7 @@ export function StudySessionPage() {
             front: current.card.front,
             back: current.card.back,
             subject: deck.subject,
+            redo: redoSpec,
           })
         }
       }
@@ -423,12 +497,21 @@ export function StudySessionPage() {
     [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode, isFree],
   )
 
-  // 磨耳朵:每张卡自动「英语×2(真人音)→中文」连播,然后翻下一张;不评分、听完整组照常结算
+  /*
+    磨耳朵:每张卡自动「单词 ×2 → 例句」连播,然后翻下一张;不评分,听完整组照常结算。
+
+    第二遍放的是**例句**,不是中文翻译。
+    原先是「英语 → 中文」轮流播。中文一出来,孩子的注意力就落在中文上了,
+    英语那句变成背景音 —— 磨耳朵磨的其实是中文。
+    换成「apple → an apple」之后,他听到的全是英语,而且第二遍
+    正好把这个词放进了一个短语里,比单蹦一个词有用得多。
+  */
   useEffect(() => {
     if (mode !== 'earTrain' || !current || phase === 'done' || !cards) return
     const en = (current.card.extra as { en?: string })?.en ?? current.card.back
     void playWordAudio(en, 2, 2)
-    const t1 = setTimeout(() => speakChinese(current.card.audioText ?? current.card.front, 0.9), 3100)
+    const follow = examplesFor(en, packKey, en)[0]
+    const t1 = setTimeout(() => playWordAudio(follow || en, 2, 1), 3100)
     const t2 = setTimeout(() => {
       if (idx + 1 >= cards.length) void finish(cards.length, cards.length)
       else setIdx((i) => i + 1)
@@ -437,7 +520,7 @@ export function StudySessionPage() {
       clearTimeout(t1)
       clearTimeout(t2)
     }
-  }, [mode, current, phase, cards, idx, finish])
+  }, [mode, current, phase, cards, idx, finish, packKey])
 
   // 录我读的 → 回放
   const toggleRecord = useCallback(async () => {
@@ -699,6 +782,8 @@ export function StudySessionPage() {
               ) : (
                 <div className="mt-6 text-lg text-brand-600 font-medium">{current.card.back}</div>
               )}
+              {/* 英语单词:释义之外再给例句 —— 「知道意思」和「会用」是两件事 */}
+              {isWord && <Examples word={current.card.front} packKey={packKey} zh={current.card.back} />}
               <div className="mt-8 flex gap-3">
                 <button onClick={() => void advance(false)} className="rounded-2xl bg-gray-100 px-6 py-3 font-bold text-gray-500 active:scale-95">
                   {isHanzi ? '不认识' : '没记住'}
@@ -723,11 +808,11 @@ export function StudySessionPage() {
             <AudioBtn big />
           </div>
           <p className="text-sm text-gray-400 mb-4">
-            {isHanzi ? '听读音,选出正确的字' : '听发音,选出正确的意思'}
+            {isHanzi ? '听读音,选出正确的字' : '听一听,选出你听到的那个词'}
           </p>
           <div className={`w-full max-w-sm ${isHanzi ? 'grid grid-cols-2 gap-3' : 'space-y-3'}`}>
             {options.map((opt) => {
-              const answer = isHanzi ? current.card.front : current.card.back
+              const answer = isHanzi || isWord ? current.card.front : current.card.back
               const isCorrect = opt === answer
               const show = picked !== null
               return (
@@ -759,7 +844,17 @@ export function StudySessionPage() {
       {/* ---- 拼写 ---- */}
       {mode === 'spell' && (
         <div className="flex-1 flex flex-col items-center px-4">
-          <div className="text-lg text-brand-600 font-medium mt-4 mb-2 text-center">{current.card.back}</div>
+          {/*
+            拼写的题面**不给中文**:听发音 + 看图,把这个词拼出来。
+            原先是「看中文拼单词」,那是在练中译英;现在练的是音—形对应,
+            也就是自然拼读真正要练的那件事。
+          */}
+          {(current.card.extra as { emoji?: string } | undefined)?.emoji && (
+            <div className="mt-2 text-7xl leading-none">
+              {(current.card.extra as { emoji?: string }).emoji}
+            </div>
+          )}
+          <div className="text-sm text-gray-400 mt-4 mb-2 text-center">听一听,把这个词拼出来</div>
           <AudioBtn />
           <p className="text-sm text-gray-400 mt-4 mb-3">拼出这个单词</p>
           {phase === 'reveal' ? (
@@ -1031,7 +1126,105 @@ export function StudySessionPage() {
       )}
 
       {/* ---- 错题本:看题回想 → 翻答案自评 ---- */}
-      {mode === 'review' && (
+      {/*
+        错题重做 —— **以它当初被答错的那种形式**回来。
+
+        原先只有一种:看题干 → 点「看答案」→ 自己点「已掌握 / 还没掌握」。
+        那对一个不识字的 4 岁半孩子等于没有:他读不了题干,更不可能诚实地
+        评判自己 —— 自评是成年人才做得到的事。
+        现在选择题错的还是选择题(A–E),算术算错的还是让他算一遍。
+      */}
+      {mode === 'review' && redo?.type === 'choice' && (
+        <div className="flex-1 flex flex-col items-center px-4">
+          {redo.emoji && <div className="text-8xl leading-none">{redo.emoji}</div>}
+          {redo.audio && (
+            <button
+              onClick={() => playRedoAudio()}
+              className="mt-3 rounded-full bg-brand-100 p-3 text-brand-600 active:scale-90"
+              aria-label="再听一遍"
+            >
+              <Volume2 size={24} />
+            </button>
+          )}
+          {!redo.emoji && (
+            <div className="w-full max-w-md rounded-2xl bg-white/80 p-4 text-gray-800 whitespace-pre-line leading-relaxed">
+              {current.card.front}
+            </div>
+          )}
+          <p className="mt-3 text-sm text-gray-400">上次这道没做对,再试一次</p>
+          <div className="mt-4 grid w-full max-w-md gap-2">
+            {redo.options.map((opt, oi) => {
+              const show = picked !== null
+              const cls = show
+                ? opt === redo.answer
+                  ? 'bg-mint-500 text-white'
+                  : opt === picked
+                    ? 'bg-red-400 text-white'
+                    : 'bg-white/70 text-gray-700'
+                : 'bg-white/70 text-gray-700'
+              return (
+                <button
+                  key={opt}
+                  disabled={picked !== null}
+                  onClick={() => {
+                    if (picked) return
+                    setPicked(opt)
+                    const right = opt === redo.answer
+                    if (right) playRedoAudio()
+                    setTimeout(() => void advance(right), right ? 620 : 1100)
+                  }}
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-4 text-left text-lg font-medium transition active:scale-95 ${cls}`}
+                >
+                  {/* A B C D E:给每个选项一个字母,家长报题、孩子指认都方便 */}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/5 text-sm font-bold">
+                    {OPTION_LETTERS[oi] ?? ''}
+                  </span>
+                  <span className="min-w-0 flex-1">{opt}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {mode === 'review' && redo?.type === 'input' && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          {/* 算错的题重做时也带着那张图 —— 让他数出来,而不是回想答案 */}
+          {redo.visual && <VisualMath visual={redo.visual} resetKey={idx} />}
+          <div className="mb-6 flex items-center gap-3 text-4xl font-bold text-gray-800">
+            <span className="whitespace-pre-line">{current.card.front}</span>
+            <input
+              autoFocus
+              value={redoInput}
+              onChange={(e) => setRedoInput(e.target.value.replace(/[^0-9-]/g, ''))}
+              onKeyDown={(e) => e.key === 'Enter' && submitRedo()}
+              inputMode="numeric"
+              disabled={redoMark !== 'none'}
+              className={`w-28 rounded-2xl border-2 px-3 py-2 text-center outline-none transition ${
+                redoMark === 'ok'
+                  ? 'border-mint-500 text-mint-600'
+                  : redoMark === 'no'
+                    ? 'border-red-400 text-red-500'
+                    : 'border-gray-200 text-gray-800 focus:border-brand-400'
+              }`}
+              placeholder="?"
+            />
+          </div>
+          {redoMark === 'no' && (
+            <div className="mb-4 text-lg text-red-500">正确答案:{redo.answer}</div>
+          )}
+          <button
+            onClick={submitRedo}
+            disabled={redoMark !== 'none' || redoInput.trim() === ''}
+            className="rounded-2xl bg-brand-500 px-10 py-3 font-bold text-white active:scale-95 disabled:opacity-40"
+          >
+            确定
+          </button>
+        </div>
+      )}
+
+      {/* 没有重做规格的老错题(手动记的、或旧版本存下来的):还是回想自评 */}
+      {mode === 'review' && !redo && (
         <div className="flex-1 flex flex-col items-center px-4">
           {(current.card.extra as { subject?: string } | undefined)?.subject && (
             <span className="mb-2 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600">
@@ -1251,19 +1444,33 @@ export function StudySessionPage() {
               )
             })}
           </div>
-          {picked && <div className="mt-3 text-sm text-gray-400">{current.card.front}</div>}
+          {/*
+            答完之后给例句 —— 这是「学完一个词」真正的最后一步。
+            纯英文,不给中文释义:这个年纪要建立的是「英语—画面」的直接联系,
+            中间插一道翻译,他会养成「先翻成中文再理解」的习惯。
+            中文收进面板里那个默认关闭的「中文(家长)」开关 ——
+            判「读对了」的人是家长,他得知道意思。
+          */}
+          {picked && (
+            <Examples
+              word={currentEn}
+              packKey={packKey}
+              zh={current.card.front}
+            />
+          )}
         </div>
       )}
 
-      {/* ---- 幼儿英语:磨耳朵(英语→中文自动连播,不用操作) ---- */}
+      {/* ---- 幼儿英语:磨耳朵(单词→例句自动连播,不用操作) ---- */}
       {mode === 'earTrain' && (
         <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
           <span className="text-8xl leading-none break-all">
             {(current.card.extra as { emoji?: string })?.emoji}
           </span>
           <div className="mt-6 text-4xl font-bold text-brand-600">{currentEn}</div>
-          <div className="mt-2 text-xl text-gray-600">{current.card.front}</div>
-          <p className="mt-8 text-xs text-gray-400">🎵 磨耳朵中…会自动翻页,听完这组就好啦</p>
+          {/* 第二行是例句,不是中文 —— 全程纯英文 */}
+          <div className="mt-2 text-xl text-gray-500">{examplesFor(currentEn, packKey, currentEn)[0] ?? ''}</div>
+          <p className="mt-8 text-xs text-gray-400">🎵 磨耳朵中…单词和例句轮流播(纯英文)</p>
         </div>
       )}
 
@@ -1274,9 +1481,11 @@ export function StudySessionPage() {
             {(current.card.extra as { emoji?: string })?.emoji}
           </span>
           <div className="mt-5 text-4xl font-bold text-brand-600">{speakTarget}</div>
-          <div className="mt-1 text-lg text-gray-500">
-            {itemType === 'word' ? current.card.back : current.card.front}
-          </div>
+          {/*
+            跟我读这一步**不给中文**。
+            他要练的是「看到这个词就读出来」,中文摆在旁边只会让他先去看中文。
+            图已经在上面了 —— 意思靠图,不靠翻译。
+          */}
 
           <button
             onClick={() => void playWordAudio(speakTarget, 2, 2)}
@@ -1329,6 +1538,12 @@ export function StudySessionPage() {
               读对了 👍
             </button>
           </div>
+          {/* 单词读完接着读例句:组词 → 短语 → 句子,一次学到位 */}
+          <Examples
+            word={speakTarget}
+            packKey={packKey}
+            zh={itemType === 'word' ? current.card.back : current.card.front}
+          />
           <p className="mt-3 text-[11px] text-gray-400">爸爸妈妈听一下,由你来点</p>
         </div>
       )}

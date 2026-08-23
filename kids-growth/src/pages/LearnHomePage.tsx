@@ -6,6 +6,7 @@ import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
+import { getStageMeta } from '../lib/ageStage'
 import {
   listVoices,
   setPreferredVoice,
@@ -34,6 +35,7 @@ import {
   yesterdayScore,
   recordTodayScore,
   wrongDueToday,
+  errorDueToday,
 } from '../db/study'
 import { rankDecks, diversify } from '../lib/recommend'
 import { buildPlan, planMinutes, type PlanDeck } from '../lib/dailyPlan'
@@ -204,6 +206,12 @@ export function LearnHomePage() {
     recordTodayScore(card.score)
     return card
   }, [currentChildId])
+
+  /** 今天有几道错题该重做 —— 显示在错题本入口上 */
+  const errDue = useLiveQuery(
+    async () => (currentChildId ? errorDueToday(currentChildId) : 0),
+    [currentChildId],
+  )
 
   /** 今天有多少张「以前答错过」的卡回来了 —— 这几张最该被做到 */
   const wrongDue = useLiveQuery(
@@ -591,8 +599,21 @@ export function LearnHomePage() {
           <NotebookPen size={22} />
         </div>
         <div className="flex-1">
-          <div className="font-bold text-gray-800">错题本</div>
-          <div className="text-xs text-gray-400">各科错题拍照记录 · 按遗忘曲线重做</div>
+          <div className="font-bold text-gray-800">
+            错题本
+            {/*
+              带一个数字。错题这件事的难点从来不是「收集」,是**回头去做** ——
+              没有数字提醒,家长永远想不起来点它,收集得再全也白搭。
+            */}
+            {!!errDue && errDue > 0 && (
+              <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                {errDue}
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-gray-400">
+            答错的自动收进来 · 选择题还是选择题,算错的还是让他算
+          </div>
         </div>
         <ChevronRight size={18} className="text-gray-300" />
       </button>
@@ -694,7 +715,7 @@ export function LearnHomePage() {
             <div className="flex-1">
               <div className="font-bold text-gray-800">更多内容包</div>
               <div className="text-xs text-gray-400">
-                还有 {availablePacks.length} 个可以添加(识字 / 英语 / 科学 / 成语 / 地理…)
+                还有 {availablePacks.length} 个可以添加 · 不限学段,某一科超前就直接挑高一档的
               </div>
             </div>
             <ChevronRight
@@ -709,7 +730,14 @@ export function LearnHomePage() {
                   <span className="text-xl">{p.icon}</span>
                   <span className="flex-1">
                     <span className="block text-sm font-medium text-gray-700">{p.name}</span>
-                    <span className="text-[11px] text-gray-400">{p.subject}</span>
+                    {/*
+                      标出适用学段。孩子常常某一科超前 —— 他 4 岁半,20 以内加减
+                      已经做得不错,该给他小学档的算术;而英语还在启蒙。
+                      这里不按学段过滤,只标注,由家长自己挑。
+                    */}
+                    <span className="text-[11px] text-gray-400">
+                      {p.subject} · {p.stages.map((st) => getStageMeta(st).label).join('/')}
+                    </span>
                   </span>
                   <button
                     onClick={() => void addPack(p.key)}

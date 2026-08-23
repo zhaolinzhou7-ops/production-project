@@ -1,1 +1,185 @@
-{"key":"enlight-nature","name":"植物与自然","subject":"启蒙","itemType":"pic","source":"常识性看图词汇,配 emoji 大图","count":20,"cards":[{"front":"树","en":"tree","emoji":"🌳"},{"front":"花","en":"flower","emoji":"🌸"},{"front":"玫瑰","en":"rose","emoji":"🌹"},{"front":"向日葵","en":"sunflower","emoji":"🌻"},{"front":"郁金香","en":"tulip","emoji":"🌷"},{"front":"叶子","en":"leaf","emoji":"🍃"},{"front":"草","en":"grass","emoji":"🌱"},{"front":"仙人掌","en":"cactus","emoji":"🌵"},{"front":"种子","en":"seed","emoji":"🌰"},{"front":"山","en":"mountain","emoji":"⛰️"},{"front":"太阳","en":"sun","emoji":"☀️"},{"front":"月亮","en":"moon","emoji":"🌙"},{"front":"星星","en":"star","emoji":"⭐"},{"front":"云","en":"cloud","emoji":"☁️"},{"front":"雨","en":"rain","emoji":"🌧️"},{"front":"河","en":"river","emoji":"🏞️"},{"front":"海","en":"sea","emoji":"🌊"},{"front":"沙滩","en":"beach","emoji":"🏖️"},{"front":"森林","en":"forest","emoji":"🌲"},{"front":"火","en":"fire","emoji":"🔥"}]}
+{
+  "key": "enlight-nature",
+  "name": "植物与自然",
+  "subject": "启蒙",
+  "itemType": "pic",
+  "source": "常识性看图词汇,配 emoji 大图",
+  "count": 35,
+  "cards": [
+    {
+      "front": "树",
+      "en": "tree",
+      "emoji": "🌳"
+    },
+    {
+      "front": "花",
+      "en": "flower",
+      "emoji": "🌸"
+    },
+    {
+      "front": "玫瑰",
+      "en": "rose",
+      "emoji": "🌹"
+    },
+    {
+      "front": "向日葵",
+      "en": "sunflower",
+      "emoji": "🌻"
+    },
+    {
+      "front": "郁金香",
+      "en": "tulip",
+      "emoji": "🌷"
+    },
+    {
+      "front": "叶子",
+      "en": "leaf",
+      "emoji": "🍃"
+    },
+    {
+      "front": "草",
+      "en": "grass",
+      "emoji": "🌱"
+    },
+    {
+      "front": "仙人掌",
+      "en": "cactus",
+      "emoji": "🌵"
+    },
+    {
+      "front": "种子",
+      "en": "seed",
+      "emoji": "🌰"
+    },
+    {
+      "front": "山",
+      "en": "mountain",
+      "emoji": "⛰️"
+    },
+    {
+      "front": "太阳",
+      "en": "sun",
+      "emoji": "☀️"
+    },
+    {
+      "front": "月亮",
+      "en": "moon",
+      "emoji": "🌙"
+    },
+    {
+      "front": "星星",
+      "en": "star",
+      "emoji": "⭐"
+    },
+    {
+      "front": "云",
+      "en": "cloud",
+      "emoji": "☁️"
+    },
+    {
+      "front": "雨",
+      "en": "rain",
+      "emoji": "🌧️"
+    },
+    {
+      "front": "河",
+      "en": "river",
+      "emoji": "🏞️"
+    },
+    {
+      "front": "海",
+      "en": "sea",
+      "emoji": "🌊"
+    },
+    {
+      "front": "沙滩",
+      "en": "beach",
+      "emoji": "🏖️"
+    },
+    {
+      "front": "森林",
+      "en": "forest",
+      "emoji": "🌲"
+    },
+    {
+      "front": "火",
+      "en": "fire",
+      "emoji": "🔥"
+    },
+    {
+      "front": "小岛",
+      "en": "island",
+      "emoji": "🏝️"
+    },
+    {
+      "front": "火山",
+      "en": "volcano",
+      "emoji": "🌋"
+    },
+    {
+      "front": "沙漠",
+      "en": "desert",
+      "emoji": "🏜️"
+    },
+    {
+      "front": "雪山",
+      "en": "snowy mountain",
+      "emoji": "🏔️"
+    },
+    {
+      "front": "石头",
+      "en": "rock",
+      "emoji": "🪨"
+    },
+    {
+      "front": "蘑菇",
+      "en": "mushroom",
+      "emoji": "🍄"
+    },
+    {
+      "front": "四叶草",
+      "en": "clover",
+      "emoji": "🍀"
+    },
+    {
+      "front": "竹子",
+      "en": "bamboo",
+      "emoji": "🎋"
+    },
+    {
+      "front": "枫叶",
+      "en": "maple leaf",
+      "emoji": "🍁"
+    },
+    {
+      "front": "落叶",
+      "en": "fallen leaves",
+      "emoji": "🍂"
+    },
+    {
+      "front": "麦穗",
+      "en": "wheat",
+      "emoji": "🌾"
+    },
+    {
+      "front": "彩虹",
+      "en": "rainbow",
+      "emoji": "🌈"
+    },
+    {
+      "front": "雪花",
+      "en": "snowflake",
+      "emoji": "❄️"
+    },
+    {
+      "front": "水滴",
+      "en": "water drop",
+      "emoji": "💧"
+    },
+    {
+      "front": "银河",
+      "en": "galaxy",
+      "emoji": "🌌"
+    }
+  ]
+}
