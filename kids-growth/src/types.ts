@@ -301,6 +301,8 @@ export type PracticeMode =
   | 'listenPicEn' // 幼儿英语:听英语选图
   | 'earTrain' // 幼儿英语:磨耳朵(中英自动连播)
   | 'quiz' // 问答:看题四选一(科学/安全/成语/地理等)
+  | 'sayIt' // 说给我听:他说出来,家长判 —— 补上「产出」这一环
+  | 'speakEn' // 英语·跟我读:听范读 → 他读出来 → 家长判(「读单词」那一环)
 
 /** SRS 记忆状态机 */
 export type SrsStatus = 'new' | 'learning' | 'review' | 'mastered'
@@ -357,6 +359,11 @@ export interface StudySession {
   correct: number
   durationSec: number
   pointsAwarded: number
+  /**
+   * 「再练一遍」。自由练习不算「今天这组练过了」,也不参与难度升降 ——
+   * 否则重复刷同一组会把难度推上去,而那只是他在玩,不是他学会了。
+   */
+  free?: boolean
   createdAt: number
 }
 
@@ -369,4 +376,21 @@ export interface DrillResult {
   correct: number
   durationSec: number
   createdAt: number
+}
+
+/** 谁录的:parent=家长范读(会顶替在线音源) / kid=孩子跟读(只回放,绝不当范读) */
+export type VoiceOwner = 'parent' | 'kid'
+
+/**
+ * 一条本机录音。主键是 [owner+key] —— 同一句话家长录一条、孩子录一条,
+ * 互不覆盖;同一个人重录同一句则直接覆盖。
+ */
+export interface VoiceClip {
+  owner: VoiceOwner
+  /** 归一化后的句子(索引用,见 lib/voiceKey) */
+  key: string
+  /** 录的时候那句话的原文,列表里显示给家长看 */
+  text: string
+  blob: Blob
+  at: number
 }

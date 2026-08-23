@@ -1,0 +1,269 @@
+/**
+ * 逻辑层自测。
+ *
+ * 页面要在浏览器里才能跑,但**业务逻辑**(难度自适应、SRS、打分、推荐、
+ * 每日计划、录音索引键)全是纯 TypeScript,可以在 Node 里直接验证。
+ *
+ * 有了它,像「新卡组默认档直接跳到看图选英文」「打分给出不及格」这类问题
+ * 在推给孩子之前就能发现,而不是等他做了一晚上才被家长看出来。
+ *
+ * 用法:npm run selftest
+ */
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+const ROOT = path.join(import.meta.dirname, '..')
+/*
+  编译产物必须落在项目里,不能放 /tmp。
+  package.json 里是 "type": "module",而 /tmp 下没有 package.json ——
+  同样一份 ESM 代码放在那里会被 Node 当成 CommonJS 解析,直接报错。
+*/
+const OUT = path.join(ROOT, '.selftest')
+rmSync(OUT, { recursive: true, force: true })
+mkdirSync(OUT, { recursive: true })
+/*
+  产物按 CommonJS 编译,并在产物目录里放一个 type:commonjs 的 package.json。
+
+  为什么不用 ESM:tsc 不会给相对导入补 .js 后缀,所以 `import './adaptive'`
+  在 Node 的 ESM 解析下直接找不到文件。CommonJS 的 require 自己会补后缀,
+  而外层项目是 "type": "module",不放这个 package.json 的话产物会被当成 ESM。
+*/
+writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ type: 'commonjs' }))
+
+const MODULES = [
+  'adaptive',
+  'scoreCard',
+  'recommend',
+  'dailyPlan',
+  'pointCap',
+  'voiceKey',
+  'voicePriority',
+  'srs',
+  'dateUtils',
+]
+
+execFileSync(
+  'npx',
+  [
+    'tsc',
+    ...MODULES.map((m) => path.join(ROOT, 'src', 'lib', `${m}.ts`)),
+    '--outDir',
+    OUT,
+    '--module',
+    'commonjs',
+    '--target',
+    'es2022',
+    '--skipLibCheck',
+    // 命令行指定文件时 tsconfig 不会被加载,显式说明以免 TS5112 直接退出
+    '--ignoreConfig',
+  ],
+  { stdio: 'inherit', cwd: ROOT },
+)
+
+// rootDir 被推断成 src/,所以产物落在 OUT/lib/ 下
+const require = createRequire(pathToFileURL(path.join(OUT, 'lib', 'x.cjs')).href)
+const load = async (m) => require(`./${m}.js`)
+
+const adaptive = await load('adaptive')
+const scoreCard = await load('scoreCard')
+const recommend = await load('recommend')
+const dailyPlan = await load('dailyPlan')
+const pointCap = await load('pointCap')
+const voiceKey = await load('voiceKey')
+const voicePriority = await load('voicePriority')
+const srs = await load('srs')
+
+let checks = 0
+let failed = 0
+function ok(cond, what) {
+  checks += 1
+  if (!cond) {
+    failed += 1
+    console.error(`  ✗ ${what}`)
+  }
+}
+function eq(a, b, what) {
+  ok(Object.is(a, b) || JSON.stringify(a) === JSON.stringify(b), `${what} — 得到 ${JSON.stringify(a)},期望 ${JSON.stringify(b)}`)
+}
+
+// ---------------------------------------------------------------- 难度自适应
+
+// 太难要**一组就降**:一个 4 岁半的孩子连着做错八题,下次就不肯打开了
+eq(adaptive.adjustFor([{ total: 8, correct: 3 }]), 'down', '一组低于 50% 就降档')
+// 太简单要**连着两组**才升,免得蒙对一组就被推上去
+eq(adaptive.adjustFor([{ total: 8, correct: 8 }]), 'keep', '只有一组全对时不升档')
+eq(
+  adaptive.adjustFor([
+    { total: 8, correct: 8 },
+    { total: 8, correct: 8 },
+  ]),
+  'up',
+  '连着两组≥90% 才升档',
+)
+// 不足 4 题的组不算数(题太少,正确率没有意义)
+eq(adaptive.adjustFor([{ total: 2, correct: 0 }]), 'keep', '题量不足的组不参与判定')
+eq(adaptive.adjustFor([]), 'keep', '没有记录时保持不变')
+
+// 档位边界不能越界
+eq(adaptive.nextLevel(0, 'down'), 0, '最低档再降还是最低档')
+eq(adaptive.nextLevel(adaptive.LEVEL_COUNT - 1, 'up'), adaptive.LEVEL_COUNT - 1, '最高档再升还是最高档')
+for (let i = 0; i < adaptive.LEVEL_COUNT; i++) {
+  const spec = adaptive.specOf(i)
+  ok(spec.choices >= 2, `第 ${i} 档至少两个选项`)
+  ok(spec.size >= 4, `第 ${i} 档至少 4 题`)
+}
+// 越往上题越多、选项越多 —— 阶梯不能出现回头
+for (let i = 1; i < adaptive.LEVEL_COUNT; i++) {
+  ok(adaptive.specOf(i).size >= adaptive.specOf(i - 1).size, `第 ${i} 档题量不少于上一档`)
+  ok(adaptive.specOf(i).choices >= adaptive.specOf(i - 1).choices, `第 ${i} 档选项不少于上一档`)
+}
+
+// 练法阶梯:难度真正被感觉到的地方
+const picLadder = [0, 1, 2, 3, 4].map((l) => adaptive.modeLadder('pic', l))
+eq(picLadder[0], 'listenPic', '看图包最低档是「听中文点图」(不用认字)')
+// 新卡组默认在第 2 档 —— 那一档不能直接是「看图选英文」,对刚开始的孩子太跳
+eq(picLadder[2], 'listenPicEn', '默认档是「听英文点图」,英语分两步进来')
+eq(picLadder[4], 'speakEn', '最高档是「读出来」——「产出」没有蒙对率')
+ok(new Set(picLadder).size >= 4, '五档里至少四种不同练法,孩子要能感觉到「变了」')
+eq(adaptive.modeLadder('hanzi', 4), 'sayIt', '识字最高档是「说给我听」')
+eq(adaptive.modeLadder('fact', 2), undefined, '没有阶梯的类型返回 undefined,由调用方回退')
+
+// ---------------------------------------------------------------- 打分
+
+// 原则 3:**没有不及格**。只要今天做过一点,至少一颗星
+const barely = scoreCard.buildDailyCard([
+  { key: 'practice', label: '练习', emoji: '📚', done: 1, target: 20, correct: 0 },
+])
+ok(barely.stars >= 1, '做了一点就至少一颗星')
+ok(!/差|不及格|失败/.test(barely.cheer), '给孩子的话里不能出现负面评价')
+
+// 原则 1:主要看「做了没有」。全做完但错一半,分数仍应明显高于只做了一点点
+const doneAllHalfRight = scoreCard.buildDailyCard([
+  { key: 'practice', label: '练习', emoji: '📚', done: 20, target: 20, correct: 10 },
+])
+ok(doneAllHalfRight.score > barely.score + 30, '做完了但错一半 > 只做了一点点')
+
+// 一组做完的评语:最差的一档要把责任揽在系统身上
+const worst = scoreCard.rateSession(0, 10)
+eq(worst.stars, 1, '一组全错也给一颗星')
+ok(worst.msg.includes('不是你的问题'), '最难那一档要说「不是你的问题」')
+eq(scoreCard.rateSession(10, 10).stars, 3, '几乎全对给三颗星')
+eq(scoreCard.rateSession(0, 0).stars, 0, '一题没做不给星')
+
+// 和昨天比
+eq(scoreCard.buildDailyCard([{ key: 'a', label: '练习', emoji: '📚', done: 10, target: 10, correct: 10 }], 20).trend, 1, '比昨天高很多算进步')
+eq(scoreCard.buildDailyCard([{ key: 'a', label: '练习', emoji: '📚', done: 0, target: 10 }], -1).trend, 0, '没有昨天的分时不判趋势')
+
+// ---------------------------------------------------------------- 推荐
+
+const signals = [
+  { id: 'a', name: '认识动物', itemType: 'pic', due: 5, lapses: 9, daysSince: 1, total: 30 },
+  { id: 'b', name: '认识颜色', itemType: 'pic', due: 3, lapses: 0, daysSince: 9, total: 20 },
+  { id: 'c', name: '幼儿识字', itemType: 'hanzi', due: 12, lapses: 0, daysSince: 1, total: 100 },
+  { id: 'd', name: '拼音启蒙', itemType: 'hanzi', due: 0, lapses: 0, daysSince: -1, total: 63 },
+]
+const ranked = recommend.rankDecks(signals)
+eq(ranked[0].deckId, 'a', '错得多的排最前 —— 忘掉的不补,后面学的都架空')
+ok(ranked.every((r) => r.reason.length > 0), '每一条推荐都要有给家长看的理由')
+ok(ranked.some((r) => r.deckId === 'd'), '从没开过的新包也要给一个位置,否则家长以为「加了没用」')
+// 兴趣加权只是往前挪,不是过滤
+const withInterest = recommend.rankDecks(signals, ['颜色'])
+ok(withInterest.length === ranked.length, '兴趣加权不挤掉任何一组')
+ok(withInterest.find((r) => r.deckId === 'b').weight > ranked.find((r) => r.deckId === 'b').weight, '兴趣相关的权重更高')
+// 类型去重:连着三步都是看图选词,孩子第二步就腻了
+const div = recommend.diversify(ranked, 2)
+eq(div.length, 2, 'diversify 取够个数')
+ok(div[0].itemType !== div[1].itemType, '前两步换着类型来')
+
+// ---------------------------------------------------------------- 每日计划
+
+const planDecks = [
+  { id: 'a', itemType: 'pic', name: '认识动物', due: 20, level: 0, reason: '之前没记住' },
+  { id: 'b', itemType: 'pic', name: '认识颜色', due: 20, level: 4 },
+  { id: 'c', itemType: 'hanzi', name: '幼儿识字', due: 20, level: 2 },
+]
+const steps = dailyPlan.buildPlan(planDecks, 'toddler')
+ok(steps.length > 0 && steps.length <= 4, '幼儿一天不超过四步')
+// 练法必须跟着**这个卡组自己的**难度档走 —— 这是用户报的「做了很多次还是一样」
+eq(steps[0].mode, 'listenPic', '入门档的卡组给最简单的练法')
+eq(steps[1].mode, 'speakEn', '挑战档的卡组给「读出来」')
+// 题量也要跟着难度档,不能永远是 6
+eq(steps[0].limit, adaptive.specOf(0).size, '入门档题量按档位给')
+eq(steps[1].limit, adaptive.specOf(4).size, '挑战档题量按档位给')
+// 收尾一定是轻松的:让他带着「今天很顺」的感觉离开
+eq(steps[steps.length - 1].mode, 'earTrain', '最后一步是磨耳朵,不用操作')
+ok(steps.some((s) => s.reason), '推荐理由要一路传到计划里')
+// 没题可做时不能端上来一组空题
+eq(dailyPlan.buildPlan([{ id: 'x', itemType: 'pic', name: '空', due: 0 }], 'toddler').length, 0, '没有可练的卡组时返回空计划')
+ok(dailyPlan.planMinutes(steps) > 0, '要能估出用时,家长要能预估、孩子要能看到终点')
+
+// ---------------------------------------------------------------- 积分上限
+
+eq(pointCap.dailyPointCap('toddler'), 120, '幼儿档上限 120')
+ok(pointCap.dailyPointCap('primary') > pointCap.dailyPointCap('toddler'), '越大的孩子上限越高')
+eq(pointCap.allowedAward(20, 110, 120), 10, '快到上限时只发剩下的额度')
+eq(pointCap.allowedAward(20, 120, 120), 0, '到顶之后不再加分')
+// 扣分不受限制 —— 否则反复勾选/取消打卡照样能刷
+eq(pointCap.allowedAward(-5, 120, 120), -5, '扣分不受上限限制')
+
+// ---------------------------------------------------------------- 录音索引键
+
+eq(voiceKey.voiceKeyOf('  Let\'s GO! '), "let's go", '归一化:去首尾空白、去句末标点、转小写')
+eq(voiceKey.voiceKeyOf('I  like   cats'), 'i like cats', '多个空格并成一个')
+// 句中的标点要保留:"Let's go" 和 "Lets go" 是两句话
+ok(voiceKey.voiceKeyOf("Let's go") !== voiceKey.voiceKeyOf('Lets go'), '句中标点不能被抹掉')
+// 而句末标点不该让同一句话变成两条录音
+eq(voiceKey.voiceKeyOf('Good morning!'), voiceKey.voiceKeyOf('Good morning'), '句末标点不影响索引')
+ok(!voiceKey.isValidVoiceKey(voiceKey.voiceKeyOf('   ')), '空句子不占一条录音')
+
+// ---------------------------------------------------------------- 录音优先级
+
+const cands = [
+  { text: 'Good morning', level: 'easy', where: '对话·打招呼' },
+  { text: 'Good morning', level: 'easy', where: '动画·早上好' },
+  { text: 'What would you like for breakfast today', level: 'hard', where: '对话·吃饭' },
+  { text: 'I am fine', level: 'easy', where: '对话·打招呼' },
+]
+const top = voicePriority.rankForRecording(cands, 3)
+eq(top[0].text, 'Good morning', '出现多次的句子最该先录 —— 录一次到处都能用')
+eq(top[0].times, 2, '重复出现要合并计数')
+ok(top[0].where.length === 2, '要告诉家长这句在哪儿会用到')
+ok(
+  top.findIndex((t) => t.text === 'I am fine') <
+    top.findIndex((t) => t.text.startsWith('What would')),
+  '短句排在长句前面',
+)
+
+// ---------------------------------------------------------------- SRS 分龄调参
+
+// 幼儿的遗忘曲线陡得多:隔 8 天再见面等于一个新词,前面的练习白做
+const toddler = srs.tuningFor('toddler')
+const adult = srs.tuningFor('primary')
+ok(toddler.second < adult.second, '幼儿档第二次间隔更短')
+ok(toddler.maxEase < adult.maxEase, '幼儿档难度系数上限更低,间隔涨得更慢')
+
+const fresh = { interval: 0, ease: 2.5, reps: 0, lapses: 0 }
+const t1 = srs.gradeCard(fresh, 'good', toddler)
+eq(t1.interval, toddler.first, '第一次答对按分龄参数排期')
+const t2 = srs.gradeCard(t1, 'good', toddler)
+eq(t2.interval, toddler.second, '第二次答对按分龄参数排期')
+const t3 = srs.gradeCard(t2, 'good', toddler)
+ok(t3.interval <= t2.interval * toddler.maxEase + 0.5, '之后的间隔受 maxEase 压制')
+// 答错要次日重来,并记一次 lapse(错题排最前面靠的就是它)
+const wrong = srs.gradeCard(t3, 'again', toddler)
+eq(wrong.interval, 1, '答错次日重来')
+eq(wrong.lapses, t3.lapses + 1, '答错要记一次 lapse')
+eq(wrong.status, 'learning', '答错回到 learning')
+// 新卡今天就该出现
+ok(srs.isDue({ due: '2999-01-01', status: 'new' }), '新卡视为到期')
+
+rmSync(OUT, { recursive: true, force: true })
+
+if (failed > 0) {
+  console.error(`\n自测失败:${failed}/${checks} 项不通过`)
+  process.exit(1)
+}
+console.log(`✅ 自测通过:${checks} 项断言`)

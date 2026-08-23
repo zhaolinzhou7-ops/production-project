@@ -3,6 +3,7 @@ import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db/db'
 import { ensureInitialized } from './db/init'
+import { loadVoiceIndex } from './db/voices'
 import { initAudioUnlock } from './lib/audio'
 import { AppShell } from './components/layout/AppShell'
 import { RequireParent } from './components/layout/RequireParent'
@@ -31,6 +32,7 @@ import { MathDrillPage } from './pages/MathDrillPage'
 import { EnglishTalkPage } from './pages/EnglishTalkPage'
 import { ErrorBookPage } from './pages/ErrorBookPage'
 import { ParentLearningPage } from './pages/ParentLearningPage'
+import { ParentVoicePage } from './pages/ParentVoicePage'
 
 function AppRoutes() {
   const childCount = useLiveQuery(() => db.children.count(), [])
@@ -169,6 +171,14 @@ function AppRoutes() {
             </RequireParent>
           }
         />
+        <Route
+          path="/parent/voice"
+          element={
+            <RequireParent>
+              <ParentVoicePage />
+            </RequireParent>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -183,7 +193,10 @@ export default function App() {
 
   useEffect(() => {
     initAudioUnlock()
-    ensureInitialized().then(() => setReady(true))
+    // 录音索引要在任何朗读发生之前就位 —— 否则第一次点「听」会漏掉家长录音
+    ensureInitialized()
+      .then(() => loadVoiceIndex())
+      .then(() => setReady(true))
   }, [])
 
   if (!ready) {

@@ -1,7 +1,7 @@
 import { db } from './db'
 import { newId } from '../lib/id'
 import { getChildPointStats } from '../lib/points'
-import { initialSrs, gradeCard, isDue } from '../lib/srs'
+import { initialSrs, gradeCard, isDue, tuningFor } from '../lib/srs'
 import { getPackMeta } from '../lib/learningContent'
 import type {
   BuiltinCard,
@@ -13,13 +13,39 @@ import type {
 } from '../lib/learningContent'
 import { computeStreak } from '../lib/streak'
 import { addDays, todayISO } from '../lib/dateUtils'
+import { getAgeStage } from '../lib/ageStage'
+import { dailyPointCap } from '../lib/pointCap'
+import { adjustFor, nextLevel, type Adjust } from '../lib/adaptive'
+import type { DeckSignal } from '../lib/recommend'
 import type { CardItemType, LearnCard, LearnDeck, PracticeMode, ReviewGrade, StudyState } from '../types'
 
 /** 每答对一张卡的积分 */
 const POINTS_PER_CORRECT = 2
 
-/** 每天通过学习最多能赚的积分(防反复刷同一练习白拿分;练习记录不受限) */
+/**
+ * 每天通过学习最多能赚的积分(防反复刷同一练习白拿分;练习记录不受限)。
+ *
+ * 为什么必须有:「再练一遍」可以无限次重来 —— 只要一直点同一组题,
+ * 分数可以刷到任意高。坏处不是「作弊」,是**把整套激励系统废掉**:
+ * 等级、贴纸、宠物、奖励兑换全挂在积分上,一旦发现分可以刷,
+ * 「练一组题得 20 分」就不再有分量,后面所有的鼓励也一起失效。
+ *
+ * 上限按学段给(见 lib/pointCap),定得比「认真学一天」高一截,
+ * 正常用永远碰不到;撞上之后不扣分、不报错,只是当天不再加分。
+ */
 export const DAILY_STUDY_POINTS_CAP = 100
+
+/** 这个孩子今天的积分上限(按学段) */
+async function capFor(childId: string): Promise<number> {
+  const child = await db.children.get(childId)
+  return child ? dailyPointCap(getAgeStage(child.birthdate)) : DAILY_STUDY_POINTS_CAP
+}
+
+/** 这个孩子当前的学段(取不到时按幼儿处理 —— 参数更保守,伤害更小) */
+async function stageOf(childId: string): Promise<'toddler' | 'primary' | 'junior' | 'senior'> {
+  const child = await db.children.get(childId)
+  return child ? getAgeStage(child.birthdate) : 'toddler'
+}
 
 /** 今天已经通过学习赚到的积分 */
 async function studyPointsToday(childId: string): Promise<number> {
@@ -222,7 +248,59 @@ export interface DueCard {
 }
 
 /**
- * 取一个卡组今天要练的卡(到期的 review/learning + 若干 new),按到期优先。
+ * 每天至少给这么多题。
+ *
+ * 没有保底会出现这种情况:昨天练完的卡都排到了后天,今天打开一看
+ * 「今天的都做完啦」—— 而孩子是**每天晚上**都要用的。连着两天没题做,
+ * 这个习惯就断了,而习惯断掉比少复习几张卡严重得多。
+ */
+const DAILY_FLOOR = 6
+
+/** 今天已经正式练过(非「再练一遍」)的卡组 */
+async function practicedTodayDecks(childId: string, today: string): Promise<Set<string>> {
+  const rows = await db.studySessions.where('[childId+date]').equals([childId, today]).toArray()
+  return new Set(rows.filter((r) => !r.free).map((r) => r.deckId))
+}
+
+/**
+ * 今天这一组能练哪些卡。
+ *
+ * 保底只在**今天还没练过这个卡组**时生效(topUp)—— 否则会变成没有尽头的
+ * 跑步机:练完 6 张,它们排到明天,保底又补 6 张,永远练不完、
+ * 也永远看不到「已清空」。孩子需要那个「今天的做完了」的时刻。
+ */
+function availableToday(
+  states: StudyState[],
+  today: string,
+  limit: number,
+  topUp = true,
+): StudyState[] {
+  const due = states.filter((s) => isDue(s, today))
+  due.sort((a, b) => {
+    /*
+      **错过的排最前面。**
+
+      SRS 已经把答错的卡排到第二天,所以它们会回来 —— 但回来之后混在
+      二十张卡中间,孩子往往在还没做到它之前就已经累了。而「上次没记住的」
+      恰恰是这一组里最该被做到的那几张。
+      所以先按「错过几次」倒序,再按老规矩(新卡垫底、到期早的优先)。
+    */
+    const la = a.lapses || 0
+    const lb = b.lapses || 0
+    if (la !== lb) return lb - la
+    if (a.status === 'new' && b.status !== 'new') return 1
+    if (b.status === 'new' && a.status !== 'new') return -1
+    return a.due.localeCompare(b.due)
+  })
+  const floor = topUp ? Math.min(DAILY_FLOOR, states.length) : 0
+  if (due.length >= floor) return due.slice(0, limit)
+  // 还差多少,就从没到期的里面挑「最快要到期」的补上
+  const rest = states.filter((s) => !isDue(s, today)).sort((a, b) => a.due.localeCompare(b.due))
+  return [...due, ...rest.slice(0, floor - due.length)].slice(0, limit)
+}
+
+/**
+ * 取一个卡组今天要练的卡:错过的排最前,再是到期的,不够就用保底补足。
  * limit 控制单次会话题量。
  */
 export async function getSessionCards(
@@ -236,14 +314,8 @@ export async function getSessionCards(
     .equals([childId, deckId])
     .toArray()
 
-  const due = states.filter((s) => isDue(s, today))
-  // 到期优先(due 早的在前),new 卡按 cardId 稳定排序补足
-  due.sort((a, b) => {
-    if (a.status === 'new' && b.status !== 'new') return 1
-    if (b.status === 'new' && a.status !== 'new') return -1
-    return a.due.localeCompare(b.due)
-  })
-  const chosen = due.slice(0, limit)
+  const done = await practicedTodayDecks(childId, today)
+  const chosen = availableToday(states, today, limit, !done.has(deckId))
 
   const cardIds = chosen.map((s) => s.cardId)
   const cards = await db.cards.bulkGet(cardIds)
@@ -280,21 +352,33 @@ export async function getFreeSessionCards(
   return out
 }
 
-/** 今天该卡组的应练数量(用于首页展示) */
+/**
+ * 今天该卡组的应练数量(用于首页展示)。
+ *
+ * 必须和 getSessionCards 用**同一套规则**,否则首页显示「还有 6 题」、
+ * 点进去却是空的 —— 这种不一致比少一个功能更让人不信任。
+ */
 export async function countDue(childId: string, deckId: string): Promise<number> {
   const today = todayISO()
   const states = await db.studyStates
     .where('[childId+deckId]')
     .equals([childId, deckId])
     .toArray()
-  return states.filter((s) => isDue(s, today)).length
+  const done = await practicedTodayDecks(childId, today)
+  return availableToday(states, today, Number.MAX_SAFE_INTEGER, !done.has(deckId)).length
 }
 
 /** 单张卡评分后更新 SRS(不加分,加分在会话结束统一结算) */
 export async function applyGrade(stateId: string, grade: ReviewGrade): Promise<void> {
   const state = await db.studyStates.get(stateId)
   if (!state) return
-  const upd = gradeCard(state, grade)
+  /*
+    间隔参数按学段取。原先所有年龄共用 SM-2 的原始参数(1→3→8→20 天),
+    而那是**给成年人背单词调的**。4–6 岁的遗忘曲线陡得多:一个词隔 8 天
+    再见面,对他基本等于一个新词,前面两次练习等于白做。
+    幼儿档改成 1→2→4→7,并把难度系数上限压到 2.0。
+  */
+  const upd = gradeCard(state, grade, tuningFor(await stageOf(state.childId)))
   await db.studyStates.update(stateId, { ...upd, lastReviewed: Date.now() })
 }
 
@@ -316,13 +400,16 @@ export async function finishSession(params: {
   total: number
   correct: number
   durationSec: number
+  /** 「再练一遍」:不计入「今天练过了」,也不参与难度升降 */
+  free?: boolean
 }): Promise<SessionResult> {
-  const { childId, deckId, mode, total, correct, durationSec } = params
+  const { childId, deckId, mode, total, correct, durationSec, free } = params
   const rawPoints = correct * POINTS_PER_CORRECT
+  const cap = await capFor(childId)
 
   const result = await db.transaction('rw', db.studySessions, db.pointLedger, async () => {
     const earnedToday = await studyPointsToday(childId)
-    const points = Math.max(0, Math.min(rawPoints, DAILY_STUDY_POINTS_CAP - earnedToday))
+    const points = Math.max(0, Math.min(rawPoints, cap - earnedToday))
     const stats = await getChildPointStats(childId)
     const balanceAfter = stats.balance + points
 
@@ -337,6 +424,7 @@ export async function finishSession(params: {
       correct,
       durationSec,
       pointsAwarded: points,
+      free: free || undefined,
       createdAt: Date.now(),
     })
 
@@ -379,10 +467,12 @@ export async function finishDrill(params: {
 }): Promise<SessionResult> {
   const { childId, kind, total, correct, durationSec } = params
   const rawPoints = correct * POINTS_PER_CORRECT_MATH
+  // 口算和练习共用同一个每日上限 —— 否则换个入口照样能刷
+  const cap = await capFor(childId)
 
   const result = await db.transaction('rw', db.drillResults, db.pointLedger, async () => {
     const earnedToday = await studyPointsToday(childId)
-    const points = Math.max(0, Math.min(rawPoints, DAILY_STUDY_POINTS_CAP - earnedToday))
+    const points = Math.max(0, Math.min(rawPoints, cap - earnedToday))
     const stats = await getChildPointStats(childId)
     const balanceAfter = stats.balance + points
     const drillId = newId()
@@ -826,4 +916,170 @@ export async function setDailyGoal(childId: string, goal: number): Promise<void>
   if (!settings) return
   const learnGoals = { ...(settings.learnGoals ?? {}), [childId]: Math.max(1, Math.round(goal)) }
   await db.settings.update('singleton', { learnGoals })
+}
+
+// ============ 难度自适应:每个卡组自己的档位 ============
+
+/**
+ * 难度档存在 localStorage,按 deckId 索引。
+ *
+ * 存在**卡组**上而不是全局:识字可能已经很熟,英语还在入门 ——
+ * 一个全局难度会同时把两边都调错。deck 本身就是按孩子实例化的,
+ * 所以按 deckId 索引天然也是按孩子分开的。
+ */
+const LEVEL_KEY = 'kids-growth-deck-level'
+
+function readLevels(): Record<string, number> {
+  try {
+    const v = JSON.parse(localStorage.getItem(LEVEL_KEY) ?? '{}') as Record<string, number>
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+export function deckLevel(deckId: string): number {
+  const v = readLevels()[deckId]
+  return typeof v === 'number' ? v : 2 // 默认从「正常」起步
+}
+
+function setDeckLevel(deckId: string, level: number): void {
+  try {
+    localStorage.setItem(LEVEL_KEY, JSON.stringify({ ...readLevels(), [deckId]: level }))
+  } catch {
+    /* 存不下也不该影响做题 */
+  }
+}
+
+/**
+ * 一组做完之后,按最近几组的正确率决定升降档。
+ * 返回变化方向,供界面告诉家长「变难了 / 变简单了」。
+ */
+export async function tuneDeckLevel(childId: string, deckId: string): Promise<Adjust> {
+  /*
+    「最近几组」按**写入顺序**倒着取,不按 createdAt 排序。
+
+    同一毫秒完成两组时 createdAt 会打平,排序就成了随机的 —— 那样
+    「最近一组」可能取到更早的那一组,难度会朝反方向调。
+    会话是顺序追加的,倒着数天然就是从新到旧,不需要任何时间戳。
+  */
+  const all = await db.studySessions.where('childId').equals(childId).toArray()
+  const recent: Array<{ total: number; correct: number }> = []
+  for (let i = all.length - 1; i >= 0 && recent.length < 4; i--) {
+    const r = all[i]
+    if (!r || r.deckId !== deckId || r.free) continue
+    recent.push({ total: r.total || 0, correct: r.correct || 0 })
+  }
+
+  const adjust = adjustFor(recent)
+  if (adjust !== 'keep') setDeckLevel(deckId, nextLevel(deckLevel(deckId), adjust))
+  return adjust
+}
+
+// ============ 今天推荐练什么 ============
+
+/** 给 lib/recommend 用的信号:每组的到期量、薄弱程度、多久没碰 */
+export async function deckSignals(childId: string): Promise<DeckSignal[]> {
+  const today = todayISO()
+  const decks = await listChildDecks(childId)
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+  const sessions = await db.studySessions.where('childId').equals(childId).toArray()
+  const done = await practicedTodayDecks(childId, today)
+
+  const lastByDeck = new Map<string, string>()
+  for (const s of sessions) {
+    const cur = lastByDeck.get(s.deckId)
+    if (!cur || s.date > cur) lastByDeck.set(s.deckId, s.date)
+  }
+
+  const out: DeckSignal[] = []
+  for (const d of decks) {
+    const mine = states.filter((s) => s.deckId === d.id)
+    if (mine.length === 0) continue
+    const last = lastByDeck.get(d.id)
+    const daysSince = last
+      ? Math.max(0, Math.round((Date.parse(today) - Date.parse(last)) / 86400000))
+      : -1
+    out.push({
+      id: d.id,
+      name: d.name,
+      itemType: d.itemType,
+      due: availableToday(mine, today, Number.MAX_SAFE_INTEGER, !done.has(d.id)).length,
+      lapses: mine.reduce((n, s) => n + (s.lapses || 0), 0),
+      daysSince,
+      total: mine.length,
+    })
+  }
+  return out
+}
+
+// ============ 今日评分 ============
+
+/** 今天各板块做了多少 —— 喂给 lib/scoreCard */
+export async function todayByArea(
+  childId: string,
+): Promise<Array<{ key: string; done: number; correct: number }>> {
+  const today = todayISO()
+  const sessions = await db.studySessions.where('[childId+date]').equals([childId, today]).toArray()
+  const drills = await db.drillResults.where('childId').equals(childId).toArray()
+  const todayDrills = drills.filter((d) => d.date === today)
+  const checkIns = await db.checkIns.where('[childId+date]').equals([childId, today]).toArray()
+
+  const sum = (rows: Array<{ total: number; correct: number }>) => ({
+    done: rows.reduce((n, r) => n + (r.total || 0), 0),
+    correct: rows.reduce((n, r) => n + (r.correct || 0), 0),
+  })
+
+  const practice = sum(sessions)
+  const math = sum(todayDrills)
+  const habitDone = checkIns.filter((c) => c.status === 'done').length
+  return [
+    { key: 'practice', ...practice },
+    { key: 'math', ...math },
+    { key: 'habit', done: habitDone, correct: habitDone },
+  ]
+}
+
+/**
+ * 昨天的分数 —— 评分卡要「和昨天的自己比」,所以每天存一条。
+ * 存 localStorage 而不是建表:它只有一个数字,而且丢了也只是少一次对比。
+ */
+const SCORE_KEY = 'kids-growth-daily-score'
+
+function readScores(): Record<string, number> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SCORE_KEY) ?? '{}') as Record<string, number>
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+export function yesterdayScore(): number {
+  const y = addDays(todayISO(), -1)
+  const v = readScores()[y]
+  return typeof v === 'number' ? v : -1
+}
+
+export function recordTodayScore(score: number): void {
+  try {
+    const all = readScores()
+    all[todayISO()] = score
+    // 只留最近 14 天,不让它无限长
+    const keep = Object.keys(all)
+      .sort()
+      .slice(-14)
+    const trimmed: Record<string, number> = {}
+    for (const k of keep) trimmed[k] = all[k]
+    localStorage.setItem(SCORE_KEY, JSON.stringify(trimmed))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 今天有多少张「以前答错过」的卡到期 —— 首页用来提示「先补这几张」 */
+export async function wrongDueToday(childId: string): Promise<number> {
+  const today = todayISO()
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+  return states.filter((s) => (s.lapses || 0) > 0 && isDue(s, today)).length
 }

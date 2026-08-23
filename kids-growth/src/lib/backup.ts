@@ -60,6 +60,16 @@ const TABLE_NAMES = [
   'drillResults',
 ] as const
 
+/*
+  录音(voices 表)**不在备份里**,而且这是有意的。
+
+  备份是一个 JSON 文件,而录音是二进制 Blob —— 塞进 JSON 要转 base64,
+  二十句就能让备份文件涨到几十兆,家长根本存不动、也发不出去。
+
+  影响要说清楚:**换设备后录音不跟着走,需要重录**。
+  好处是导入备份不会把已有的录音冲掉(importBackup 只清 TABLE_NAMES 里的表),
+  所以在同一台设备上恢复数据,录音仍然在。
+*/
 export async function exportBackup(): Promise<BackupPayload> {
   const data = {} as BackupPayload['data']
   for (const name of TABLE_NAMES) {

@@ -5,7 +5,21 @@ import { Volume2, ArrowRight, Mic, Play, Square, Disc } from 'lucide-react'
 import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
-import { getSessionCards, getFreeSessionCards, applyGrade, finishSession, addWrongCard, autoAddErrorCard, type DueCard } from '../db/study'
+import {
+  getSessionCards,
+  getFreeSessionCards,
+  applyGrade,
+  finishSession,
+  addWrongCard,
+  autoAddErrorCard,
+  deckLevel,
+  tuneDeckLevel,
+  type DueCard,
+} from '../db/study'
+import { specOf, type Adjust } from '../lib/adaptive'
+import { rateSession } from '../lib/scoreCard'
+import { hasParentVoice } from '../lib/audio'
+import { saveMyVoice } from '../db/voices'
 import { evaluateAchievements } from '../db/achievements'
 import { computeLevelInfo, getChildPointStats } from '../lib/points'
 import {
@@ -55,6 +69,15 @@ export function StudySessionPage() {
   const [searchParams] = useSearchParams()
   /** 自由练习:随机抽卡、不改记忆排期、不限组数 */
   const isFree = searchParams.get('free') === '1'
+  /** 「今天就做这个」按每一步给定的题量;没给就按这个卡组当前的难度档 */
+  const limitParam = Number(searchParams.get('limit'))
+  /** 这个卡组当前的难度档 0–4(见 lib/adaptive) */
+  const level = deckId ? deckLevel(deckId) : 2
+  const spec = specOf(level)
+  const sessionLimit =
+    Number.isFinite(limitParam) && limitParam > 0 ? Math.round(limitParam) : spec.size
+  /** 选项数跟着难度档走:入门二选一,挑战五选一 */
+  const optCount = spec.choices
   const currentChildId = useAppStore((s) => s.currentChildId)
   const { child, tone, stage } = useCurrentChild()
   const isToddler = stage === 'toddler'
@@ -87,14 +110,18 @@ export function StudySessionPage() {
   const [petResult, setPetResult] = useState<FeedResult | null>(null)
   /** 答对特效计数器:每答对 +1 触发一次花瓣鼓励 */
   const [burst, setBurst] = useState(0)
+  /** 这一组做完后难度是升了还是降了 —— 结算页告诉家长一声 */
+  const [levelMoved, setLevelMoved] = useState<Adjust>('keep')
+  /** 跟我读:他自己的那一遍,录下来可以回放,也存进「孩子的录音」 */
+  const [myTake, setMyTake] = useState<Blob | null>(null)
 
   useEffect(() => {
     if (!currentChildId || !deckId) return
     let alive = true
     void (async () => {
       const list = isFree
-        ? await getFreeSessionCards(currentChildId, deckId, 12)
-        : await getSessionCards(currentChildId, deckId, 12)
+        ? await getFreeSessionCards(currentChildId, deckId, sessionLimit)
+        : await getSessionCards(currentChildId, deckId, sessionLimit)
       const allCards = await db.cards.where('deckId').equals(deckId).toArray()
       const d = await db.decks.get(deckId)
       if (!alive) return
@@ -116,12 +143,12 @@ export function StudySessionPage() {
     return () => {
       alive = false
     }
-  }, [currentChildId, deckId, isFree])
+  }, [currentChildId, deckId, isFree, sessionLimit])
 
   /** 自由练习:重新抽一组,原地重开 */
   const restartFree = useCallback(async () => {
     if (!currentChildId || !deckId) return
-    const list = await getFreeSessionCards(currentChildId, deckId, 12)
+    const list = await getFreeSessionCards(currentChildId, deckId, sessionLimit)
     setCards(list)
     setIdx(0)
     setPhase('prompt')
@@ -132,10 +159,11 @@ export function StudySessionPage() {
     setSpeakMsg('')
     setSpeakStars(-1)
     setRecBlob(null)
+    setMyTake(null)
     setSummary(null)
     setWonSticker(null)
     setPetResult(null)
-  }, [currentChildId, deckId])
+  }, [currentChildId, deckId, sessionLimit])
 
   const current = cards?.[idx]
   const itemType = deck?.itemType ?? 'word'
@@ -154,27 +182,40 @@ export function StudySessionPage() {
   const picOptions = useMemo(() => {
     if (!current || mode !== 'picChoose') return []
     const answer = current.card.front
-    const distractors = shuffle(poolPic.map((p) => p.front).filter((f) => f !== answer)).slice(0, 2)
+    const distractors = shuffle(poolPic.map((p) => p.front).filter((f) => f !== answer)).slice(
+      0,
+      optCount - 1,
+    )
     return shuffle([answer, ...distractors])
-  }, [current, mode, poolPic])
+  }, [current, mode, poolPic, optCount])
 
   const listenPicOptions = useMemo(() => {
     if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
     const ext = current.card.extra as { emoji?: string; en?: string } | undefined
     const answer = { front: current.card.front, en: ext?.en ?? '', emoji: ext?.emoji ?? '' }
-    const distractors = shuffle(poolPic.filter((p) => p.front !== answer.front)).slice(0, 3)
+    const distractors = shuffle(poolPic.filter((p) => p.front !== answer.front)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, poolPic])
+  }, [current, mode, poolPic, optCount])
 
   // 英语·看图选词:3 个英语单词选项
   const picOptionsEn = useMemo(() => {
     if (!current || mode !== 'picChooseEn') return []
     const answer = (current.card.extra as { en?: string })?.en ?? current.card.back
-    const distractors = shuffle(poolPic.map((p) => p.en).filter((e) => e && e !== answer)).slice(0, 2)
+    const distractors = shuffle(poolPic.map((p) => p.en).filter((e) => e && e !== answer)).slice(
+      0,
+      optCount - 1,
+    )
     return shuffle([answer, ...distractors])
-  }, [current, mode, poolPic])
+  }, [current, mode, poolPic, optCount])
 
   const currentEn = (current?.card.extra as { en?: string } | undefined)?.en ?? current?.card.back ?? ''
+  /*
+    「跟我读」要读的那个英文。
+
+    看图卡的英文在 extra.en 里,而**单词卡的英文就是正面**(背面是中文释义)——
+    照搬 currentEn 会让孩子对着中文译文「读英语」。
+  */
+  const speakTarget = itemType === 'word' ? (current?.card.front ?? '') : currentEn
 
   // 问答四选一:正确答案 + 3 个本卡组其他答案作干扰
   const quizOptions = useMemo(() => {
@@ -189,9 +230,9 @@ export function StudySessionPage() {
     if (!current || mode !== 'listenChoose') return []
     const answer = isHanzi ? current.card.front : current.card.back
     const src = isHanzi ? poolFront : pool
-    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, 3)
+    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, pool, poolFront, isHanzi])
+  }, [current, mode, pool, poolFront, isHanzi, optCount])
 
   // 补全诗句:随机挖掉一句,4 选项(正确句 + 3 干扰句)
   const blank = useMemo(() => {
@@ -224,7 +265,13 @@ export function StudySessionPage() {
       const t = setTimeout(() => void playWordAudio(en, 2, 2), isToddler ? 1200 : 0)
       return () => clearTimeout(t)
     }
-  }, [current, phase, mode, playAudio, isToddler])
+    if (mode === 'speakEn') {
+      // 跟我读的第一步一定是**听范读** —— 没听过就让他读,只会读错
+      const en = itemType === 'word' ? current.card.front : ((current.card.extra as { en?: string })?.en ?? current.card.back)
+      const t = setTimeout(() => void playWordAudio(en, 2, 2), isToddler ? 900 : 0)
+      return () => clearTimeout(t)
+    }
+  }, [current, phase, mode, playAudio, isToddler, itemType])
 
   // 预热下一张卡的音频:提前下载好,翻到它时直接是真人音,不会因首次下载慢而退回合成音
   useEffect(() => {
@@ -250,8 +297,16 @@ export function StudySessionPage() {
         total,
         correct: finalCorrect,
         durationSec: Math.round((Date.now() - startedAt) / 1000),
+        free: isFree,
       })
       setSummary({ correct: finalCorrect, total, points: res.pointsAwarded, capped: res.capped })
+      /*
+        难度自适应:一组做完就按最近几组的正确率升降档。
+        「再练一遍」不参与 —— 那只是他在玩,不是他学会了。
+        升降的结果下一组就生效:题量、选项数、以及**练法**都会跟着变
+        (见 lib/adaptive 的练法阶梯)—— 难度真正被感觉到的地方在练法上。
+      */
+      if (!isFree) setLevelMoved(await tuneDeckLevel(currentChildId, deckId))
       // 升级判定
       if (settings) {
         const lvBefore = computeLevelInfo(before.xp, settings.levelLadder).level
@@ -278,7 +333,7 @@ export function StudySessionPage() {
       if (tone === 'playful') confetti({ particleCount: 120, spread: 80, origin: { y: 0.7 } })
       setPhase('done')
     },
-    [currentChildId, deckId, mode, child, startedAt, tone],
+    [currentChildId, deckId, mode, child, startedAt, tone, isFree],
   )
 
   const advance = useCallback(
@@ -362,6 +417,7 @@ export function StudySessionPage() {
         setSpeakMsg('')
         setSpeakStars(-1)
         setRecBlob(null)
+        setMyTake(null)
       }
     },
     [current, correctCount, cards, idx, finish, currentChildId, deck, combo, isToddler, mode, isFree],
@@ -401,6 +457,35 @@ export function StudySessionPage() {
     }
   }, [recording])
 
+  /**
+   * 跟我读:录下他自己的那一遍。
+   *
+   * 和上面那个的区别是这条**会存下来**(owner='kid')。原先孩子录完只留在
+   * 内存里,一退出就没了 —— 家长陪着录了一晚上,第二天想听听进步,什么都不剩。
+   *
+   * 存的是 kid 那一份,**绝不会**被当成范读放给他听:拿他自己的发音去教他自己,
+   * 只会把错的固化下来。
+   */
+  const toggleTake = useCallback(async () => {
+    if (recording) {
+      setRecording(false)
+      const rec = recorderRef.current
+      recorderRef.current = null
+      if (!rec) return
+      const blob = await rec.stop()
+      setMyTake(blob)
+      if (speakTarget) await saveMyVoice(speakTarget, blob, 'kid')
+      return
+    }
+    try {
+      setMyTake(null)
+      recorderRef.current = await startRecording()
+      setRecording(true)
+    } catch {
+      setSpeakMsg('麦克风不可用,检查浏览器授权')
+    }
+  }, [recording, speakTarget])
+
   if (!child || !currentChildId) return null
 
   if (cards && cards.length === 0 && phase !== 'done') {
@@ -432,7 +517,13 @@ export function StudySessionPage() {
   // 结算页
   if (phase === 'done' && summary) {
     const pct = summary.total > 0 ? Math.round((summary.correct / summary.total) * 100) : 0
-    const sessStars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct > 0 ? 1 : 0
+    /*
+      星级和评语交给 lib/scoreCard —— 那里把「怎么评价一个 4 岁半的孩子」
+      的原则写死了:最低一档说的是「这组太难啦,不是你的问题」,
+      而不是「你做错了」。做得不好永远先怪题,不怪孩子。
+    */
+    const rated = rateSession(summary.correct, summary.total)
+    const sessStars = rated.stars
     return (
       <>
         <div className="pt-12 text-center px-6">
@@ -442,6 +533,14 @@ export function StudySessionPage() {
             {'⭐'.repeat(sessStars)}
             <span className="opacity-30">{'⭐'.repeat(3 - sessStars)}</span>
           </div>
+          {rated.msg && <p className="mt-2 text-sm text-gray-500">{rated.msg}</p>}
+          {levelMoved !== 'keep' && (
+            <p className="mt-1 text-xs text-gray-400">
+              {levelMoved === 'up'
+                ? '最近做得很稳,下一组会难一点点'
+                : '这组偏难了,下一组会简单一点'}
+            </p>
+          )}
           <div className="mt-5 rounded-3xl bg-white/70 p-6 shadow-sm max-w-xs mx-auto">
             <div className="flex justify-around">
               <div>
@@ -1165,6 +1264,116 @@ export function StudySessionPage() {
           <div className="mt-6 text-4xl font-bold text-brand-600">{currentEn}</div>
           <div className="mt-2 text-xl text-gray-600">{current.card.front}</div>
           <p className="mt-8 text-xs text-gray-400">🎵 磨耳朵中…会自动翻页,听完这组就好啦</p>
+        </div>
+      )}
+
+      {/* ---- 英语·跟我读:听范读 → 他读出来 → 家长判(补上「读单词」那一环) ---- */}
+      {mode === 'speakEn' && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+          <span className="text-7xl leading-none break-all">
+            {(current.card.extra as { emoji?: string })?.emoji}
+          </span>
+          <div className="mt-5 text-4xl font-bold text-brand-600">{speakTarget}</div>
+          <div className="mt-1 text-lg text-gray-500">
+            {itemType === 'word' ? current.card.back : current.card.front}
+          </div>
+
+          <button
+            onClick={() => void playWordAudio(speakTarget, 2, 2)}
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-100 px-6 py-3 text-base font-bold text-brand-600 active:scale-95"
+          >
+            <Volume2 size={20} /> 听一听
+            {hasParentVoice(speakTarget) && (
+              <span className="text-[11px] font-medium text-brand-400">爸爸妈妈的声音</span>
+            )}
+          </button>
+
+          <div className="mt-4 flex items-center justify-center gap-2">
+            {isRecordingSupported() && (
+              <button
+                onClick={() => void toggleTake()}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium active:scale-95 ${
+                  recording ? 'bg-orange-100 text-orange-600' : 'bg-white/80 text-gray-600'
+                }`}
+              >
+                {recording ? <Square size={15} /> : <Disc size={15} />}
+                {recording ? '停止' : '录我读的'}
+              </button>
+            )}
+            {myTake && (
+              <button
+                onClick={() => playRecording(myTake)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-mint-400/25 px-4 py-2 text-sm font-medium text-mint-600 active:scale-95"
+              >
+                <Play size={15} /> 回放
+              </button>
+            )}
+          </div>
+
+          {/*
+            判「读对了没有」交给家长,不交给语音识别。
+            4 岁半的孩子读英语,浏览器的识别基本认不出来 —— 一个读得挺好的孩子
+            被判「不对」,比没有这个功能伤害大得多。
+          */}
+          <div className="mt-8 flex gap-3">
+            <button
+              onClick={() => void advance(false)}
+              className="rounded-2xl bg-white/80 px-6 py-3 font-bold text-gray-500 active:scale-95"
+            >
+              再试试
+            </button>
+            <button
+              onClick={() => void advance(true)}
+              className="rounded-2xl bg-mint-500 px-8 py-3 font-bold text-white active:scale-95"
+            >
+              读对了 👍
+            </button>
+          </div>
+          <p className="mt-3 text-[11px] text-gray-400">爸爸妈妈听一下,由你来点</p>
+        </div>
+      )}
+
+      {/* ---- 说给我听:他说出来,家长判 —— 「产出」这一环,没有蒙对的可能 ---- */}
+      {mode === 'sayIt' && (
+        <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+          <span className="text-8xl leading-none break-all">
+            {(current.card.extra as { emoji?: string })?.emoji ?? current.card.front}
+          </span>
+          <p className="mt-6 text-lg text-gray-500">
+            {isHanzi ? '这个字读什么?说出来' : '这是什么?说出来'}
+          </p>
+          {phase === 'reveal' && (
+            <div className="mt-4 text-3xl font-bold text-brand-600">
+              {/* 识字卡正面就是那个字,答案是读音;看图卡答案是名字 */}
+              {isHanzi ? current.card.back : current.card.front}
+              {!isHanzi && currentEn && (
+                <span className="ml-2 text-xl text-gray-400">{currentEn}</span>
+              )}
+            </div>
+          )}
+          {phase === 'prompt' ? (
+            <button
+              onClick={() => setPhase('reveal')}
+              className="mt-8 rounded-2xl bg-brand-500 px-8 py-3 font-bold text-white active:scale-95"
+            >
+              说完了,看答案
+            </button>
+          ) : (
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => void advance(false)}
+                className="rounded-2xl bg-white/80 px-6 py-3 font-bold text-gray-500 active:scale-95"
+              >
+                没说出来
+              </button>
+              <button
+                onClick={() => void advance(true)}
+                className="rounded-2xl bg-mint-500 px-8 py-3 font-bold text-white active:scale-95"
+              >
+                说对了 👍
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

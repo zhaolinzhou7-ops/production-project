@@ -24,7 +24,20 @@ import {
   type DiagReason,
 } from '../lib/tts'
 import { VoiceHelpGuide } from '../components/common/VoiceHelpGuide'
-import { ensureBuiltinDeck, countDue, getDailyGoal } from '../db/study'
+import {
+  ensureBuiltinDeck,
+  countDue,
+  getDailyGoal,
+  deckSignals,
+  deckLevel,
+  todayByArea,
+  yesterdayScore,
+  recordTodayScore,
+  wrongDueToday,
+} from '../db/study'
+import { rankDecks, diversify } from '../lib/recommend'
+import { buildPlan, planMinutes, type PlanDeck } from '../lib/dailyPlan'
+import { buildDailyCard } from '../lib/scoreCard'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
 import { STICKER_CATALOG, getOwnedStickers, resetStickers } from '../lib/stickers'
@@ -122,6 +135,81 @@ export function LearnHomePage() {
       sessions.reduce((s, x) => s + x.total, 0) + drills.reduce((s, x) => s + x.total, 0)
     return { done, goal }
   }, [currentChildId])
+
+  /**
+   * 「今天就做这个」—— 一条排好的路,孩子不需要做任何选择。
+   *
+   * 为什么需要它:这一页有十几个可点的东西,全是字,而使用者是一个
+   * 4 岁半、**不识字**的孩子。他打开这一页的真实结果是点到哪儿算哪儿,
+   * 或者每次都点同一个。
+   *
+   * 排序不是固定的:先按「错得多 / 久没碰 / 到期多」挑出该练的(lib/recommend),
+   * 再按每个卡组自己的难度档决定用哪种练法、给多少题(lib/dailyPlan)。
+   * 家长能看到**为什么**今天先练这个 —— 看不懂的推荐,他下次就绕过去自己挑了。
+   */
+  const plan = useLiveQuery(async () => {
+    if (!currentChildId || !decks) return null
+    const signals = await deckSignals(currentChildId)
+    const ranked = diversify(rankDecks(signals), 6)
+    const byId = new Map(signals.map((d) => [d.id, d]))
+    const planDecks: PlanDeck[] = ranked
+      .map((r) => {
+        const sig = byId.get(r.deckId)
+        if (!sig) return null
+        return {
+          id: sig.id,
+          itemType: sig.itemType,
+          name: sig.name,
+          due: sig.due,
+          reason: r.reason,
+          level: deckLevel(sig.id),
+        }
+      })
+      .filter(Boolean) as PlanDeck[]
+    const steps = buildPlan(planDecks, stage)
+    // 今天已经做到第几步:按「这个卡组+这种练法今天练过没有」算
+    const today = todayISO()
+    const sessions = await db.studySessions
+      .where('[childId+date]')
+      .equals([currentChildId, today])
+      .toArray()
+    const doneSet = new Set(sessions.filter((x) => !x.free).map((x) => `${x.deckId}/${x.mode}`))
+    const done = steps.filter((st) => doneSet.has(`${st.deckId}/${st.mode}`)).length
+    return { steps, done, minutes: planMinutes(steps) }
+  }, [currentChildId, decks, stage])
+
+  /**
+   * 今日评分。
+   *
+   * 打分原则写死在 lib/scoreCard 里:主要看「做了没有」而不是「对了多少」、
+   * 和昨天的自己比、**没有不及格**。这个年纪正确率低,绝大多数时候说明
+   * 题出难了 —— 那是系统的问题,不该扣他的分。
+   */
+  const scoreCard = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const [areas, goal, tasks] = await Promise.all([
+      todayByArea(currentChildId),
+      getDailyGoal(currentChildId),
+      db.tasks.where('childId').equals(currentChildId).filter((t) => t.active).toArray(),
+    ])
+    const by = (k: string) => areas.find((a) => a.key === k) ?? { done: 0, correct: 0 }
+    const card = buildDailyCard(
+      [
+        { key: 'practice', label: '练习', emoji: '📚', target: goal, ...by('practice') },
+        { key: 'math', label: '口算', emoji: '🔢', target: 10, ...by('math') },
+        { key: 'habit', label: '习惯', emoji: '✅', target: tasks.length, ...by('habit') },
+      ],
+      yesterdayScore(),
+    )
+    recordTodayScore(card.score)
+    return card
+  }, [currentChildId])
+
+  /** 今天有多少张「以前答错过」的卡回来了 —— 这几张最该被做到 */
+  const wrongDue = useLiveQuery(
+    async () => (currentChildId ? wrongDueToday(currentChildId) : 0),
+    [currentChildId],
+  )
 
   const ownedStickers = useLiveQuery(
     async () => (currentChildId ? getOwnedStickers(currentChildId) : []),
@@ -241,6 +329,83 @@ export function LearnHomePage() {
           {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
       </div>
+
+      {/*
+        「今天就做这个」。
+        幼儿段放在最上面、做成一个大按钮 —— 他只要点这一个,
+        剩下的顺序、题量、练法都由系统排好。
+      */}
+      {plan && plan.steps.length > 0 && (
+        <div className="mb-3 rounded-3xl bg-gradient-to-br from-brand-100 to-mint-400/20 p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-bold text-gray-700">🎯 今天就做这个</div>
+            <div className="text-[11px] text-gray-500">
+              {plan.done}/{plan.steps.length} 步 · 约 {plan.minutes} 分钟
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const next = plan.steps[Math.min(plan.done, plan.steps.length - 1)]
+              navigate(`/learn/session/${next.deckId}/${next.mode}?limit=${next.limit}`)
+            }}
+            className="w-full rounded-2xl bg-brand-500 py-4 text-lg font-bold text-white shadow-sm active:scale-95 transition"
+          >
+            {plan.done >= plan.steps.length ? '🔁 今天的都做完啦,再来一组' : '▶ 开始今天的学习'}
+          </button>
+          <div className="mt-3 space-y-1">
+            {plan.steps.map((st, i) => (
+              <div key={`${st.deckId}-${st.mode}`} className="flex items-start gap-2 text-[11px]">
+                <span className={i < plan.done ? 'text-mint-600' : 'text-gray-400'}>
+                  {i < plan.done ? '✅' : `${i + 1}.`}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <span className="text-gray-600">{st.label}</span>
+                  <span className="ml-1 text-gray-400">· {st.limit} 题</span>
+                  {/* 理由是给家长看的 —— 他看得懂,才会信任这条路 */}
+                  {st.reason && <div className="text-gray-400">💡 {st.reason}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {!!wrongDue && wrongDue > 0 && (
+            <p className="mt-2 text-[11px] text-gray-500">
+              今天有 {wrongDue} 张以前没记住的卡回来了 —— 它们已经排在最前面。
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 今日评分:主要看「做了没有」,和昨天比,没有不及格 */}
+      {scoreCard && (
+        <div className="mb-3 rounded-3xl bg-white/70 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl tracking-tight">
+              {'⭐'.repeat(scoreCard.stars)}
+              <span className="opacity-25">{'⭐'.repeat(5 - scoreCard.stars)}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-gray-700">
+                今日评分 {scoreCard.score}
+                {scoreCard.trend > 0 && <span className="ml-1 text-mint-600">↑ 比昨天进步</span>}
+              </div>
+              <div className="text-[11px] text-gray-500">{scoreCard.cheer}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            {scoreCard.areas.map((a) => (
+              <div key={a.key} className="flex-1 rounded-2xl bg-gray-50 p-2 text-center">
+                <div className="text-lg">{a.emoji}</div>
+                <div className="text-[11px] font-medium text-gray-600">
+                  {a.done}/{a.target || '—'}
+                </div>
+                <div className="text-[10px] text-gray-400">{a.label}</div>
+              </div>
+            ))}
+          </div>
+          {/* 给家长的一句话:实话实说,包括承认「题可能出难了」 */}
+          <p className="mt-2 text-[11px] text-gray-400">{scoreCard.note}</p>
+        </div>
+      )}
 
       {/* 学习宠物(童趣模式) */}
       {tone === 'playful' && pet !== undefined && (
@@ -578,6 +743,23 @@ export function LearnHomePage() {
         </button>
         {showVoices && (
           <div className="mt-3 space-y-4">
+            {/*
+              先把话说明白,再让家长去调音源。
+
+              英语**整句**没有可用的免费真人音源 —— 有道那套是词典,只有单词有
+              真人录音。所以下面这些音源不管怎么测、怎么换,整句都好不了。
+              真正的解法是家长自己录一遍,那一份排在所有音源前面。
+            */}
+            <button
+              onClick={() => navigate('/parent/voice')}
+              className="w-full rounded-2xl bg-gradient-to-br from-mint-400/20 to-brand-100 p-3 text-left active:scale-[0.99] transition"
+            >
+              <div className="text-sm font-bold text-gray-700">🎤 英语句子读不好?自己录一遍</div>
+              <div className="mt-0.5 text-[11px] text-gray-500">
+                英语整句没有可用的免费真人音源,换哪个都一样。你录的那一份会排在所有网络音源前面,
+                断网也能响 —— 而且是孩子最想听的声音。
+              </div>
+            </button>
             {/* 网络真人音源自检 */}
             {(['zh', 'en'] as const).map((lang) => {
               const sample = lang === 'zh' ? '小朋友,我们一起学习吧' : 'Hello! Nice to meet you.'

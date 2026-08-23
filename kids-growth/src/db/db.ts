@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie'
+import Dexie, { type EntityTable, type Table } from 'dexie'
 import type {
   Achievement,
   Anecdote,
@@ -23,6 +23,7 @@ import type {
   StudyState,
   Task,
   Unlock,
+  VoiceClip,
 } from '../types'
 
 export class GrowthDB extends Dexie {
@@ -49,6 +50,7 @@ export class GrowthDB extends Dexie {
   studyStates!: EntityTable<StudyState, 'id'>
   studySessions!: EntityTable<StudySession, 'id'>
   drillResults!: EntityTable<DrillResult, 'id'>
+  voices!: Table<VoiceClip, [string, string]>
 
   constructor() {
     super('kids-growth-db')
@@ -83,6 +85,16 @@ export class GrowthDB extends Dexie {
         'id, childId, cardId, deckId, due, status, [childId+due], [childId+deckId], [childId+cardId]',
       studySessions: 'id, childId, deckId, date, [childId+date]',
       drillResults: 'id, childId, date',
+    })
+    /*
+      v4:本机录音(纯新增表)。
+
+      主键写成复合的 [owner+key],而不是自增 id —— 这样「同一个人重录同一句」
+      天然就是覆盖,不需要先查再删;而家长和孩子录同一句是两条,互不干扰。
+      录音只存本机,不上传。
+    */
+    this.version(4).stores({
+      voices: '[owner+key], owner, at',
     })
   }
 }

@@ -18,6 +18,7 @@ import { isTaskScheduledOn } from '../lib/taskDue'
 import { computeLevelInfo } from '../lib/points'
 import { computeStreak } from '../lib/streak'
 import type { Achievement, CheckIn, LevelStep, PointLedger, Task, TaskCategory } from '../types'
+import { BUILD_TAG } from '../lib/version'
 
 const CATEGORY_ORDER: TaskCategory[] = ['生活', '学习', '运动', '品德', '家务', '其他']
 
@@ -203,6 +204,9 @@ export function ChildHomePage() {
         tone={tone}
         onClose={dismissCurrent}
       />
+
+      {/* 版本号放在最下面:排查时一眼确认手机上打开的是不是最新代码 */}
+      <div className="pt-8 text-center text-[10px] text-gray-300">{BUILD_TAG}</div>
     </div>
   )
 }

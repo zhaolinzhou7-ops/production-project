@@ -1,4 +1,5 @@
 import { playRemote, cancelRemote, ensureAudioEl, preloadRemote } from './tts'
+import { hasMyVoice, getMyVoice } from '../db/voices'
 
 /** 发音口音:1=英式 2=美式(有道 dictvoice 约定) */
 export type Accent = 1 | 2
@@ -257,21 +258,105 @@ export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1, isFal
   }
 }
 
+// ============ 家长录音:排在所有音源之前 ============
+
 /**
- * 说英文:先试**网络真人/神经网络音源**(有道真人词库 → Google → 百度),
- * 全都拿不到才用设备合成音。times=2 自动复读一遍。
+ * 播放优先级:**家长录音 > 在线真人音源 > 设备合成音**。
+ *
+ * 为什么家长录音要排在最前面:英语**整句**没有可用的免费音源(有道那套
+ * 是词典,只有单词有真人录音)。所以只要家长为这一句录过,就一定用他的 ——
+ * 它比任何在线音源都准,不依赖网络,而且是孩子熟悉的声音。
+ *
+ * 只用 owner='parent' 的那份:孩子自己的跟读**绝不能**当范读放给他听。
  */
-export function playWordAudio(word: string, _accent: Accent = 2, times = 1): void {
-  void playRemote(word, 'en', times).catch(() => {
-    speak(word, 'en-US', 0.9, times, true)
+
+let mineUrl: string | null = null
+
+/** 用已解锁的那个 <audio> 元素放录音 —— 换成新元素会在移动端被拦掉 */
+function playBlob(blob: Blob, times: number, rate = 1): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    try {
+      const a = ensureAudioEl()
+      cancelRemote()
+      if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel()
+      if (mineUrl) URL.revokeObjectURL(mineUrl)
+      mineUrl = URL.createObjectURL(blob)
+      // 慢速也能是爸爸的声音 —— 放慢录音比退回机械音好得多
+      a.playbackRate = Math.min(2, Math.max(0.5, rate))
+      let played = 0
+      a.onended = () => {
+        played += 1
+        if (played < times) {
+          a.currentTime = 0
+          void a.play().catch(() => {})
+        }
+      }
+      a.onerror = () => reject(new Error('blob play error'))
+      a.src = mineUrl
+      a.play().then(resolve).catch(reject)
+    } catch (e) {
+      reject(e instanceof Error ? e : new Error('blob play failed'))
+    }
   })
 }
 
-/** 说一句英文(对话/复述/儿歌朗读),同样走真人音源优先 */
-export function speakEnglish(text: string, rate = 0.85, times = 1): void {
-  void playRemote(text, 'en', times).catch(() => {
-    speak(text, 'en-US', rate, times, true)
+/** 这句话有没有家长录音(同步,播放路径上要立刻知道) */
+export function hasParentVoice(text: string): boolean {
+  return hasMyVoice(text, 'parent')
+}
+
+/** 放家长录音;没有或放不出来时返回 false,由调用方回退 */
+export async function playParentVoice(text: string, times = 1, rate = 1): Promise<boolean> {
+  if (!hasMyVoice(text, 'parent')) return false
+  const blob = await getMyVoice(text, 'parent').catch(() => null)
+  if (!blob) return false
+  try {
+    await playBlob(blob, times, rate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 有录音就用录音,否则走 fallback(在线音源 → 合成音) */
+function mineFirst(text: string, fallback: () => void, rate = 1): void {
+  if (!hasMyVoice(text, 'parent')) {
+    fallback()
+    return
+  }
+  void playParentVoice(text, 1, rate).then((ok) => {
+    if (!ok) fallback()
   })
+}
+
+/**
+ * 说英文:**家长录音** → 网络真人/神经网络音源(有道真人词库 → Google → 百度)
+ * → 设备合成音。times=2 自动复读一遍。
+ */
+export function playWordAudio(word: string, _accent: Accent = 2, times = 1): void {
+  mineFirst(word, () => {
+    void playRemote(word, 'en', times).catch(() => {
+      speak(word, 'en-US', 0.9, times, true)
+    })
+  })
+}
+
+/**
+ * 说一句英文(对话/复述/儿歌朗读)。
+ *
+ * 整句是最需要家长录音的地方 —— 在线音源对整句要么不给,要么读出来是机器拼的。
+ */
+export function speakEnglish(text: string, rate = 0.85, times = 1): void {
+  mineFirst(
+    text,
+    () => {
+      void playRemote(text, 'en', times).catch(() => {
+        speak(text, 'en-US', rate, times, true)
+      })
+    },
+    // 0.85 是「正常朗读」的基准,不该把录音也放慢
+    rate >= 0.85 ? 1 : rate / 0.85,
+  )
 }
 
 /**
@@ -279,13 +364,17 @@ export function speakEnglish(text: string, rate = 0.85, times = 1): void {
  * 识字/古诗/看图/语音夸奖都走这里 —— 中文是最容易听出"机器人味"的地方。
  */
 export function speakChinese(text: string, rate = 0.9, times = 1): void {
-  void playRemote(text, 'zh', times).catch(() => {
-    speak(text, 'zh-CN', rate, times, true)
+  mineFirst(text, () => {
+    void playRemote(text, 'zh', times).catch(() => {
+      speak(text, 'zh-CN', rate, times, true)
+    })
   })
 }
 
 /** 提前把要读的内容下载好(下一张卡 / 下一句台词),点下去就是真人音 */
 export function prefetchSpeech(text: string, lang: 'zh' | 'en'): void {
+  // 有家长录音的句子不必预热网络音源 —— 它根本不会走到那一步
+  if (hasMyVoice(text, 'parent')) return
   preloadRemote(text, lang)
 }
 

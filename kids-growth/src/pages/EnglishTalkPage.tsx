@@ -14,6 +14,8 @@ import {
   normalizeForCompare,
 } from '../lib/audio'
 import { scorePronunciation, isRecordingSupported, startRecording, playRecording, type Recorder } from '../lib/pronounce'
+import { saveMyVoice } from '../db/voices'
+import { hasParentVoice } from '../lib/audio'
 import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
 import { feedPet, type FeedResult } from '../lib/pets'
@@ -121,10 +123,14 @@ const CARTOON_THEME: Record<
 
 const DEFAULT_THEME = { bg: 'from-sky-100 to-mint-400/20', deco: [] }
 
-/** 说英文(浏览器 TTS;句子无免费真人音源,如实用合成音) */
+/**
+ * 说英文。优先级:**家长录音 → 在线真人音源 → 设备合成音**。
+ *
+ * 慢速也先走家长录音(放慢播放),只有没录过时才退回系统 TTS ——
+ * 一句话正常速度是爸爸的声音、慢速变成机械音,孩子一下就听出来了。
+ */
 function sayEn(text: string, rate = 0.85): void {
-  // 慢速(rate<0.75)时用系统 TTS 才能真的放慢;正常速度优先真人音源
-  if (rate < 0.75) speak(text, 'en-US', rate)
+  if (rate < 0.75 && !hasParentVoice(text)) speak(text, 'en-US', rate)
   else speakEnglish(text, rate)
 }
 
@@ -319,12 +325,29 @@ export function EnglishTalkPage() {
     }
   }
 
+  /**
+   * 录孩子说的那一遍。
+   *
+   * 录完**存下来**(owner='kid')。原先只留在内存里,一退出页面就没了 ——
+   * 家长陪着录了一晚上,第二天想听听进步,什么都不剩。
+   * 存的是 kid 那一份,绝不会被当成范读放给他听。
+   */
   const toggleRecord = async () => {
     if (recording) {
       setRecording(false)
       const rec = recorderRef.current
       recorderRef.current = null
-      if (rec) setRecBlob(await rec.stop())
+      if (rec) {
+        const blob = await rec.stop()
+        setRecBlob(blob)
+        const target =
+          tab === 'retell'
+            ? retells[rIdx]?.en
+            : tab === 'dialog'
+              ? dialog?.turns[turnIdx]?.expect
+              : ''
+        if (target) await saveMyVoice(target, blob, 'kid')
+      }
       return
     }
     try {

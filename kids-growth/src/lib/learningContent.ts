@@ -249,6 +249,44 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     load: () => import('../data/decks/phonics-cvc.json').then((m) => m.default as BuiltinPackData),
   },
   {
+    /*
+      拼音。
+
+      为什么把它排在识字前面:拼音是**自主阅读的钥匙** —— 学会了拼音,
+      他能自己拼出没见过的字,识字量从此不再受「教过多少」限制。
+      部编版一年级上册的第一个单元就是拼音,正是这个道理。
+
+      放在 hanzi 类型里是有意的:它的练法(听音选字 / 看字读音)
+      正好就是拼音要练的两件事。
+      家长录音按文本索引,把这 63 个音录一次,这一包全程都是他自己的声音。
+    */
+    key: 'pinyin-basic',
+    name: '拼音启蒙·声母韵母',
+    subject: '语文',
+    icon: '🔤',
+    itemType: 'hanzi',
+    stages: ['toddler', 'primary'],
+    load: () => import('../data/decks/pinyin-basic.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
+    /*
+      亲子共读的小故事。
+
+      阅读量是长期学业成绩最强的单一预测因子 —— 比任何刷题都强。
+      而这套系统在此之前**一篇中文读物都没有**。
+
+      放在 poem 类型里同样是有意的:它的「朗读」模式是逐句点读,
+      正好适合亲子共读 —— 你读一句,他跟一句;认得的字他自己读。
+    */
+    key: 'read-story-1',
+    name: '亲子共读·小故事',
+    subject: '语文',
+    icon: '📖',
+    itemType: 'poem',
+    stages: ['toddler', 'primary'],
+    load: () => import('../data/decks/read-story-1.json').then((m) => m.default as BuiltinPackData),
+  },
+  {
     key: 'hanzi-toddler',
     name: '幼儿·最常用100字',
     subject: '语文',

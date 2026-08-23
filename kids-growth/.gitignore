@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 dist-artifact
 dist-pages
+
+# 自测编译产物
+.selftest

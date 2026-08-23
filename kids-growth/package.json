@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "build:artifact": "vite build --config vite.artifact.config.ts && node scripts/build-artifact.mjs",
-    "build:pages": "vite build --config vite.pages.config.ts"
+    "build:pages": "vite build --config vite.pages.config.ts",
+    "selftest": "node scripts/selftest.mjs",
+    "rebuild": "npm run lint && npm run build && npm run selftest"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",

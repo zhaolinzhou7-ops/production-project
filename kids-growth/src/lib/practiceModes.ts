@@ -20,6 +20,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'spell', label: '拼写', icon: '⌨️', desc: '看中文拼单词', lowAgeFriendly: true },
     { mode: 'dictation', label: '听写', icon: '✍️', desc: '听发音写单词', lowAgeFriendly: true },
     { mode: 'speak', label: '跟读', icon: '🎤', desc: '跟着读一遍', needsMic: true, lowAgeFriendly: true },
+    { mode: 'speakEn', label: '跟我读', icon: '🗣️', desc: '听范读→读出来→家长判', lowAgeFriendly: true },
   ],
   poem: [
     { mode: 'recite', label: '朗读背诵', icon: '📖', desc: '听读并背诵', lowAgeFriendly: true },
@@ -28,6 +29,7 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
   hanzi: [
     { mode: 'recognize', label: '认字', icon: '👀', desc: '看字读音组词', lowAgeFriendly: true },
     { mode: 'listenChoose', label: '听音选字', icon: '👂', desc: '听读音选汉字', lowAgeFriendly: true },
+    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '自己说出来,家长判', lowAgeFriendly: true },
   ],
   wrong: [{ mode: 'review', label: '重做', icon: '🔁', desc: '回想再自评', lowAgeFriendly: true }],
   fact: [
@@ -40,6 +42,13 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'picChooseEn', label: '英语·看图选词', icon: '🅰️', desc: '看图选英语单词', lowAgeFriendly: true },
     { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true },
     { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播', lowAgeFriendly: true },
+    /*
+      「读出来」是难度阶梯的最后一档,也是这套系统原先缺掉的一环。
+      四选一有 25% 的蒙对率,而说出来没有 —— 一个内容真正学会的标志,
+      是他能说出来,不是能认出来。
+    */
+    { mode: 'speakEn', label: '英语·跟我读', icon: '🗣️', desc: '听范读→读出来→家长判', lowAgeFriendly: true },
+    { mode: 'sayIt', label: '说给我听', icon: '💬', desc: '看图自己说,家长判', lowAgeFriendly: true },
   ],
 }
 

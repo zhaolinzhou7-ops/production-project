@@ -106,6 +106,12 @@ export function ParentSettingsPage() {
             ? `上次备份：${new Date(settings.lastBackupAt).toLocaleString('zh-CN')}`
             : '还没有备份过，建议现在导出一份'}
         </p>
+        {/* 说清楚备份带不走什么 —— 换手机后发现录音没了,比一开始就知道糟糕得多 */}
+        <p className="mb-3 text-[11px] text-gray-400">
+          备份包含所有学习进度、记录与积分。<span className="text-gray-500">家长录音不在备份里</span>
+          （音频体积太大，塞进备份文件会涨到几十兆）—— 换设备后需要重录；
+          在同一台设备上导入备份不会影响已有录音。
+        </p>
         <div className="flex gap-2">
           <button
             onClick={handleExport}

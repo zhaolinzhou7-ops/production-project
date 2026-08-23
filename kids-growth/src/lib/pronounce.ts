@@ -1,6 +1,7 @@
 // 发音「粗评」打分:识别文本与目标做归一化相似度 → 鼓励式 0–3 星。
 // 启发式(编辑距离),不做音素级测评;够孩子练、且不上传录音。
 import { normalizeForCompare } from './audio'
+import { ensureAudioEl, cancelRemote } from './tts'
 
 function levenshtein(a: string, b: string): number {
   const m = a.length
@@ -93,13 +94,27 @@ export async function startRecording(): Promise<Recorder> {
   }
 }
 
-/** 回放录音 Blob */
+let playbackUrl: string | null = null
+
+/**
+ * 回放录音 Blob。
+ *
+ * 用全局那个**已解锁**的 <audio> 元素,不 new 一个新的:
+ * - 移动端只允许「在用户手势里启动过的媒体」之后被程序化播放,
+ *   新建的元素会被拦掉 —— 表现就是「点了回放没反应」。
+ * - 两个播放器各放各的,会叠着一起响。
+ */
 export function playRecording(blob: Blob): void {
   try {
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    audio.onended = () => URL.revokeObjectURL(url)
-    void audio.play()
+    const a = ensureAudioEl()
+    cancelRemote()
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel()
+    if (playbackUrl) URL.revokeObjectURL(playbackUrl)
+    playbackUrl = URL.createObjectURL(blob)
+    a.playbackRate = 1
+    a.onended = null
+    a.src = playbackUrl
+    void a.play().catch(() => {})
   } catch {
     /* 忽略 */
   }

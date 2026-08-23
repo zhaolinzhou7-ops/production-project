@@ -378,6 +378,12 @@ function playUrl(url: string, timeoutMs = 3000, times = 1): Promise<void> {
     a.onerror = () => fail('audio error')
     try {
       a.pause()
+      /*
+        播放速度要显式复位。
+        这个 <audio> 元素是全局共用的 —— 家长录音的慢速播放会把 playbackRate
+        留在 0.7,不复位的话接下来所有在线音源都会跟着变慢。
+      */
+      a.playbackRate = 1
       a.src = url
       a.play().catch(() => fail('play rejected'))
     } catch {

@@ -19,6 +19,7 @@ import {
   CloudSun,
   BookOpen,
   BarChart3,
+  Mic,
 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Line, LineChart, ResponsiveContainer } from 'recharts'
@@ -367,6 +368,21 @@ export function ParentDashboardPage() {
           <div>
             <div className="font-bold text-gray-800">学习管理</div>
             <div className="text-xs text-gray-400">词库分配、掌握统计、错词本与每日目标</div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/parent/voice')}
+          className="w-full flex items-center gap-3 rounded-2xl bg-white/70 p-4 shadow-sm active:scale-95 transition text-left"
+        >
+          <div className="rounded-xl bg-mint-400/20 p-2.5 text-mint-600">
+            <Mic size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-gray-800">英语声音 · 家长录音</div>
+            <div className="text-xs text-gray-400">
+              英语整句没有真人音源，你录一遍就顶替所有网络音源
+            </div>
           </div>
         </button>
 
