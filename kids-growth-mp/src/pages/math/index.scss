@@ -323,3 +323,72 @@
   font-weight: 700;
   color: #6366f1;
 }
+
+/* 选题页的回首页出口 */
+.math__back {
+  display: block;
+  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  color: #9aa0a6;
+}
+
+/* 题型分组:默认收起,点开才展开 —— 别把一面「题型墙」摆在家长面前 */
+.grp {
+  margin-bottom: 16rpx;
+  padding: 20rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.75);
+
+  &--on {
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  &__hd {
+    display: flex;
+    align-items: center;
+  }
+
+  &__icon {
+    font-size: 44rpx;
+    margin-right: 18rpx;
+  }
+
+  &__meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__lab {
+    display: block;
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #374151;
+  }
+
+  &__desc {
+    display: block;
+    font-size: 22rpx;
+    color: #9aa0a6;
+  }
+
+  &__arrow {
+    font-size: 28rpx;
+    color: #c4c8cc;
+    padding-left: 12rpx;
+  }
+
+  /* 「整组随便来」:家长不必先想今天练哪个题型 —— 那一念正是最容易卡住的地方 */
+  &__all {
+    margin-top: 14rpx;
+    padding: 12rpx 0;
+    border-radius: 20rpx;
+    background: rgba(99, 102, 241, 0.12);
+    text-align: center;
+  }
+
+  &__allt {
+    font-size: 25rpx;
+    font-weight: 600;
+    color: #4f46e5;
+  }
+}

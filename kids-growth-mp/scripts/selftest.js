@@ -619,13 +619,13 @@ function run() {
   */
   eq(
     dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 0 })), 'toddler')[0].mode,
-    'listenPic',
-    '最低档第一步该是「听中文点图」—— 不用认字',
+    'listenPicEn',
+    '最低档第一步该是「听英语点图」—— 只要听得懂,不用认字',
   )
   eq(
     dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 4 })), 'toddler')[0].mode,
-    'speakEn',
-    '最高档第一步该是「读出来」—— 产出才是真会了',
+    'dictation',
+    '最高档第一步该是「听写」—— 没有图没有选项,真会了才写得出',
   )
   ok(
     dp.buildPlan(fakeDecks.map((d) => ({ ...d, level: 0 })), 'toddler')[0].limit <
@@ -637,8 +637,17 @@ function run() {
   const ladder = [0, 1, 2, 3, 4].map((l) => adMod.modeLadder('pic', l))
   eq(ladder.filter(Boolean).length, 5, '五档都要有对应的练法')
   eq(new Set(ladder).size, 5, '五档的练法不该重复 —— 重复就等于那一档白设')
-  eq(adMod.modeLadder('pic', -3), 'listenPic', '档位越界应夹到最低档')
-  eq(adMod.modeLadder('pic', 99), 'speakEn', '档位越界应夹到最高档')
+  eq(adMod.modeLadder('pic', -3), 'listenPicEn', '档位越界应夹到最低档')
+  eq(adMod.modeLadder('pic', 99), 'dictation', '档位越界应夹到最高档')
+  /*
+    看图卡这一路**不能出现中文练法**。
+    对一个中文母语的孩子,「看图选中文名」不是学习,是占位 ——
+    他三岁就知道 🐱 叫猫;那一档占着,等于把英语的练习量砍掉一半。
+  */
+  ok(
+    !ladder.some((m) => m === 'listenPic' || m === 'picChoose'),
+    '看图卡的阶梯里不该再有中文练法',
+  )
   eq(tPlan[tPlan.length - 1].mode, 'earTrain', '最后一步该是磨耳朵 —— 收尾要轻松')
   ok(
     tPlan.every((s) => s.limit <= 8),
@@ -1157,15 +1166,25 @@ function run() {
   eq(ad.nextLevel(2, 'keep'), 2, 'keep 就是不动')
 
   /*
-    ---- 说给我听 ----
-    补上「产出」这一环:原先幼儿五种练法里四种是四选一、一种是被动听,
-    没有一个需要他说出来。而四选一有 25% 蒙对率,答对不等于会。
+    ---- 「产出」这一环 + 不留重复的练法 ----
+
+    产出必须有:四选一有 25% 蒙对率,答对不等于会;真正学会的标志是他能说出来。
+    但「说给我听」和「跟我读」是同一件事(他说、家长判),只是少了范读 ——
+    合成一个就够了,两个并排放着只会让家长在首页多犹豫一次。
   */
   const pmodSay = L('core/practiceModes.js')
   const picModes = pmodSay.modesFor('pic', true).map((m) => m.mode)
-  ok(picModes.includes('sayIt'), '看图包应有「说给我听」')
+  ok(picModes.includes('speakEn'), '看图包要有需要他开口的练法')
+  ok(!picModes.includes('sayIt'), '「说给我听」已并入「跟我读」,不该再单独出现')
+  // 看图卡的练法全程英语:中文那两个是占位,不该再出现
+  ok(!picModes.includes('picChoose'), '看图包不该再有「看图选中文名」')
+  ok(!picModes.includes('listenPic'), '看图包不该再有「听中文点图」')
   const hanziModes = pmodSay.modesFor('hanzi', true).map((m) => m.mode)
-  ok(hanziModes.includes('sayIt'), '识字包也应有「说给我听」')
+  ok(!hanziModes.includes('sayIt'), '识字包的「说给我听」也已删除')
+  ok(hanziModes.includes('recognize'), '识字包仍要有「认字」')
+  // 英语单词包不该同时有「跟读」和「跟我读」—— 那是同一件事
+  const wordModes = pmodSay.modesFor('word', true).map((m) => m.mode)
+  ok(!(wordModes.includes('speak') && wordModes.includes('speakEn')), '跟读与跟我读不该并存')
 
   /*
     ---- 卡组难度是分开记的 ----
@@ -1178,13 +1197,13 @@ function run() {
   eq(study.deckLevel(adDeckA), 2, '默认从「正常」档起步')
   // 连着两组满分 → 升
   for (let i = 0; i < 2; i++) {
-    study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChoose', total: 8, correct: 8, durationSec: 60 })
+    study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChooseEn', total: 8, correct: 8, durationSec: 60 })
   }
   eq(study.tuneDeckLevel(cidAd, adDeckA), 'up', '连着两组满分应升档')
   eq(study.deckLevel(adDeckA), 3, '升档后应是 3')
   eq(study.deckLevel(adDeckB), 2, '另一个卡组的难度不该被带着动')
   // 一组很差 → 降
-  study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChoose', total: 8, correct: 2, durationSec: 60 })
+  study.finishSession({ childId: cidAd, deckId: adDeckA, mode: 'picChooseEn', total: 8, correct: 2, durationSec: 60 })
   eq(study.tuneDeckLevel(cidAd, adDeckA), 'down', '一组很差应降档')
   eq(study.deckLevel(adDeckA), 2, '降回 2')
 
@@ -2204,6 +2223,95 @@ function run() {
     ok(study.listErrorCards(cidE).length === 1, '毕业的题要真的从错题本里消失')
     // 毕业之后再调一次不该重复计数
     ok(study.graduateErrorCards(cidE) === 0, '没有可毕业的时候返回 0')
+  }
+
+  // ---- 老错题也必须能重做:新功能不能只对新数据生效 ----
+  {
+    const rd = L('core/redo.js')
+    // 老卡上只有题干和答案,没有 redo
+    const legacy = [
+      { front: '5 + 5 =', back: '10' },
+      { front: '🐱 这是什么?', back: '猫 (cat)' },
+      { front: '认字:好', back: '读音 hǎo' },
+      { front: '认字:天', back: '读音 tiān' },
+      { front: '认字:人', back: '读音 rén' },
+      { front: '认字:大', back: '读音 dà' },
+    ]
+    const mathRedo = rd.inferRedo(legacy[0], legacy)
+    ok(mathRedo && mathRedo.type === 'input', '答案是纯数字的老错题 → 让他重新算')
+    ok(mathRedo.answer === 10, '算术老错题的答案要推对')
+
+    const hzRedo = rd.inferRedo(legacy[2], legacy)
+    ok(hzRedo && hzRedo.type === 'choice', '其它老错题 → 做成选择题')
+    ok(hzRedo.options.indexOf(hzRedo.answer) >= 0, '正确答案必须在选项里')
+    ok(hzRedo.options.length >= 2, '至少要有两个选项,否则不算选择题')
+    // 点一下要能读出来 —— 不识字的孩子靠这个知道题目问什么
+    ok(!!hzRedo.audio, '老错题重做时也要能读出声')
+
+    // 干扰项要「像」正确答案:中文答案不该混进英文选项
+    const enSibs = [
+      { front: 'cat', back: 'cat' },
+      { front: 'dog', back: 'dog' },
+      { front: 'fish', back: 'fish' },
+      { front: '认字:好', back: '读音 hǎo' },
+    ]
+    const enRedo = rd.inferRedo({ front: 'cat', back: 'cat' }, enSibs)
+    ok(
+      enRedo.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)),
+      '英文答案的选项里不该混进中文 —— 那等于直接告诉他答案',
+    )
+    ok(enRedo.lang === 'en', '英文答案要按英文朗读')
+
+    // 老的看图错题题干带着原来那张图,要捞回来当题面
+    const picRedo = rd.inferRedo(legacy[1], legacy)
+    ok(picRedo && picRedo.emoji === '🐱', '老看图错题要把题干里的图捞回来')
+
+    // 凑不出同类干扰项时不硬造
+    ok(rd.inferRedo({ front: 'x', back: '只有我一个' }, []) === undefined, '没有干扰项时不生成假选择题')
+  }
+
+  // ---- 错题做对就消失 ----
+  {
+    reset()
+    const cidR = study.getCurrentChildId()
+    study.autoAddErrorCard(cidR, { front: '3 + 4 =', back: '7', subject: '数学' })
+    study.autoAddErrorCard(cidR, { front: '2 + 2 =', back: '4', subject: '数学' })
+    ok(study.listErrorCards(cidR).length === 2, '先收两道错题')
+    const one = study.listErrorCards(cidR)[0]
+    ok(study.retireErrorCard(cidR, one.id) === true, '做对一道就能移出错题本')
+    ok(study.listErrorCards(cidR).length === 1, '列表要真的短一格 —— 孩子得看见自己消灭了一道')
+    // 重复调用不该出错,也不该误删别的
+    ok(study.retireErrorCard(cidR, one.id) === false, '已经移出的再调一次返回 false')
+    ok(study.listErrorCards(cidR).length === 1, '重复调用不该误删剩下的')
+    // 不属于错题本的卡不能被它删掉
+    const deckX = study.ensureBuiltinDeck(cidR, 'enlight-colors')
+    const anyCard = db.readTable('cards').find((c) => c.deckId === deckX)
+    ok(study.retireErrorCard(cidR, anyCard.id) === false, '普通卡组的卡不该被错题本移除')
+    ok(db.readTable('cards').some((c) => c.id === anyCard.id), '普通卡组的卡必须还在')
+  }
+
+  // ---- 口算题型分组:别把一面「题型墙」摆在家长面前 ----
+  {
+    const md2 = L('core/mathDrill.js')
+    for (const tier of ['toddler', 'school', 'olympic', 'advanced']) {
+      const groups = md2.mathGroupsForTier(tier)
+      ok(groups.length > 0, `${tier} 应至少分出一组`)
+      ok(groups.length <= 6, `${tier} 的分组不该超过 6 块,否则等于没分`)
+      ok(groups.every((g) => g.kinds.length > 0), '不该出现空组')
+      // 分组必须**不重不漏**:漏了的题型等于被删掉,重了的会出现两次
+      const flat = groups.flatMap((g) => g.kinds.map((k) => k.kind))
+      const all = md2.mathKindsForTier(tier).map((k) => k.kind)
+      ok(flat.length === all.length, `${tier} 分组后题型数量应不变`)
+      ok(new Set(flat).size === flat.length, `${tier} 同一题型不该出现在两组里`)
+      for (const k of all) ok(flat.indexOf(k) >= 0, `${tier} 的题型 ${k} 不该在分组后丢失`)
+    }
+    // 整组随机:题目要真的来自这一组,而且组里每种都得出得到
+    const g = md2.mathGroupsForTier('toddler').find((x) => x.def.group === 'plus')
+    const kinds = g.kinds.map((k) => k.kind)
+    const drill = md2.generateGroupDrill(kinds, 24, 'toddler')
+    ok(drill.length === 24, '整组随机要出够题数')
+    ok(drill.every((p) => typeof p.answer === 'number' && p.text.length > 0), '整组随机出的题要完整')
+    ok(md2.generateGroupDrill([], 10, 'toddler').length === 0, '空题型列表应返回空,不该崩')
   }
 
   // ---- 数形结合:算式必须配得上那堆实物 ----

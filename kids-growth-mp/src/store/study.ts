@@ -853,6 +853,26 @@ export function listErrorCards(childId: string): LearnCard[] {
 }
 
 /**
+ * 重做答对 → **立刻移出错题本**。
+ *
+ * 原先是「连对两次才毕业」,而且只在进错题本页时结算。想法是稳妥,
+ * 实际效果是:孩子辛辛苦苦做完一轮,列表一条没少 —— 他看不到自己
+ * 「消灭掉」了什么,那件事本身就没意思了。
+ *
+ * 4 岁半的孩子需要的是**立刻看见结果**。做对一道,它就没了,列表变短一格,
+ * 这才是他愿意再做一轮的理由。
+ * 万一是蒙对的也不要紧:同一道题下次再错,会重新进来。
+ */
+export function retireErrorCard(childId: string, cardId: string): boolean {
+  const deckId = getErrorDeckId(childId)
+  if (!deckId) return false
+  const card = readTable<LearnCard>(KEYS.cards).find((c) => c.id === cardId)
+  if (!card || card.deckId !== deckId) return false
+  deleteCard(cardId)
+  return true
+}
+
+/**
  * 错题「毕业」:重做连着答对两次就移出错题本。
  *
  * 为什么必须有:原先错题只进不出。一个每天做题的孩子,两个月就能攒出

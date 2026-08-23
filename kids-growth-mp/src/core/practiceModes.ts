@@ -40,7 +40,6 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'speakEn', label: '跟我读', icon: '🗣️', desc: '听范读→读出来→读例句', lowAgeFriendly: true, repeat: true },
     { mode: 'spell', label: '拼写', icon: '⌨️', desc: '把字母拼成这个词', lowAgeFriendly: true },
     { mode: 'dictation', label: '听写', icon: '✍️', desc: '听发音写单词', lowAgeFriendly: true },
-    { mode: 'speak', label: '跟读', icon: '🎤', desc: '跟着读一遍', needsMic: true, lowAgeFriendly: true },
   ],
   poem: [
     { mode: 'recite', label: '朗读背诵', icon: '📖', desc: '听读并背诵', lowAgeFriendly: true, repeat: true },
@@ -49,7 +48,6 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
   hanzi: [
     { mode: 'recognize', label: '认字', icon: '👀', desc: '看字读音组词', lowAgeFriendly: true, repeat: true },
     { mode: 'listenChoose', label: '听音选字', icon: '👂', desc: '听读音选汉字', lowAgeFriendly: true, repeat: true },
-    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '看字读出来,家长判对错', lowAgeFriendly: true, repeat: true },
     { mode: 'pinyin', label: '看拼音选字', icon: '🅿️', desc: '照着拼音找汉字', lowAgeFriendly: true },
   ],
   wrong: [{ mode: 'review', label: '重做', icon: '🔁', desc: '回想再自评', lowAgeFriendly: true, repeat: true }],
@@ -57,14 +55,28 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'quiz', label: '选一选', icon: '🧠', desc: '看题目选答案', lowAgeFriendly: true, repeat: true },
     { mode: 'review', label: '想一想', icon: '💭', desc: '先回想再翻答案自评', lowAgeFriendly: true, repeat: true },
   ],
+  /*
+    看图卡的练法**全程英语**,而且不留重复的。
+
+    删掉的两个:
+    - 「看图选一选」(看图选中文名):对一个中文母语的孩子,🐱 叫猫这件事
+      他三岁就会了 —— 这一档不是学习,是占位。
+    - 「听音选图」(听中文点图):同上,和英语版是同一个动作,只是换了语言,
+      而中文那一半没有任何增益。
+    - 「说给我听」:和「跟我读」是同一件事(他说、家长判),只是少了范读,
+      合并成一个就够了。
+  */
   pic: [
-    { mode: 'picChoose', label: '看图选一选', icon: '🖼️', desc: '看图片选名字', lowAgeFriendly: true },
-    { mode: 'listenPic', label: '听音选图', icon: '👂', desc: '听声音点图片', lowAgeFriendly: true },
-    { mode: 'picChooseEn', label: '英语·看图选词', icon: '🅰️', desc: '看图选英语单词', lowAgeFriendly: true },
-    { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true, repeat: true },
-    { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播,不用操作', lowAgeFriendly: true, repeat: true },
-    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '看图说出来,家长判对错', lowAgeFriendly: true, repeat: true },
-    { mode: 'speakEn', label: '英语·跟我读', icon: '🎙️', desc: '听一遍,再读给爸爸妈妈听', lowAgeFriendly: true, repeat: true },
+    { mode: 'listenPicEn', label: '听英语点图', icon: '🎧', desc: '听英语,点出对应的图', lowAgeFriendly: true, repeat: true },
+    { mode: 'picChooseEn', label: '看图选单词', icon: '🅰️', desc: '看图选出英语单词', lowAgeFriendly: true },
+    /*
+      「跟我读」**不标 repeat**:它需要家长在旁边判对错,
+      而「再练一遍」是给孩子自己点的 —— 那两个位置要留给
+      他一个人也能一遍遍来的(听英语点图、磨耳朵)。
+    */
+    { mode: 'speakEn', label: '跟我读', icon: '🎙️', desc: '听范读→读出来→读例句', lowAgeFriendly: true },
+    { mode: 'spell', label: '拼出来', icon: '⌨️', desc: '听发音+看图,把词拼出来', lowAgeFriendly: true },
+    { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '单词和例句自动连播,不用操作', lowAgeFriendly: true, repeat: true },
   ],
 }
 

@@ -68,11 +68,13 @@ export function buildPlan(decks: PlanDeck[], stage: AgeStage): PlanStep[] {
     /*
       练法**跟着这个卡组的难度档走**,不再写死。
 
-      原先四步是固定的:听音选图 → 看图选一选 → 认字 → 磨耳朵。
+      原先四步是固定的:听中文点图 → 看图选中文名 → 认字 → 磨耳朵。
+      前两步对一个中文母语的孩子等于白做 —— 他早就知道 🐱 叫猫。
+      现在看图卡这一路**全程英语**,认字那一步照旧是中文(那本来就是中文的事)。
       于是不管孩子练了多少次、答得多好,看到的永远是同一套题 ——
       用户的原话是「做了很多次,每一次还是这样」。
-      现在低档给「听中文点图」(不用认字),练熟了自动升到「看图选英文」,
-      再往上是「读出来」。难度的变化他一眼就能感觉到。
+      现在低档给「听英语点图」(只要听得懂),练熟了升到「看图选单词」(要认得出),
+      再往上是「读出来」「拼出来」。难度的变化他一眼就能感觉到。
     */
     const modeOf = (d: PlanDeck | undefined, fallback: PracticeMode): PracticeMode =>
       (d ? (modeLadder(d.itemType, d.level ?? 2) as PracticeMode) : undefined) ?? fallback
@@ -80,10 +82,10 @@ export function buildPlan(decks: PlanDeck[], stage: AgeStage): PlanStep[] {
 
     // 1) 第一步用**当前难度**的主练法 —— 状态最好的时候做最该做的
     const d1 = pics[0]
-    push(d1, modeOf(d1, 'listenPic'), `${d1?.name ?? ''}`, sizeOf(d1))
+    push(d1, modeOf(d1, 'listenPicEn'), `${d1?.name ?? ''}`, sizeOf(d1))
     // 2) 换一个卡组,同样按它自己的难度档
     const d2 = pics[1] ?? pics[0]
-    push(d2, modeOf(d2, 'picChoose'), `${d2?.name ?? ''}`, sizeOf(d2))
+    push(d2, modeOf(d2, 'picChooseEn'), `${d2?.name ?? ''}`, sizeOf(d2))
     // 3) 认字有就练,没有就跳过,不硬凑
     const d3 = hanzi[0]
     push(d3, modeOf(d3, 'recognize'), `认字 · ${d3?.name ?? ''}`, sizeOf(d3))

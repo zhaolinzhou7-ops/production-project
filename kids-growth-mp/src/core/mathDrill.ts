@@ -92,6 +92,41 @@ export interface MathKindDef {
   label: string
   icon: string
   desc: string
+  /** 归到哪一组(见 MATH_GROUPS)—— 用来把长长的题型清单收成几块 */
+  group: MathGroup
+}
+
+/**
+ * 题型分组。
+ *
+ * 为什么要分组:光幼儿档就有 20 个题型,平铺在屏幕上是一面「题型墙」。
+ * 家长每天晚上要在这面墙里挑一个 —— 挑不动,最后固定点同一个,
+ * 后面十几个等于不存在。
+ *
+ * 分成五块之后,每块 3–5 个,而且每块可以**整组随机**:
+ * 家长点「加法·随便来」就行,不必逐个题型去想今天练哪个。
+ */
+export type MathGroup = 'count' | 'plus' | 'minus' | 'mixed' | 'think' | 'times' | 'olympic'
+
+export interface MathGroupDef {
+  group: MathGroup
+  label: string
+  icon: string
+  desc: string
+}
+
+export const MATH_GROUPS: MathGroupDef[] = [
+  { group: 'count', label: '数与比较', icon: '🔢', desc: '数得清、排第几、谁多谁少' },
+  { group: 'plus', label: '加法', icon: '➕', desc: '10/20 以内加法、凑十、看图合起来' },
+  { group: 'minus', label: '减法', icon: '➖', desc: '10/20 以内减法、看图拿走' },
+  { group: 'mixed', label: '连算与分配', icon: '➰', desc: '连加连减、平均分' },
+  { group: 'times', label: '乘除', icon: '✖️', desc: '乘法口诀、乘法、除法、四则混合' },
+  { group: 'think', label: '找规律·动脑', icon: '🧩', desc: '规律、方位、分类、推理、专注' },
+  { group: 'olympic', label: '奥数专题', icon: '🏅', desc: '和差、年龄、植树、鸡兔同笼…' },
+]
+
+export function getMathGroupDef(group: MathGroup): MathGroupDef | undefined {
+  return MATH_GROUPS.find((g) => g.group === group)
 }
 
 /**
@@ -102,44 +137,44 @@ export interface MathKindDef {
  * 每一档都窄到孩子能连着做对,做对本身就是继续的动力。
  */
 export const MATH_KINDS: MathKindDef[] = [
-  { kind: 'count10', label: '数一数', icon: '🔢', desc: '数图形有几个(10 以内)' },
-  { kind: 'add10', label: '10 以内加法', icon: '➕', desc: '和不超过 10' },
-  { kind: 'sub10', label: '10 以内减法', icon: '➖', desc: '10 以内,不出现负数' },
-  { kind: 'makeTen', label: '凑十', icon: '🔟', desc: '几加几等于 10' },
-  { kind: 'compare', label: '比大小', icon: '⚖️', desc: '哪个多、哪个少' },
-  { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' },
-  { kind: 'sub20', label: '20 以内退位减', icon: '🔻', desc: '13-5 这类,和进位加配套' },
-  { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' },
-  { kind: 'ordinal', label: '排第几', icon: '🥇', desc: '从前数第几个' },
-  { kind: 'half', label: '分一分', icon: '🍰', desc: '平均分,除法的地基' },
-  { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' },
-  { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' },
-  { kind: 'picAdd', label: '看图·合起来', icon: '🧺', desc: '两堆合在一起有几个' },
-  { kind: 'picSub', label: '看图·拿走了', icon: '✋', desc: '走掉一些,还剩几个' },
-  { kind: 'picDiff', label: '看图·多几个', icon: '⚖️', desc: '哪边多,多几个' },
-  { kind: 'position', label: '认方位', icon: '🧭', desc: '从左数、从右数,排第几' },
-  { kind: 'oddOne', label: '找不同类', icon: '🧩', desc: '哪个不是一伙的' },
-  { kind: 'sizeCmp', label: '比长短', icon: '📏', desc: '哪个长、哪个高' },
-  { kind: 'logic3', label: '想一想', icon: '💭', desc: '谁最高、谁最快' },
-  { kind: 'spotDiff', label: '找不同', icon: '👀', desc: '两排里哪个不一样' },
-  { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' },
-  { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' },
-  { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' },
-  { kind: 'mul', label: '乘法', icon: '⏫', desc: '含两位数乘一位数' },
-  { kind: 'div', label: '除法', icon: '➗', desc: '整除,无余数' },
-  { kind: 'mixed', label: '混合', icon: '🎲', desc: '四则混合随机' },
-  { kind: 'series', label: '数列找规律', icon: '📈', desc: '2,4,8,16… 接下来是几' },
-  { kind: 'cycle', label: '周期问题', icon: '🔁', desc: '重复排下去,第 N 个是什么' },
-  { kind: 'swap', label: '等量代换', icon: '⚖️', desc: '1 个换 2 个,那 3 个换几个' },
-  { kind: 'countRect', label: '图形计数', icon: '▦', desc: '一共能数出几个长方形' },
-  { kind: 'enumerate', label: '有几种搭配', icon: '👕', desc: '简单枚举:一共几种穿法' },
-  { kind: 'clever', label: '巧算', icon: '⚡', desc: '1+2+3+…,不用一个个加' },
-  { kind: 'sumDiff', label: '和差问题', icon: '➕➖', desc: '知道和与差,求那两个数' },
-  { kind: 'ageDiff', label: '年龄问题', icon: '👨‍👦', desc: '年龄差是不会变的' },
-  { kind: 'tree', label: '植树问题', icon: '🌳', desc: '每隔几米栽一棵,要几棵' },
-  { kind: 'chicken', label: '鸡兔同笼', icon: '🐔', desc: '数头又数脚' },
-  { kind: 'profitLoss', label: '盈亏问题', icon: '🍬', desc: '多了几个、少了几个' },
-  { kind: 'average', label: '平均数', icon: '📊', desc: '匀一匀,每份是多少' },
+  { kind: 'count10', label: '数一数', icon: '🔢', desc: '数图形有几个(10 以内)' , group: 'count' },
+  { kind: 'add10', label: '10 以内加法', icon: '➕', desc: '和不超过 10' , group: 'plus' },
+  { kind: 'sub10', label: '10 以内减法', icon: '➖', desc: '10 以内,不出现负数' , group: 'minus' },
+  { kind: 'makeTen', label: '凑十', icon: '🔟', desc: '几加几等于 10' , group: 'plus' },
+  { kind: 'compare', label: '比大小', icon: '⚖️', desc: '哪个多、哪个少' , group: 'count' },
+  { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' , group: 'plus' },
+  { kind: 'sub20', label: '20 以内退位减', icon: '🔻', desc: '13-5 这类,和进位加配套' , group: 'minus' },
+  { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' , group: 'mixed' },
+  { kind: 'ordinal', label: '排第几', icon: '🥇', desc: '从前数第几个' , group: 'count' },
+  { kind: 'half', label: '分一分', icon: '🍰', desc: '平均分,除法的地基' , group: 'mixed' },
+  { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' , group: 'think' },
+  { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' , group: 'count' },
+  { kind: 'picAdd', label: '看图·合起来', icon: '🧺', desc: '两堆合在一起有几个' , group: 'plus' },
+  { kind: 'picSub', label: '看图·拿走了', icon: '✋', desc: '走掉一些,还剩几个' , group: 'minus' },
+  { kind: 'picDiff', label: '看图·多几个', icon: '⚖️', desc: '哪边多,多几个' , group: 'minus' },
+  { kind: 'position', label: '认方位', icon: '🧭', desc: '从左数、从右数,排第几' , group: 'count' },
+  { kind: 'oddOne', label: '找不同类', icon: '🧩', desc: '哪个不是一伙的' , group: 'think' },
+  { kind: 'sizeCmp', label: '比长短', icon: '📏', desc: '哪个长、哪个高' , group: 'count' },
+  { kind: 'logic3', label: '想一想', icon: '💭', desc: '谁最高、谁最快' , group: 'think' },
+  { kind: 'spotDiff', label: '找不同', icon: '👀', desc: '两排里哪个不一样' , group: 'think' },
+  { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' , group: 'plus' },
+  { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' , group: 'minus' },
+  { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' , group: 'times' },
+  { kind: 'mul', label: '乘法', icon: '⏫', desc: '含两位数乘一位数' , group: 'times' },
+  { kind: 'div', label: '除法', icon: '➗', desc: '整除,无余数' , group: 'times' },
+  { kind: 'mixed', label: '混合', icon: '🎲', desc: '四则混合随机' , group: 'times' },
+  { kind: 'series', label: '数列找规律', icon: '📈', desc: '2,4,8,16… 接下来是几' , group: 'olympic' },
+  { kind: 'cycle', label: '周期问题', icon: '🔁', desc: '重复排下去,第 N 个是什么' , group: 'olympic' },
+  { kind: 'swap', label: '等量代换', icon: '⚖️', desc: '1 个换 2 个,那 3 个换几个' , group: 'olympic' },
+  { kind: 'countRect', label: '图形计数', icon: '▦', desc: '一共能数出几个长方形' , group: 'olympic' },
+  { kind: 'enumerate', label: '有几种搭配', icon: '👕', desc: '简单枚举:一共几种穿法' , group: 'olympic' },
+  { kind: 'clever', label: '巧算', icon: '⚡', desc: '1+2+3+…,不用一个个加' , group: 'olympic' },
+  { kind: 'sumDiff', label: '和差问题', icon: '➕➖', desc: '知道和与差,求那两个数' , group: 'olympic' },
+  { kind: 'ageDiff', label: '年龄问题', icon: '👨‍👦', desc: '年龄差是不会变的' , group: 'olympic' },
+  { kind: 'tree', label: '植树问题', icon: '🌳', desc: '每隔几米栽一棵,要几棵' , group: 'olympic' },
+  { kind: 'chicken', label: '鸡兔同笼', icon: '🐔', desc: '数头又数脚' , group: 'olympic' },
+  { kind: 'profitLoss', label: '盈亏问题', icon: '🍬', desc: '多了几个、少了几个' , group: 'olympic' },
+  { kind: 'average', label: '平均数', icon: '📊', desc: '匀一匀,每份是多少' , group: 'olympic' },
 ]
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
@@ -195,6 +230,46 @@ export const MATH_TIERS: MathTierDef[] = [
 /** 学段对应的默认难度档(只作默认值,页面上随时可改) */
 export function defaultTierFor(stage: AgeStage): MathTier {
   return stage === 'toddler' ? 'toddler' : 'school'
+}
+
+/**
+ * 某一档里的题型,**按组分好**。
+ *
+ * 只返回这一档真的有题的组 —— 空组不该在屏幕上占一行。
+ */
+export function mathGroupsForTier(tier: MathTier): Array<{ def: MathGroupDef; kinds: MathKindDef[] }> {
+  const kinds = mathKindsForTier(tier)
+  const out: Array<{ def: MathGroupDef; kinds: MathKindDef[] }> = []
+  for (const def of MATH_GROUPS) {
+    const mine = kinds.filter((k) => k.group === def.group)
+    if (mine.length > 0) out.push({ def, kinds: mine })
+  }
+  return out
+}
+
+/**
+ * 整组随机出题 —— 家长点一下「加法·随便来」就能开始。
+ *
+ * 这是分组之后最有用的一件事:他不必先想「今天练 10 以内加法还是凑十」,
+ * 而那个念头正是每天晚上最容易卡住的地方。
+ * 组内几个题型轮着出,顺带也避免了连做二十道同一种题的枯燥。
+ */
+export function generateGroupDrill(kinds: MathKind[], count: number, stage: AgeStage): MathProblem[] {
+  const list = kinds.filter(Boolean)
+  if (list.length === 0) return []
+  const out: MathProblem[] = []
+  for (let i = 0; i < count; i++) {
+    // 轮着来而不是纯随机:纯随机常常连着出五道同一种,那就白分组了
+    out.push(generateProblem(list[i % list.length], stage))
+  }
+  // 再打乱一次,免得顺序太规律被他摸出来
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = out[i]
+    out[i] = out[j]
+    out[j] = t
+  }
+  return out
 }
 
 /** 某一档里有哪些题型 */

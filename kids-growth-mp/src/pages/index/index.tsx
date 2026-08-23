@@ -505,12 +505,18 @@ function Index() {
       {/*
         今日目标进度条。孩子对「还差几题」远比对「累计多少题」有感觉,
         这条进度条就是给他一个今天能够到的终点。
+
+        原先这下面还有一条「今日挑战 x/3 组」。两条进度条并排放着说的是
+        同一件事(今天做够没有),只是一条按题数、一条按组数 ——
+        孩子看两条一模一样的条只会更糊涂。合成一条,组数并进这一行的右边。
       */}
-      <View className='dg'>
+      <View className='dg' onClick={() => openPage('/pages/fun/index')}>
         <View className='dg__hd'>
-          <Text className='dg__t'>今日目标</Text>
+          <Text className='dg__t'>
+            今日目标{challenge.done >= challenge.goal ? ' 🏆' : ''}
+          </Text>
           <Text className='dg__n'>
-            {todayN} / {goalN} 题
+            {todayN} / {goalN} 题 · {challenge.done}/{challenge.goal} 组
           </Text>
         </View>
         <View className='dg__track'>
@@ -680,20 +686,6 @@ function Index() {
         <Text className='lvbar__h'>{level.next ? `再 ${level.toNext} 升级` : '满级'}</Text>
       </View>
 
-      {/* 今日挑战:和上面的「今日目标」互为补充 —— 一个按题数,一个按组数 */}
-      <View className='chalbar' onClick={() => openPage('/pages/fun/index')}>
-        <Text className='chalbar__t'>
-          {challenge.done >= challenge.goal
-            ? '🏆 今日挑战完成!'
-            : `今日挑战 ${challenge.done}/${challenge.goal} 组`}
-        </Text>
-        <View className='chalbar__track'>
-          <View
-            className='chalbar__fill'
-            style={{ width: `${Math.min(100, (challenge.done / challenge.goal) * 100)}%` }}
-          />
-        </View>
-      </View>
 
       <View className='entries'>
         <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>

@@ -3,7 +3,9 @@ import { View, Text, Input } from '@tarojs/components'
 import Taro, { useUnload } from '@tarojs/taro'
 import {
   mathKindsForTier,
+  mathGroupsForTier,
   generateDrill,
+  generateGroupDrill,
   defaultTierFor,
   tierOfKind,
   MATH_TIERS,
@@ -49,12 +51,23 @@ function MathPage() {
     const first = mathKindsForTier(t)[0].kind
     setKind(first)
     writeObject('mathKind', first)
+    // 换了难度档,原来选的那一组不一定还在,清掉免得出到别档的题
+    setGroupKinds([])
+    setOpenGroup('')
   }
 
   const chooseKind = (k: MathKind) => {
     setKind(k)
     writeObject('mathKind', k)
   }
+
+  /** 展开的是哪一组(空串=都收着)—— 默认全收起,屏幕上先只剩五六行 */
+  const [openGroup, setOpenGroup] = useState('')
+  /**
+   * 选了「整组随便来」时,这里放这一组的全部题型;
+   * 选单个题型时清空。两者互斥,免得家长弄不清现在到底会出什么题。
+   */
+  const [groupKinds, setGroupKinds] = useState<MathKind[]>([])
   const [count, setCount] = useState(20)
   const [problems, setProblems] = useState<MathProblem[]>([])
   const [idx, setIdx] = useState(0)
@@ -81,7 +94,11 @@ function MathPage() {
       却拿到同样简单的题,那个开关等于是假的。
     */
     const rangeStage = tier === 'toddler' ? 'toddler' : 'primary'
-    setProblems(generateDrill(kind, count, rangeStage))
+    setProblems(
+      groupKinds.length > 0
+        ? generateGroupDrill(groupKinds, count, rangeStage)
+        : generateDrill(kind, count, rangeStage),
+    )
     setIdx(0)
     setCorrect(0)
     setInput('')
@@ -168,6 +185,8 @@ function MathPage() {
   if (screen === 'config') {
     return (
       <View className='math'>
+        {/* 选题页是口算的「家」,所以这里给一个明确的回首页出口 */}
+        <Text className='math__back' onClick={() => Taro.navigateBack()}>‹ 返回首页</Text>
         <Text className='math__h'>难度</Text>
         <View className='tiers'>
           {MATH_TIERS.map((t) => (
@@ -181,15 +200,59 @@ function MathPage() {
             </View>
           ))}
         </View>
-        <Text className='math__h'>选择题型</Text>
-        <View className='kinds'>
-          {mathKindsForTier(tier).map((k) => (
-            <View key={k.kind} className={kind === k.kind ? 'kind kind--on' : 'kind'} onClick={() => chooseKind(k.kind)}>
-              <Text className='kind__icon'>{k.icon}</Text>
-              <Text className='kind__lab'>{k.label}</Text>
+        {/*
+          题型**按组收起来**。
+
+          光幼儿档就有 20 个题型,平铺出来是一面「题型墙」。家长每天晚上要在
+          这面墙里挑一个 —— 挑不动,最后固定点同一个,后面十几个等于不存在。
+          现在默认只看到五六个组,点开才展开;而且每组有「随便来」——
+          他不必先想「今天练 10 以内加法还是凑十」,那个念头正是最容易卡住的地方。
+        */}
+        <Text className='math__h'>练什么</Text>
+        {mathGroupsForTier(tier).map((g) => {
+          const open = openGroup === g.def.group
+          const picked = g.kinds.some((k) => k.kind === kind)
+          return (
+            <View key={g.def.group} className={picked ? 'grp grp--on' : 'grp'}>
+              <View className='grp__hd' onClick={() => setOpenGroup(open ? '' : g.def.group)}>
+                <Text className='grp__icon'>{g.def.icon}</Text>
+                <View className='grp__meta'>
+                  <Text className='grp__lab'>{g.def.label}</Text>
+                  <Text className='grp__desc'>{g.def.desc}</Text>
+                </View>
+                <Text className='grp__arrow'>{open ? '▾' : '▸'}</Text>
+              </View>
+              <View
+                className='grp__all'
+                onClick={() => {
+                  setGroupKinds(g.kinds.map((k) => k.kind))
+                  setKind(g.kinds[0].kind)
+                }}
+              >
+                <Text className='grp__allt'>
+                  {groupKinds.length > 0 && groupKinds[0] === g.kinds[0].kind ? '✓ 整组随便来' : '整组随便来'}
+                </Text>
+              </View>
+              {open ? (
+                <View className='kinds'>
+                  {g.kinds.map((k) => (
+                    <View
+                      key={k.kind}
+                      className={kind === k.kind && groupKinds.length === 0 ? 'kind kind--on' : 'kind'}
+                      onClick={() => {
+                        setGroupKinds([])
+                        chooseKind(k.kind)
+                      }}
+                    >
+                      <Text className='kind__icon'>{k.icon}</Text>
+                      <Text className='kind__lab'>{k.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
-          ))}
-        </View>
+          )
+        })}
         <Text className='math__h'>题目数量</Text>
         <View className='counts'>
           {COUNTS.map((c) => (
@@ -223,8 +286,17 @@ function MathPage() {
         {evolved ? <Text className='reward__line'>🎊 你的小宠物进化啦!</Text> : null}
         {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}
         <View className='row'>
-          <View className='btn btn--gray' onClick={() => setScreen('config')}><Text className='btn__t'>再来一组</Text></View>
-          <View className='btn btn--primary' onClick={() => Taro.navigateBack()}><Text className='btn__t'>完成</Text></View>
+          {/*
+            做完之后**先回到口算的选题页**,不要一步跳回首页。
+
+            实际用起来几乎每次都是连着做两三组:回到首页再点进来要三下,
+            而且每次都得重新找到「口算练习」那个入口。
+            回到选题页是一下,而且难度、题型、题量都还是刚才那套。
+            真想走的人再点一次「回首页」就行 —— 多的那一下花在少数情况上,
+            省下的三下花在每一次上。
+          */}
+          <View className='btn btn--gray' onClick={() => Taro.navigateBack()}><Text className='btn__t'>回首页</Text></View>
+          <View className='btn btn--primary' onClick={() => setScreen('config')}><Text className='btn__t'>再来一组</Text></View>
         </View>
       </View>
     )
@@ -234,7 +306,8 @@ function MathPage() {
   return (
     <View className='math'>
       <View className='math__bar'>
-        <Text className='math__exit' onClick={() => Taro.navigateBack()}>退出</Text>
+        {/* 做题中途退出,退回的是选题页 —— 通常是想换个题型,不是想离开 */}
+        <Text className='math__exit' onClick={() => setScreen('config')}>退出</Text>
         <Text className='math__count'>{idx + 1}/{problems.length}</Text>
       </View>
       {combo >= 2 ? <Text className='combo'>🔥 连对 {combo}</Text> : null}

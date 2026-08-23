@@ -10,6 +10,7 @@ import {
   finishSession,
   addStudyTime,
   autoAddErrorCard,
+  retireErrorCard,
   getStage,
   type DueCard,
 } from '../../store/study'
@@ -20,7 +21,7 @@ import { playWordAudio, playText, playEnglishSlow, stopAudio, prefetchAudio } fr
 import { startRecognize, stopRecognize } from '../../lib/speech'
 import { startRecord, stopRecord, playFile, keepRecording } from '../../lib/recorder'
 import { scorePronunciation, normalizeForCompare } from '../../core/score'
-import { buildRedo, OPTION_LETTERS } from '../../core/redo'
+import { buildRedo, inferRedo, OPTION_LETTERS } from '../../core/redo'
 import Examples from '../../components/Examples'
 import { examplesFor, pluralPhrase } from '../../core/examples'
 import { rateSession } from '../../core/scoreCard'
@@ -360,10 +361,28 @@ function Session() {
    * 这道错题的重做规格(答错时就一起存下来的)。
    * 没有的话说明是手动记的老错题,退回「看题回想」。
    */
-  const redo = useMemo(
-    () => (current?.card.extra as { redo?: RedoSpec } | undefined)?.redo,
-    [current],
-  )
+  const redo = useMemo(() => {
+    const stored = (current?.card.extra as { redo?: RedoSpec } | undefined)?.redo
+    if (stored) return stored
+    /*
+      **老错题也要能重做。**
+
+      新做法只对「以后答错的题」生效,而错题本里已经攒着的那些一条 redo 都没有 ——
+      家长打开一看和以前一模一样,会以为根本没改。
+      所以这里按题干和答案现推一份:数字答案当算术题让他重算,
+      其它做成选择题,干扰项从错题本里别的题的答案里挑。
+    */
+    if (!current || mode !== 'review') return undefined
+    return inferRedo(
+      {
+        front: current.card.front,
+        back: current.card.back,
+        emoji: (current.card.extra as { emoji?: string } | undefined)?.emoji,
+      },
+      allCards.map((c) => ({ front: c.front, back: c.back })),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, mode, allCards])
 
   /** 重做题的「再听一遍」;RedoSpec 里存的是 'zh'/'en',这里转成语音接口要的写法 */
   const playRedoAudio = () => {
@@ -449,7 +468,12 @@ function Session() {
    */
   const letterPool = useMemo(() => {
     if (!current || mode !== 'spell') return []
-    const word = current.card.front.toLowerCase().replace(/[^a-z]/g, '')
+    // 看图卡的英文在 extra.en 里,不能用 front(那是中文)
+    const en =
+      itemType === 'pic'
+        ? ((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
+        : current.card.front
+    const word = en.toLowerCase().replace(/[^a-z]/g, '')
     const letters = word.split('')
     // 干扰字母控制在 3 个以内:太多就成了大海捞针,反而打击信心
     const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('')
@@ -472,6 +496,19 @@ function Session() {
 
   const playCurrent = () => {
     if (!current) return
+    /*
+      拼写和听写读的**一定是英文**。
+      看图卡走 playPic 时会按 picEn 判断读中文还是英文,而拼写/听写这两档
+      本来就是英语练法 —— 读中文等于把答案念给他听之外还念错了语言。
+    */
+    if (mode === 'spell' || mode === 'dictation') {
+      const en =
+        itemType === 'pic'
+          ? ((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
+          : current.card.front
+      void playWordAudio(en)
+      return
+    }
     if (isPic) playPic(current.card)
     else playPrompt(current.card.audioText ?? current.card.front)
   }
@@ -587,6 +624,21 @@ function Session() {
   const advance = (wasCorrect: boolean) => {
     if (!current) return
     lockRef.current = Date.now() + 400
+    /*
+      错题重做**做对就消失**。
+
+      原先做完一轮列表一条没少,孩子看不到自己「消灭」了什么 ——
+      那件事本身就没意思了。4 岁半需要的是立刻看见结果:做对一道它就没了,
+      列表短一格,这才是他愿意再来一轮的理由。
+      蒙对了也不要紧:同一道题下次再错会重新进来。
+    */
+    if (mode === 'review' && wasCorrect && !freePractice) {
+      try {
+        retireErrorCard(childId, current.card.id)
+      } catch {
+        /* 移除失败不该打断做题 */
+      }
+    }
     // 「再练一遍」不写 SRS —— 只是练手,不该改变复习计划
     if (!freePractice) applyGrade(current.state.id, wasCorrect ? 'good' : 'again')
     if (wasCorrect) {
@@ -828,7 +880,18 @@ function Session() {
 
   if (!current) return <View className='sess' />
 
-  const spellCorrect = normalizeForCompare(spellInput) === normalizeForCompare(current.card.front)
+  /**
+   * 拼写/听写要拼的那个英文词。
+   *
+   * 单词卡的正面就是英文;而**看图卡的正面是中文**,英文在 extra.en 里 ——
+   * 照搬 front 会变成让他拼「猫」这个汉字,拼写这一档直接废掉。
+   * 难度阶梯的最高两档(拼出来、听写)走的正是看图卡,所以这里必须分开取。
+   */
+  const spellTarget =
+    itemType === 'pic'
+      ? ((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
+      : current.card.front
+  const spellCorrect = normalizeForCompare(spellInput) === normalizeForCompare(spellTarget)
   const poemLines = (current.card.extra as { lines?: string[] } | undefined)?.lines ?? []
   const poemMeta = current.card.extra as { author?: string; dynasty?: string } | undefined
 
@@ -940,7 +1003,7 @@ function Session() {
           <View className='audio audio--big' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
           {phase === 'reveal' ? (
             <View className='card__reveal'>
-              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{current.card.front}</Text>
+              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{spellTarget}</Text>
               {!spellCorrect ? <Text className='card__extra'>你写的:{spellInput || '(空)'}</Text> : null}
               <Examples word={current.card.front} packKey={packKey} zh={current.card.back} />
               <View className='btn btn--primary' onClick={() => advance(spellCorrect)}><Text className='btn__t'>下一个</Text></View>
@@ -994,8 +1057,7 @@ function Session() {
           <Text className='card__tip'>听发音,写出这个单词</Text>
           {phase === 'reveal' ? (
             <View className='card__reveal'>
-              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{current.card.front}</Text>
-              <Text className='card__back'>{current.card.back}</Text>
+              <Text className={spellCorrect ? 'card__front card__front--ok' : 'card__front card__front--no'}>{spellTarget}</Text>
               {!spellCorrect ? <Text className='card__extra'>你写的:{spellInput || '(空)'}</Text> : null}
               <View className='btn btn--primary' onClick={() => advance(spellCorrect)}><Text className='btn__t'>下一个</Text></View>
             </View>

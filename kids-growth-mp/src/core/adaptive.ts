@@ -96,16 +96,22 @@ export function modeLadder(itemType: string, level: number): string | undefined 
   const l = Math.max(0, Math.min(LEVELS.length - 1, Math.round(level)))
   if (itemType === 'pic') {
     /*
-      五档要**平滑**:中间不能出现断崖。
-      原先第 2 档直接是「看图选英文」,而新卡组默认就在第 2 档 ——
-      一个刚开始的孩子上来就要认英文单词,太跳了。
-      现在英语是分两步进来的:先「听英文点图」(只要听得懂),
-      再「看图选英文」(要认得出),最后才是「读出来」。
+      看图卡的阶梯**全程英语**。
+
+      原先前两档是「听中文点图」和「看图选中文名」。对一个中文母语的孩子来说
+      那两档根本不是学习 —— 他早就知道 🐱 叫猫。占着两档,等于把英语
+      往后推了一半的练习量。
+
+      现在五档是:
+        听得懂 → 认得出 → 说得出 → 拼得出(有图有音) → 听写(只有音)
+      每一档都在英语上往前走一步,而且**五档互不重复** ——
+      有重复的档等于那一档白设,孩子会觉得「练了半天还是老样子」。
     */
-    return ['listenPic', 'picChoose', 'listenPicEn', 'picChooseEn', 'speakEn'][l]
+    return ['listenPicEn', 'picChooseEn', 'speakEn', 'spell', 'dictation'][l]
   }
   if (itemType === 'hanzi') {
-    return ['listenChoose', 'listenChoose', 'recognize', 'recognize', 'sayIt'][l]
+    // 识字本来就是中文的事;「说给我听」删掉之后,最高档换成看拼音找字
+    return ['listenChoose', 'listenChoose', 'recognize', 'recognize', 'pinyin'][l]
   }
   if (itemType === 'word') {
     /*

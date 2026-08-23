@@ -164,3 +164,72 @@ export function buildRedo(params: {
     { audio: card.front, lang: 'zh' },
   )
 }
+
+/**
+ * 给一张**没有重做规格**的错题现造一份。
+ *
+ * 为什么必须有:新做法只对「以后答错的题」生效,而错题本里已经攒着的那些
+ * 一条 redo 都没有 —— 家长打开一看,和以前一模一样,会以为根本没改。
+ * 这类「新功能只对新数据生效」的坑,用户一定会踩,而且踩了会觉得白改。
+ *
+ * 老卡上只有题干和答案,信息比当初少,所以靠推断:
+ * - 答案是**纯数字** → 算术题,让他重新算一遍(输入)
+ * - 其它 → 选择题,干扰项从错题本里**别的题的答案**里挑
+ *
+ * 干扰项来自同一个错题本,所以它们本身就是他做错过的东西 ——
+ * 作为干扰项比随便造几个假选项更有意义。
+ */
+export function inferRedo(card: RedoCard, siblings: RedoCard[]): RedoSpec | undefined {
+  const front = String(card.front ?? '').trim()
+  const back = String(card.back ?? '').trim()
+  if (!front && !back) return undefined
+
+  // 纯数字答案 → 算术题,还是让他算
+  if (/^-?\d+$/.test(back)) {
+    return { type: 'input', answer: Number(back) }
+  }
+
+  /*
+    选择题的干扰项要「像」正确答案:
+    答案是英文就配英文,是中文就配中文 —— 一个中文选项混在四个英文里,
+    等于直接告诉他答案是哪个。
+  */
+  const sameShape = (v: string) => isLatin(back) === isLatin(v)
+  const pool = siblings
+    .map((c) => String(c.back ?? '').trim())
+    .filter((v) => v && v !== back && !/^-?\d+$/.test(v) && sameShape(v))
+
+  if (pool.length === 0) return undefined
+  const options = optionsFrom(back, pool)
+  if (options.length < 2) return undefined
+
+  /*
+    点一下要能读出来。
+    读什么:答案是英文就读英文(他要记的是那个词的发音),
+    否则读题干(中文题目念一遍,不识字的孩子才知道这题问什么)。
+  */
+  const audio = isLatin(back) ? back : front
+  return {
+    type: 'choice',
+    options,
+    answer: back,
+    audio: audio || undefined,
+    lang: isLatin(audio) ? 'en' : 'zh',
+    emoji: card.emoji || pickEmoji(front),
+  }
+}
+
+/** 是不是英文(只含拉丁字母、空格和常见标点) */
+function isLatin(s: string): boolean {
+  return /^[A-Za-z][A-Za-z\s'’.\-!?]*$/.test(String(s ?? '').trim())
+}
+
+/**
+ * 从题干里把开头的图捞出来。
+ * 老的看图错题题干长这样:「🐱 这是什么?」—— 那个 emoji 就是原来的图,
+ * 拿回来当题面,孩子一眼就认得出是哪道题。
+ */
+function pickEmoji(front: string): string | undefined {
+  const m = String(front ?? '').trim().match(/^(\p{Extended_Pictographic}+)/u)
+  return m ? m[1] : undefined
+}
