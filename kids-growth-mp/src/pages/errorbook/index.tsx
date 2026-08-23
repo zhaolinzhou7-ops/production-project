@@ -7,6 +7,8 @@ import {
   listErrorCards,
   deleteCard,
   getErrorDeckId,
+  graduateErrorCards,
+  errorDueToday,
 } from '../../store/study'
 import type { LearnCard } from '../../types'
 import { withGuard } from '../../components/Guard'
@@ -22,10 +24,21 @@ function ErrorBook() {
   const [back, setBack] = useState('')
   const [subject, setSubject] = useState('数学')
 
+  const [due, setDue] = useState(0)
+  const [graduated, setGraduated] = useState(0)
+
   const refresh = () => {
     const cid = getCurrentChildId()
+    /*
+      每次进来先让「已经连对两次」的错题毕业。
+      放在进页面时做而不是答对时做,是因为答对的那一刻孩子还在做题 ——
+      让他看到题目从列表里消失是家长的事,不该打断他。
+    */
+    const out = graduateErrorCards(cid)
+    if (out > 0) setGraduated(out)
     setCards(listErrorCards(cid))
     setDeckId(getErrorDeckId(cid) || '')
+    setDue(errorDueToday(cid))
   }
   useLoad(refresh)
   useDidShow(refresh)
@@ -60,8 +73,24 @@ function ErrorBook() {
     <View className='eb'>
       <View className='eb__actions'>
         <View className='btn btn--primary' onClick={() => setShowForm((v) => !v)}><Text className='btn__t'>＋ 记一道错题</Text></View>
-        {cards.length > 0 ? <View className='btn btn--mint' onClick={review}><Text className='btn__t'>▶ 重做</Text></View> : null}
+        {cards.length > 0 ? (
+          <View className='btn btn--mint' onClick={review}>
+            <Text className='btn__t'>{due > 0 ? `▶ 重做 ${due} 道` : '▶ 重做'}</Text>
+          </View>
+        ) : null}
       </View>
+      {/*
+        毕业提示。错题本能长期用下去的前提是它**会变短** ——
+        家长要看得见「消化掉了几道」,否则只看到越攒越多,很快就不点了。
+      */}
+      {graduated > 0 ? (
+        <Text className='eb__grad'>🎓 有 {graduated} 道已经连着做对两次,移出错题本了</Text>
+      ) : null}
+      {cards.length > 0 ? (
+        <Text className='eb__grad'>
+          错题本里还有 {cards.length} 道{due > 0 ? `,今天到期 ${due} 道` : ',今天没有到期的'}
+        </Text>
+      ) : null}
 
       {showForm ? (
         <View className='form'>
@@ -96,7 +125,11 @@ function ErrorBook() {
         ))
       )}
 
-      <Text className='eb__note'>错题按间隔重复排期:重做答对则拉长间隔,答错则很快再现,直到真正掌握。</Text>
+      <Text className='eb__note'>
+        错题按间隔重复排期:重做答对则拉长间隔,答错则很快再现。
+        选择题错的还是选择题(A–E),算错的算术题还是让他算一遍 ——
+        重做是真的再做一次,不是看一眼答案。连着做对两次就自动毕业。
+      </Text>
     </View>
   )
 }

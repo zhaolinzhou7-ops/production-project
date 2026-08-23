@@ -25,7 +25,8 @@ import {
   todayByArea,
   yesterdayScore,
   recordTodayScore,
-} from '../../store/study'
+
+  errorDueToday,} from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
@@ -107,6 +108,8 @@ function Index() {
   const [diag, setDiag] = useState<DiagLine[]>([])
   const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
   const [stickerCount, setStickerCount] = useState(0)
+  /** 今天有几道错题该重做 —— 显示在错题本入口上 */
+  const [errDue, setErrDue] = useState(0)
   const [petEmoji, setPetEmoji] = useState('🥚')
   const [level, setLevel] = useState<LevelInfo>(levelOf(0))
   const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
@@ -123,7 +126,6 @@ function Index() {
   const [plan, setPlan] = useState<PlanStep[]>([])
   const [planDone, setPlanDone] = useState(0)
   /** 幼儿段默认把其余入口收起来 */
-  const [showMore, setShowMore] = useState(false)
   /** 今日评分卡 —— 给孩子看星星和一句话,详细分项在家长中心 */
   const [card, setCard] = useState<DailyCard | null>(null)
 
@@ -286,6 +288,7 @@ function Index() {
       ensureHabits()
       setHabit(todayProgress())
       setStickerCount(ownedStickers().length)
+      setErrDue(errorDueToday(childId))
       setCanSpend(spendable())
       setPending(pendingCount())
       const pet = getPet()
@@ -629,10 +632,18 @@ function Index() {
         </View>
       ) : null}
 
-      {/* 幼儿段默认收起下面这些 —— 他一个字都读不了,列出来只会干扰 */}
-      {getStage() === 'toddler' && !showMore ? (
-        <Text className='morebtn' onClick={() => setShowMore(true)}>更多(家长用)▾</Text>
-      ) : null}
+      {/*
+        入口**全部直接显示**,不再藏在「更多」后面。
+
+        上一版为了给 4 岁半的孩子减负,把错题本、成长档案、内容库、声音自检
+        这些收进了「更多(家长用)」。想法没错,做法错了:
+        家长每天要用的东西被藏了一层,而**家长才是每天晚上真正操作这台设备的人** ——
+        他要点四下才找得到内容库,那这个功能对他就等于不存在。
+
+        孩子那一侧已经有「今天就做这个」那一个大按钮兜住了,
+        他根本不会往下看;下面这些多几个入口并不会干扰到他。
+        真正需要减负的是选择,不是可见性 —— 这两件事上一版搞混了。
+      */}
 
       {/*
         口算**永远留在主屏**。
@@ -644,16 +655,18 @@ function Index() {
           <Text className='entry__icon'>🧮</Text>
           <Text className='entry__t'>口算练习</Text>
         </View>
-        {getStage() !== 'toddler' || showMore ? (
-          <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
-            <Text className='entry__icon'>📕</Text>
-            <Text className='entry__t'>错题本</Text>
-          </View>
-        ) : null}
+        {/*
+          错题本上带一个数字。
+          错题这件事的难点从来不是「收集」,是**回头去做** ——
+          没有数字提醒,家长永远想不起来点它,收集得再全也白搭。
+        */}
+        <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
+          <Text className='entry__icon'>📕</Text>
+          <Text className='entry__t'>错题本{errDue > 0 ? ` ${errDue}` : ''}</Text>
+        </View>
       </View>
 
-      {/* 等级对 4 岁半是抽象符号(「Lv.7」他理解不了),幼儿段收进「更多」 */}
-      {getStage() !== 'toddler' || showMore ? (
+      {/* 等级条:孩子看不懂「Lv.7」,但家长用它判断整体投入,所以留在主屏 */}
       <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>
         <Text className='lvbar__e'>{level.cur.emoji}</Text>
         <View className='lvbar__meta'>
@@ -666,13 +679,8 @@ function Index() {
         </View>
         <Text className='lvbar__h'>{level.next ? `再 ${level.toNext} 升级` : '满级'}</Text>
       </View>
-      ) : null}
 
-      {/*
-        今日挑战和上面的「今日目标」说的是同一件事(今天做够没有),
-        两条进度条并排放着是重复。幼儿段只留今日目标那一条。
-      */}
-      {getStage() !== 'toddler' || showMore ? (
+      {/* 今日挑战:和上面的「今日目标」互为补充 —— 一个按题数,一个按组数 */}
       <View className='chalbar' onClick={() => openPage('/pages/fun/index')}>
         <Text className='chalbar__t'>
           {challenge.done >= challenge.goal
@@ -686,7 +694,6 @@ function Index() {
           />
         </View>
       </View>
-      ) : null}
 
       <View className='entries'>
         <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
@@ -706,11 +713,7 @@ function Index() {
         </View>
       </View>
 
-      {/*
-        成长档案、内容库、声音自检都是**家长**用的,幼儿段收进「更多」。
-        孩子首页原先有 9 个入口,其中一多半他一辈子也不会点。
-      */}
-      {getStage() !== 'toddler' || showMore ? (
+      {/* 成长档案 / 内容库 / 声音自检 —— 家长每天要用,直接放出来 */}
       <View className='entries'>
         <View className='entry entry--sound' onClick={() => void checkSound()}>
           <Text className='entry__icon'>🔎</Text>
@@ -721,9 +724,7 @@ function Index() {
           <Text className='entry__t'>成长档案</Text>
         </View>
       </View>
-      ) : null}
 
-      {getStage() !== 'toddler' || showMore ? (
       <View className='entries'>
         <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
           <Text className='entry__icon'>📚</Text>
@@ -734,7 +735,6 @@ function Index() {
           <Text className='entry__t'>家长中心</Text>
         </View>
       </View>
-      ) : null}
 
       {diag.length > 0 ? (
         <View className='diag'>

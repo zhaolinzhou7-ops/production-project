@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { packsForStage } from '../../core/learningContent'
+import { packsForStage, BUILTIN_PACKS } from '../../core/learningContent'
 import {
   getCurrentChildId,
   getStage,
-  setStage,
   addedPackKeys,
   ensureBuiltinDeck,
   removeBuiltinDeck,
@@ -15,10 +14,20 @@ import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
 import './index.scss'
 
-const STAGES: Array<[AgeStage, string]> = [
+/**
+ * 内容库的分组标签。
+ *
+ * 「全部」是有意加的:孩子的实际水平常常跨着学段 —— 他 4 岁半,
+ * 20 以内加减法已经做得不错,该给他小学档的算术;而英语还在启蒙。
+ * 只按学段过滤会让家长看不到那些他其实用得上的包。
+ */
+type Browse = AgeStage | 'all'
+
+const STAGES: Array<[Browse, string]> = [
   ['toddler', '幼儿 3-6岁'],
   ['primary', '小学'],
   ['junior', '初中'],
+  ['all', '全部'],
 ]
 
 interface Row {
@@ -31,17 +40,25 @@ interface Row {
 
 function Packs() {
   const { ask: askParent, gate: parentGate } = useParentGate()
-  const [stage, setStageState] = useState<AgeStage>('primary')
+  /*
+    这里存的是**正在浏览哪一档**,和孩子自己的学段是两回事。
+
+    原先切标签会顺手把孩子的学段也改掉 —— 家长只是想看看小学档有什么内容,
+    结果整个 App 的推荐、题量、难度参数全跟着变了,而他完全不知道
+    是刚才那一下点的。浏览就只是浏览。
+  */
+  const [stage, setStageState] = useState<Browse>(() => getStage())
   const [rows, setRows] = useState<Row[]>([])
   const [busy, setBusy] = useState('')
 
-  const refresh = (s?: AgeStage) => {
-    const st = s ?? getStage()
+  const refresh = (s?: Browse) => {
+    const st = s ?? stage
     setStageState(st)
     const childId = getCurrentChildId()
     const added = addedPackKeys(childId)
+    const list = st === 'all' ? BUILTIN_PACKS : packsForStage(st)
     setRows(
-      packsForStage(st).map((p) => ({
+      list.map((p) => ({
         key: p.key,
         name: p.name,
         subject: p.subject,
@@ -51,10 +68,11 @@ function Packs() {
     )
   }
 
-  useDidShow(() => refresh())
+  // 第一次进来落在孩子当前的学段上,之后由家长自己切
+  useDidShow(() => refresh(stage))
 
-  const switchStage = (s: AgeStage) => {
-    setStage(s)
+  const switchStage = (s: Browse) => {
+    // 只换看的,不动孩子的学段
     refresh(s)
   }
 
@@ -107,6 +125,8 @@ function Packs() {
       </View>
       <Text className='packs__tip'>
         点一下加进首页,再点一下移除。加进来的内容会按遗忘曲线安排复习。
+        切换上面的标签只是换着看,不会改变孩子的学段设置 ——
+        孩子在某一科超前时,直接从更高的档里挑就行。
       </Text>
 
       {rows.map((row) => (

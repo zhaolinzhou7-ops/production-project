@@ -108,7 +108,12 @@ export function modeLadder(itemType: string, level: number): string | undefined 
     return ['listenChoose', 'listenChoose', 'recognize', 'recognize', 'sayIt'][l]
   }
   if (itemType === 'word') {
-    return ['listenChoose', 'listenChoose', 'recognize', 'speak', 'spell'][l]
+    /*
+      英语单词的阶梯也是**纯英文**的:
+      听辨(听到的是哪个词) → 认词+例句 → 读出来 → 拼出来。
+      原先第 2 档是「看英文想中文」,那一步会把他推回「先翻译再理解」。
+    */
+    return ['listenChoose', 'listenChoose', 'recognize', 'speakEn', 'spell'][l]
   }
   return undefined
 }

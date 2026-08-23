@@ -11,7 +11,7 @@ import {
   type MathTier,
   type MathProblem,
 } from '../../core/mathDrill'
-import { getCurrentChildId, finishDrill, addStudyTime, getStage } from '../../store/study'
+import { getCurrentChildId, finishDrill, addStudyTime, getStage, autoAddErrorCard } from '../../store/study'
 import { readObject, writeObject } from '../../store/db'
 import { awardSticker, feedPet, bumpChallenge } from '../../store/fun'
 import CorrectBurst from '../../components/CorrectBurst'
@@ -107,10 +107,35 @@ function MathPage() {
     flushNow()
   }
 
+  /** 点过的那些实物(按「第几组-第几个」记),用来做「点着数」 */
+  const [tapped, setTapped] = useState<string[]>([])
+  const tapCount = (key: string, struck: boolean) => {
+    // 划掉的不参与数数 —— 它们已经被拿走了
+    if (struck) return
+    setTapped((prev) => (prev.indexOf(key) >= 0 ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
+
   const submit = () => {
     if (feedback !== 'none') return
     const p = problems[idx]
     const isRight = input.trim() !== '' && Number(input.trim()) === p.answer
+    /*
+      算错的题**自动进错题本**,而且是以「能重新算一遍」的形式进去的:
+      带上正确答案和那张图,重做时还是让他输入,不是让他看一眼答案自评。
+      看一眼答案,他记住的是答案;自己再算一遍,他练到的才是这道题。
+    */
+    if (!isRight) {
+      try {
+        autoAddErrorCard(getCurrentChildId(), {
+          front: p.text,
+          back: String(p.answer),
+          subject: '数学',
+          redo: { type: 'input', answer: p.answer, visual: p.visual },
+        })
+      } catch {
+        /* 记错题失败不该打断做题 */
+      }
+    }
     const nextCorrect = correct + (isRight ? 1 : 0)
     setCorrect(nextCorrect)
     setFeedback(isRight ? 'ok' : 'no')
@@ -133,6 +158,7 @@ function MathPage() {
           setIdx(idx + 1)
           setInput('')
           setFeedback('none')
+          setTapped([])
         }
       },
       isRight ? 420 : 1000,
@@ -215,6 +241,60 @@ function MathPage() {
       {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
       <View className='q'>
         <Text className='q__t'>{p?.text}</Text>
+        {/*
+          数形结合:算式下面把实物摆出来。
+          他先数糖果得到答案,慢慢才把「5 + 5」这个符号和那堆糖对上 ——
+          这个顺序反过来就成了死记硬背。
+        */}
+        {p?.visual ? (
+          <View className='vis'>
+            {p.visual.groups.map((g, gi) => (
+              <View key={gi} className='vis__row'>
+                {gi > 0 ? <Text className='vis__op'>{p.visual!.ops[gi - 1] ?? '+'}</Text> : null}
+                <View className='vis__items'>
+                  {Array.from({ length: g.n }).map((_, i) => {
+                    // 减法:后面几个划掉,表示「拿走了」
+                    const struck =
+                      gi === 0 &&
+                      !!p.visual!.strike &&
+                      i >= g.n - (p.visual!.strike as number)
+                    const key = `${gi}-${i}`
+                    const counted = tapped.indexOf(key) >= 0
+                    return (
+                      <Text
+                        key={i}
+                        className={
+                          struck
+                            ? 'vis__i vis__i--out'
+                            : counted
+                              ? 'vis__i vis__i--on'
+                              : 'vis__i'
+                        }
+                        onClick={() => tapCount(key, struck)}
+                      >
+                        {g.emoji}
+                      </Text>
+                    )
+                  })}
+                </View>
+              </View>
+            ))}
+            {/*
+              **点着数**。
+
+              5 岁的孩子数东西时会用手指一个个点 —— 这不是坏习惯,是这个阶段
+              必经的一步(「一一对应」)。屏幕上没法用手指点着数,他就只能凭
+              眼睛扫,很容易数错、然后以为自己不会算。
+              点一下就变个样子并报出数,等于把手指还给他。数完了直接填答案。
+            */}
+            {tapped.length > 0 ? (
+              <Text className='vis__n'>数到 {tapped.length}</Text>
+            ) : null}
+            <Text className='vis__hint'>
+              {p.visual.strike ? '划掉的是拿走的 · ' : ''}可以点着数,数一个亮一个
+            </Text>
+          </View>
+        ) : null}
         <Input
           className={feedback === 'ok' ? 'q__inp q__inp--ok' : feedback === 'no' ? 'q__inp q__inp--no' : 'q__inp'}
           type='number'

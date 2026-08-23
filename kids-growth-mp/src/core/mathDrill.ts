@@ -1,4 +1,4 @@
-import type { AgeStage } from '../types'
+import type { AgeStage, MathVisual } from '../types'
 
 /** 口算题型 */
 export type MathKind =
@@ -49,10 +49,42 @@ export type MathKind =
   | 'profitLoss'
   | 'average'
 
+/**
+ * 数形结合的图示:把算式配上看得见的实物。
+ *
+ * 为什么必须有:「5 + 5 = ?」对一个 5 岁的孩子是**两个抽象符号**,
+ * 他只能靠背。而「🍬🍬🍬🍬🍬 和 🍬🍬🍬🍬🍬 合起来是几颗糖」他能**数出来** ——
+ * 数出来的答案是他自己得到的,背下来的答案是别人给的。
+ *
+ * 这一步在数学教育里叫「具体—表象—抽象」:实物 → 图示 → 符号。
+ * 跳过前两步直接练符号,算得快也走不远,一遇到应用题就不会列式。
+ *
+ * 所以图示和算式**同时出现**,不是二选一:他先看图数出来,
+ * 慢慢就把「5 + 5」这个符号和那堆糖对上了。
+ */
+export type { MathVisual } from '../types'
+
 export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
   text: string
   answer: number
+  /** 数形结合图示;题目太大(超过 20 个)时不给,画出来反而数不清 */
+  visual?: MathVisual
+}
+
+/** 图示里用的实物 —— 都是孩子认得、且一眼能数清的 */
+const COUNTABLES = ['🍬', '🍎', '⭐', '🐟', '🎈', '🍪', '🐤', '🍓']
+
+/**
+ * 造一个图示。
+ *
+ * 总数超过 20 就不给图 —— 一排二十几个 emoji 在手机上要换行三次,
+ * 孩子数到一半就乱了,那时候图示反而变成干扰。
+ */
+function visualOf(groups: Array<{ emoji: string; n: number }>, ops: string[], strike?: number): MathVisual | undefined {
+  const total = groups.reduce((n, g) => n + g.n, 0)
+  if (total <= 0 || total > 20) return undefined
+  return { groups, ops, strike }
 }
 
 export interface MathKindDef {
@@ -224,20 +256,36 @@ function genCount10(): MathProblem {
 function genAdd10(): MathProblem {
   const a = randInt(1, 8)
   const b = randInt(1, 9 - a + 1)
-  return { text: `${a} + ${b} =`, answer: a + b }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} + ${b} =`,
+    answer: a + b,
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+']),
+  }
 }
 
 /** 10 以内减法:结果不为负 */
 function genSub10(): MathProblem {
   const a = randInt(2, 10)
   const b = randInt(1, a)
-  return { text: `${a} - ${b} =`, answer: a - b }
+  // 减法的图示是「画出来再划掉几个」,这比另起一排更接近「拿走」的动作
+  return {
+    text: `${a} - ${b} =`,
+    answer: a - b,
+    visual: visualOf([{ emoji: pick(COUNTABLES), n: a }], [], b),
+  }
 }
 
 /** 凑十:进位加法的地基,单独练熟收益最大 */
 function genMakeTen(): MathProblem {
   const a = randInt(1, 9)
-  return { text: `${a} + ( ) = 10`, answer: 10 - a }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} + ( ) = 10`,
+    answer: 10 - a,
+    // 已有的画出来,要凑的留白 —— 他数一数还差几个
+    visual: visualOf([{ emoji: e, n: a }], []),
+  }
 }
 
 /** 比大小:答 1 表示前面大,答 2 表示后面大 —— 题干里写清楚怎么答 */
@@ -245,14 +293,25 @@ function genCompare(): MathProblem {
   let a = randInt(1, 20)
   let b = randInt(1, 20)
   if (a === b) b = a + 1
-  return { text: `${a} 和 ${b}\n哪个大?大的那个是几?`, answer: Math.max(a, b) }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} 和 ${b}\n哪个大?大的那个是几?`,
+    answer: Math.max(a, b),
+    // 比大小最该配图 —— 两排摆在一起,哪排长一眼就看出来,不用先会数
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['和']),
+  }
 }
 
 /** 20 以内进位加:幼小衔接的重点题型 */
 function genAdd20(): MathProblem {
   const a = randInt(5, 9)
   const b = randInt(11 - a, 9)
-  return { text: `${a} + ${b} =`, answer: a + b }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} + ${b} =`,
+    answer: a + b,
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+']),
+  }
 }
 
 
@@ -260,7 +319,11 @@ function genAdd20(): MathProblem {
 function genSub20(): MathProblem {
   const a = randInt(11, 18)
   const b = randInt(a - 9, 9)
-  return { text: `${a} - ${b} =`, answer: a - b }
+  return {
+    text: `${a} - ${b} =`,
+    answer: a - b,
+    visual: visualOf([{ emoji: pick(COUNTABLES), n: a }], [], b),
+  }
 }
 
 /** 连加连减:一步一步往下算,练的是「保持住中间结果」这件事 */
@@ -269,7 +332,12 @@ function genChain(): MathProblem {
   const b = randInt(1, 9 - Math.min(a, 8))
   const mid = a + b
   const c = randInt(1, mid)
-  return { text: `${a} + ${b} - ${c} =`, answer: mid - c }
+  const e = pick(COUNTABLES)
+  return {
+    text: `${a} + ${b} - ${c} =`,
+    answer: mid - c,
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+'], c),
+  }
 }
 
 /** 排第几:序数概念。孩子常把「第 3 个」和「3 个」混起来,值得单独练 */

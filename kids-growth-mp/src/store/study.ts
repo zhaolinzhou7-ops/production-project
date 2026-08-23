@@ -25,6 +25,7 @@ import type {
   PracticeMode,
   ReviewGrade,
   StudyState,
+  RedoSpec,
 } from '../types'
 
 const POINTS_PER_CORRECT = 2
@@ -786,7 +787,7 @@ export function ensureErrorDeck(childId: string): string {
 
 export function addErrorCard(
   childId: string,
-  entry: { front: string; back: string; subject?: string },
+  entry: { front: string; back: string; subject?: string; redo?: RedoSpec },
 ): string {
   const deckId = ensureErrorDeck(childId)
   const cards = readTable<LearnCard>(KEYS.cards)
@@ -798,7 +799,15 @@ export function addErrorCard(
     deckId,
     front: entry.front.trim(),
     back: entry.back.trim(),
-    extra: entry.subject ? { subject: entry.subject } : undefined,
+    /*
+      redo 决定这道错题**将来怎么重做**(选择题 / 输入)。
+      存在卡上而不是重做时现算 —— 干扰项必须和当初做错时是同一批,
+      否则「重做」就变成了另一道题。
+    */
+    extra:
+      entry.subject || entry.redo
+        ? { ...(entry.subject ? { subject: entry.subject } : {}), ...(entry.redo ? { redo: entry.redo } : {}) }
+        : undefined,
     order: count,
   })
   states.push({ id: newId(), childId, cardId, deckId, ...initialSrs() })
@@ -815,7 +824,7 @@ export function addErrorCard(
  */
 export function autoAddErrorCard(
   childId: string,
-  entry: { front: string; back: string; subject?: string },
+  entry: { front: string; back: string; subject?: string; redo?: RedoSpec },
 ): void {
   const front = entry.front.trim()
   if (!front) return
@@ -841,6 +850,47 @@ export function listErrorCards(childId: string): LearnCard[] {
   return readTable<LearnCard>(KEYS.cards)
     .filter((c) => c.deckId === deckId)
     .sort((a, b) => a.order - b.order)
+}
+
+/**
+ * 错题「毕业」:重做连着答对两次就移出错题本。
+ *
+ * 为什么必须有:原先错题只进不出。一个每天做题的孩子,两个月就能攒出
+ * 两三百道 —— 家长打开一看,再也不会点第二次。**一个只增不减的错题本,
+ * 最后一定会被放弃**,那前面自动收集做得再好也没用。
+ *
+ * 门槛定在「连对两次」而不是一次:错题里有相当一部分当初就是蒙错的,
+ * 一次答对说明不了什么;连着两次答对(而且中间隔着 SRS 安排的天数),
+ * 才算真的记住了。
+ */
+export function graduateErrorCards(childId: string): number {
+  const deckId = getErrorDeckId(childId)
+  if (!deckId) return 0
+  const states = readTable<StudyState>(KEYS.states)
+  const graduating = states.filter(
+    (st) => st.childId === childId && st.deckId === deckId && (st.reps ?? 0) >= 2,
+  )
+  if (graduating.length === 0) return 0
+  const ids = new Set(graduating.map((st) => st.cardId))
+  writeTable(
+    KEYS.cards,
+    readTable<LearnCard>(KEYS.cards).filter((c) => !ids.has(c.id)),
+  )
+  writeTable(
+    KEYS.states,
+    states.filter((st) => !(st.deckId === deckId && ids.has(st.cardId))),
+  )
+  return graduating.length
+}
+
+/** 今天有多少道错题要重做 —— 首页拿它提示,不然错题本没人会主动点 */
+export function errorDueToday(childId: string): number {
+  const deckId = getErrorDeckId(childId)
+  if (!deckId) return 0
+  const today = todayISO()
+  return readTable<StudyState>(KEYS.states).filter(
+    (st) => st.childId === childId && st.deckId === deckId && isDue(st, today),
+  ).length
 }
 
 export function deleteCard(cardId: string): void {

@@ -5,4 +5,4 @@
  * 之前几次误判都是因为编译产物是旧的,却当成新代码在分析。
  * 每次发新版本时把这里 +1。
  */
-export const BUILD_TAG = 'v52'
+export const BUILD_TAG = 'v54'

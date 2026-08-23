@@ -2056,6 +2056,186 @@ function run() {
   // ---- 成就:达成条件单调 ----
   const codes = progress.earnedAchievements(cid2)
   ok(Array.isArray(codes), '成就列表应可计算')
+
+  // ---- 例句:句子必须是**对的**,拿不准就不出 ----
+  const ex = L('core/examples.js')
+
+  // 冠词:a/an 是这类生成里最容易错、也最容易被家长一眼看穿的地方
+  ok(ex.articleFor('apple') === 'an', 'apple 用 an')
+  ok(ex.articleFor('cat') === 'a', 'cat 用 a')
+  ok(ex.articleFor('umbrella') === 'an', 'umbrella 用 an')
+  ok(ex.articleFor('x-ray') === 'an', 'x-ray 读作 ex-ray,用 an')
+
+  // 复数:不规则的必须走表,规则的必须按后缀走
+  ok(ex.pluralOf('cat') === 'cats', '规则复数 +s')
+  ok(ex.pluralOf('box') === 'boxes', '-x 结尾 +es')
+  ok(ex.pluralOf('baby') === 'babies', '辅音+y → -ies')
+  ok(ex.pluralOf('mouse') === 'mice', 'mouse → mice')
+  ok(ex.pluralOf('tooth') === 'teeth', 'tooth → teeth')
+  ok(ex.pluralOf('foot') === 'feet', 'foot → feet')
+  ok(ex.pluralOf('fish') === 'fish', 'fish 单复数同形')
+  ok(ex.pluralOf('sheep') === 'sheep', 'sheep 单复数同形')
+  ok(ex.pluralOf('leaf') === 'leaves', 'leaf → leaves')
+  ok(ex.pluralOf('tomato') === 'tomatoes', '辅音+o → -es')
+
+  // 各词类的句型
+  const catEx = ex.examplesFor('cat', 'enlight-animals')
+  ok(catEx[0] === 'a cat', '可数名词先给组词')
+  ok(catEx.indexOf('I see a cat.') >= 0, '可数名词要有一条完整句子')
+  ok(ex.pluralPhrase('cat', 'enlight-animals') === 'two cats', '可数名词额外给复数组词')
+  ok(ex.pluralPhrase('rice', 'enlight-food') === undefined, '不可数名词没有复数组词')
+  ok(ex.examplesFor('rice', 'enlight-food')[0] === 'some rice', '不可数名词用 some')
+  ok(ex.examplesFor('happy', 'enlight-feelings')[0] === 'I am happy.', '形容人的形容词用 I am')
+  ok(ex.examplesFor('red', 'enlight-colors')[0] === 'It is red.', '形容物的形容词用 It is')
+  ok(ex.examplesFor('run', 'enlight-actions')[0] === 'I can run.', '动词用 I can')
+  ok(ex.examplesFor('doctor', 'enlight-family').indexOf('I want to be a doctor.') >= 0, '职业要出「我想当…」')
+  ok(ex.examplesFor('mom', 'enlight-family')[0] === 'my mom', '家人用 my')
+  ok(ex.examplesFor('pants', 'enlight-clothes')[0] === 'my pants', '只有复数形式的用 my')
+  ok(ex.examplesFor('hand', 'enlight-body').indexOf('Touch your hand.') >= 0, '身体部位要能做出动作')
+  ok(ex.examplesFor('A a', 'enlight-abc', 'Apple')[0] === 'A is for Apple.', '字母卡用 X is for Y')
+
+  /*
+    「拿不准就不出」—— 这条规矩比多几条例句重要得多。
+    这套系统是孩子唯一的英语来源,少一条例句没有损失,错一条例句是在教错。
+  */
+  ok(ex.examplesFor('sky blue', 'enlight-colors').length === 0, '说不清的词组不出例句')
+  ok(ex.examplesFor('cat', 'no-such-pack').length === 0, '不认识的内容包不出例句')
+  ok(ex.examplesFor('', 'enlight-animals').length === 0, '空词不出例句')
+
+  // 全量扫一遍所有看图包:凡是出了例句的,冠词不能错、不能有双空格
+  {
+    let scanned = 0
+    let withEx = 0
+    const problems = []
+    for (const meta of content.BUILTIN_PACKS) {
+      if (meta.itemType !== 'pic') continue
+      const pack = meta.load()
+      for (const c of pack.cards) {
+        const word = meta.key === 'enlight-abc' ? c.front : c.en
+        if (!word) continue
+        scanned += 1
+        const list = ex.examplesFor(word, meta.key, c.en)
+        if (list.length > 0) withEx += 1
+        for (const line of list) {
+          if (/\ba [aeiou]/.test(line)) problems.push(`${word}: ${line}`)
+          if (/\ban [^aeiou ]/.test(line) && !/an (hour|x-ray|umbrella)/.test(line)) problems.push(`${word}: ${line}`)
+          if (line.indexOf('  ') >= 0) problems.push(`${word}: 双空格 ${line}`)
+          /*
+            怎么区分「组词」和「句子」:句子以大写开头。
+            组词("a hot air balloon"、"two cats")本来就不该有句号,
+            按词数判断会把长一点的组词误判成句子。
+          */
+          if (/^[A-Z]/.test(line) && !/[.!?]$/.test(line)) problems.push(`${word}: 句子没有句号 ${line}`)
+        }
+      }
+    }
+    ok(problems.length === 0, `例句全量扫描不应有语法问题(发现 ${problems.length} 条:${problems.slice(0, 3).join(' / ')})`)
+    ok(scanned > 500, '看图包应扫到 500 个以上的词')
+    // 覆盖率低于九成说明词类表漏了一大块,值得回头补
+    ok(withEx / scanned > 0.9, `例句覆盖率应高于 90%(实际 ${((withEx / scanned) * 100).toFixed(1)}%)`)
+  }
+
+  // ---- 错题重做:选择题(A–E)与输入题 ----
+  const redoM = L('core/redo.js')
+  ok(redoM.OPTION_LETTERS.join('') === 'ABCDE', '选项字母是 A–E')
+  {
+    const pool = [
+      { front: '猫', back: 'cat', emoji: '🐱', en: 'cat' },
+      { front: '狗', back: 'dog', emoji: '🐶', en: 'dog' },
+      { front: '鱼', back: 'fish', emoji: '🐟', en: 'fish' },
+      { front: '鸟', back: 'bird', emoji: '🐦', en: 'bird' },
+      { front: '马', back: 'horse', emoji: '🐴', en: 'horse' },
+      { front: '牛', back: 'cow', emoji: '🐮', en: 'cow' },
+    ]
+    const card = pool[0]
+
+    const rc = redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool })
+    ok(rc && rc.type === 'choice', '看图选一选错了 → 还是选择题')
+    ok(rc.options.length === 5, '选择题给 5 个选项(A–E)')
+    ok(rc.options.indexOf(rc.answer) >= 0, '正确答案必须在选项里')
+    ok(new Set(rc.options).size === rc.options.length, '选项不能重复')
+    ok(rc.emoji === '🐱', '看图题重做时要带上原来那张图')
+
+    const re = redoM.buildRedo({ mode: 'picChooseEn', itemType: 'pic', card, pool })
+    ok(re.answer === 'cat', '英语题的答案是英文')
+    ok(re.lang === 'en', '英语题按英文朗读')
+    // 纯英文:选项里不能混进中文
+    ok(re.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语重做题的选项必须全是英文')
+
+    const rw = redoM.buildRedo({ mode: 'speakEn', itemType: 'word', card: { front: 'cat', back: '猫' }, pool: [
+      { front: 'dog', back: '狗' }, { front: 'cap', back: '帽' }, { front: 'cut', back: '切' }, { front: 'cow', back: '牛' },
+    ] })
+    ok(rw && rw.answer === 'cat', '没有现成选项的练法也要能退回选择题')
+    ok(rw.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
+
+    // 池子太小时不该造出一个「只有正确答案」的假选择题
+    const tiny = redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool: [card] })
+    ok(tiny === undefined, '凑不出干扰项时不生成选择题')
+  }
+
+  // ---- 错题本必须**会变短**,否则家长很快就不点了 ----
+  {
+    const cidE = study.getCurrentChildId()
+    study.autoAddErrorCard(cidE, {
+      front: '5 + 5 =',
+      back: '10',
+      subject: '数学',
+      redo: { type: 'input', answer: 10 },
+    })
+    study.autoAddErrorCard(cidE, { front: '这是什么?', back: 'cat', subject: '英语' })
+    // 同一道题答错两次只记一条 —— 否则错题本会被同一道题刷爆
+    study.autoAddErrorCard(cidE, { front: '5 + 5 =', back: '10', subject: '数学' })
+    const listed = study.listErrorCards(cidE)
+    ok(listed.length === 2, `同一题不重复收录(实际 ${listed.length} 条)`)
+    ok(study.errorDueToday(cidE) === 2, '新收的错题今天就该重做')
+
+    // redo 必须原样存下来 —— 干扰项换了就不是「重做这道题」了
+    const mathCard = listed.find((c) => c.front === '5 + 5 =')
+    ok(mathCard.extra && mathCard.extra.redo && mathCard.extra.redo.type === 'input', '算术错题按输入形式重做')
+    ok(mathCard.extra.redo.answer === 10, '重做时的答案要对得上')
+
+    // 连对两次才毕业:一次不算
+    const stAll = db.readTable('states').filter((x) => x.childId === cidE && x.cardId === mathCard.id)
+    ok(stAll.length === 1, '每张错题卡有一条学习状态')
+    study.applyGrade(stAll[0].id, 'good')
+    ok(study.graduateErrorCards(cidE) === 0, '只答对一次还不能毕业')
+    study.applyGrade(stAll[0].id, 'good')
+    ok(study.graduateErrorCards(cidE) === 1, '连着答对两次就毕业')
+    ok(study.listErrorCards(cidE).length === 1, '毕业的题要真的从错题本里消失')
+    // 毕业之后再调一次不该重复计数
+    ok(study.graduateErrorCards(cidE) === 0, '没有可毕业的时候返回 0')
+  }
+
+  // ---- 数形结合:算式必须配得上那堆实物 ----
+  {
+    const md = L('core/mathDrill.js')
+    let checked = 0
+    for (let i = 0; i < 300; i++) {
+      for (const kind of ['add10', 'sub10', 'add20', 'sub20', 'chain', 'makeTen', 'compare']) {
+        const p = md.generateProblem(kind, 'toddler')
+        if (!p.visual) continue
+        checked += 1
+        const total = p.visual.groups.reduce((n, g) => n + g.n, 0)
+        ok(total > 0 && total <= 20, '图示总数要在 20 个以内,多了孩子数不清')
+        ok(p.visual.ops.length === Math.max(0, p.visual.groups.length - 1), '连接符个数比组数少一个')
+        // 加法:图上的东西加起来就是答案 —— 数得出来才叫数形结合
+        if (kind === 'add10' || kind === 'add20') {
+          ok(total === p.answer, `${kind}:图上的总数应等于答案`)
+        }
+        // 减法:画出来 a 个划掉 b 个,剩下的就是答案
+        if (kind === 'sub10' || kind === 'sub20') {
+          ok(total - (p.visual.strike || 0) === p.answer, `${kind}:减掉划去的应等于答案`)
+        }
+        if (kind === 'chain') {
+          ok(total - (p.visual.strike || 0) === p.answer, 'chain:先合起来再拿走应等于答案')
+        }
+        if (kind === 'compare') {
+          ok(Math.max(...p.visual.groups.map((g) => g.n)) === p.answer, 'compare:图上多的那排就是答案')
+        }
+      }
+    }
+    ok(checked > 1000, '应抽查到足够多的带图算式')
+  }
 }
 
 // ---------------------------------------------------------------- main
