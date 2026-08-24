@@ -25,6 +25,8 @@ function ErrorBook() {
   const [subject, setSubject] = useState('数学')
 
   const [due, setDue] = useState(0)
+  /** 展开答案的那一条(空串=都藏着) */
+  const [shown, setShown] = useState('')
   const [graduated, setGraduated] = useState(0)
 
   const refresh = () => {
@@ -68,6 +70,19 @@ function ErrorBook() {
 
   const review = () => {
     if (deckId) Taro.navigateTo({ url: `/pages/session/index?deckId=${deckId}&mode=review` })
+  }
+
+  /**
+   * 只做这一道。
+   *
+   * 家长在错题本里常常是有目标的:「昨天这道加法他错了两次,今天先把它弄懂」。
+   * 原来只能整本一起重做,那道题排在第几完全由算法决定 —— 想做的那道可能
+   * 压根没出现,家长翻完一轮也没等到它。现在点哪道就做哪道。
+   */
+  const reviewOne = (cardId: string) => {
+    if (deckId) {
+      Taro.navigateTo({ url: `/pages/session/index?deckId=${deckId}&mode=review&cardId=${cardId}` })
+    }
   }
 
   return (
@@ -114,14 +129,29 @@ function ErrorBook() {
       ) : (
         cards.map((c) => (
           <View key={c.id} className='item'>
-            <View className='item__main'>
+            {/* 点这一块就直接做这一道 —— 家长想练哪道就点哪道 */}
+            <View className='item__main' onClick={() => reviewOne(c.id)}>
               {(c.extra as { subject?: string } | undefined)?.subject ? (
                 <Text className='item__tag'>{(c.extra as { subject?: string }).subject}</Text>
               ) : null}
               <Text className='item__q'>{c.front}</Text>
-              <Text className='item__a'>答案:{c.back}</Text>
+              {/*
+                答案默认**藏起来**。
+                摊在列表上等于每次翻错题本都把答案又看了一遍 ——
+                看多了记住的是答案的样子,不是这道题。想核对再点一下。
+              */}
+              {shown === c.id ? <Text className='item__a'>答案:{c.back}</Text> : null}
             </View>
-            <Text className='item__del' onClick={() => del(c.id)}>🗑</Text>
+            <View className='item__acts'>
+              <Text className='item__go' onClick={() => reviewOne(c.id)}>做这道</Text>
+              <Text
+                className='item__eye'
+                onClick={() => setShown(shown === c.id ? '' : c.id)}
+              >
+                {shown === c.id ? '🙈' : '👁'}
+              </Text>
+              <Text className='item__del' onClick={() => del(c.id)}>🗑</Text>
+            </View>
           </View>
         ))
       )}

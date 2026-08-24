@@ -652,6 +652,17 @@ function Index() {
       */}
 
       {/*
+        分区标题。
+        原先十几张卡片一路排下来没有任何分界,找东西只能从上往下扫。
+        分成「今天要学 / 玩一玩 / 家长」三块之后,家长第一眼就知道看哪一段,
+        而孩子那一段永远在最上面。
+      */}
+      <View className='sect'>
+        <Text className='sect__t'>今天要学</Text>
+        <View className='sect__line' />
+      </View>
+
+      {/*
         口算**永远留在主屏**。
         上一版我把它和错题本一起收进了「更多」—— 错的:错题本是家长偶尔查的,
         口算是孩子每天要做的。一个每天都用的东西藏起来,用户的感受就是「被删了」。
@@ -688,16 +699,21 @@ function Index() {
 
 
       <View className='entries'>
-        <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
-          <Text className='entry__icon'>{petEmoji}</Text>
-          <Text className='entry__t'>宠物·贴纸 {stickerCount}</Text>
-        </View>
-      </View>
-
-      <View className='entries'>
         <View className='entry entry--talk' onClick={() => openPage('/pages/talk/index')}>
           <Text className='entry__icon'>💬</Text>
           <Text className='entry__t'>英语口语</Text>
+        </View>
+      </View>
+
+      <View className='sect'>
+        <Text className='sect__t'>玩一玩</Text>
+        <View className='sect__line' />
+      </View>
+
+      <View className='entries'>
+        <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
+          <Text className='entry__icon'>{petEmoji}</Text>
+          <Text className='entry__t'>宠物·贴纸 {stickerCount}</Text>
         </View>
         <View className='entry entry--reward' onClick={() => openPage('/pages/rewards/index')}>
           <Text className='entry__icon'>🎁</Text>
@@ -705,7 +721,11 @@ function Index() {
         </View>
       </View>
 
-      {/* 成长档案 / 内容库 / 声音自检 —— 家长每天要用,直接放出来 */}
+      <View className='sect'>
+        <Text className='sect__t'>家长</Text>
+        <View className='sect__line' />
+      </View>
+
       <View className='entries'>
         <View className='entry entry--sound' onClick={() => void checkSound()}>
           <Text className='entry__icon'>🔎</Text>

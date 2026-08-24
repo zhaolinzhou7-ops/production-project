@@ -2314,6 +2314,22 @@ function run() {
     ok(md2.generateGroupDrill([], 10, 'toddler').length === 0, '空题型列表应返回空,不该崩')
   }
 
+  // ---- 做题页必须是独立一页 ----
+  {
+    /*
+      微信顶部那个返回箭头是系统的,页面内部拦不住 ——
+      做题和选题挤在同一页时,「做完按返回」一定回到首页。
+      拆成两页之后返回天然退回选题页,所以这条注册必须在。
+    */
+    const appCfg = fs.readFileSync(path.join(ROOT, 'src', 'app.config.ts'), 'utf8')
+    ok(appCfg.indexOf("'pages/math/run/index'") >= 0, '做题页必须注册在 app.config 的 pages 里')
+    const cfgPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'index.tsx'), 'utf8')
+    ok(cfgPage.indexOf('/pages/math/run/index') >= 0, '选题页要跳到做题页,而不是自己切屏')
+    ok(cfgPage.indexOf("screen === 'run'") < 0, '选题页里不该再留做题的分支')
+    const runPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'run', 'index.tsx'), 'utf8')
+    ok(runPage.indexOf('navigateBack') >= 0, '做题页的退出/完成要退回选题页')
+  }
+
   // ---- 数形结合:算式必须配得上那堆实物 ----
   {
     const md = L('core/mathDrill.js')

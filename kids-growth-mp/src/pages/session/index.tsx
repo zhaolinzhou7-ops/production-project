@@ -203,9 +203,19 @@ function Session() {
       */
       const useLimit = Number.isFinite(limitParam) && limitParam > 0 ? cardLimit : spec.size
       setOptCount(spec.choices)
-      const list = getSessionCards(cid, deckId, useLimit, freePractice)
       const d = getDeck(deckId) ?? null
       const all = getDeckCards(deckId)
+      /*
+        指定了 cardId 就**只做这一道**。
+
+        错题本里家长常常是有目标的:「昨天这道加法他错了两次,今天先把它弄懂」。
+        原来只能整本一起重做,那道题排在第几完全由算法决定 ——
+        家长想做的那道可能压根没出现。现在点哪道就做哪道。
+      */
+      const onlyId = router.params.cardId || ''
+      const list = onlyId
+        ? getSessionCards(cid, deckId, 999, true).filter((x) => x.card.id === onlyId)
+        : getSessionCards(cid, deckId, useLimit, freePractice)
       setChildId(cid)
       setDeck(d)
       setAllCards(all)

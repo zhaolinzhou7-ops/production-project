@@ -1,12 +1,85 @@
+/*
+ * 全局设计变量。
+ *
+ * 之前每个页面各写各的圆角、阴影、灰度,十几个页面下来就有了十几种「白卡片」——
+ * 单看每一个都不难看,连起来翻就是散的。这里把它们收成一套:
+ * 圆角三档、阴影三档、文字四档灰、间距一把尺。
+ *
+ * 配色偏暖:这个程序主要在**晚上**用,冷白背景在暗环境里最刺眼。
+ * 暖白 + 低饱和的粉/绿/黄,亮度压在 90% 上下,看久了不累。
+ */
 page {
+  /* 主色:粉(品牌)/ 绿(学习)/ 黄(奖励)/ 蓝(工具) */
   --brand: #ff8fa3;
   --brand-500: #f9497a;
+  --brand-50: rgba(249, 73, 122, 0.1);
   --mint: #34d399;
+  --mint-600: #059669;
   --sun: #fbbf24;
-  background: #fff7f0;
-  color: #374151;
+  --sun-600: #f59e0b;
+  --sky: #38bdf8;
+  --sky-600: #0ea5e9;
+
+  /* 文字四档:标题 / 正文 / 次要 / 极弱 */
+  --ink: #1f2937;
+  --ink-2: #374151;
+  --ink-3: #6b7280;
+  --ink-4: #9ca3af;
+
+  /* 卡片与描边 */
+  --card: rgba(255, 255, 255, 0.82);
+  --line: rgba(0, 0, 0, 0.06);
+
+  /* 圆角三档 */
+  --r-sm: 20rpx;
+  --r-md: 28rpx;
+  --r-lg: 36rpx;
+
+  /* 阴影三档 —— 越重要的东西浮得越高 */
+  --sh-1: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+  --sh-2: 0 6rpx 18rpx rgba(0, 0, 0, 0.08);
+  --sh-3: 0 10rpx 28rpx rgba(0, 0, 0, 0.12);
+
+  /* 暖白背景,顶部带一点点粉 —— 晚上看不刺眼 */
+  background: linear-gradient(180deg, #fff1ec 0%, #fff7f0 220rpx, #fff7f0 100%);
+  color: var(--ink-2);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/*
+ * 分区标题。
+ *
+ * 首页原先是十几张卡片一路排下来,没有任何分界 —— 找东西只能从上往下扫。
+ * 分成「今天要学 / 玩一玩 / 家长」三块之后,家长第一眼就知道该看哪一段,
+ * 而孩子那一段永远在最上面。
+ */
+.sect {
+  display: flex;
+  align-items: center;
+  margin: 34rpx 0 16rpx;
+
+  &__t {
+    font-size: 26rpx;
+    font-weight: 700;
+    color: var(--ink-4);
+    letter-spacing: 2rpx;
+  }
+
+  &__line {
+    flex: 1;
+    height: 2rpx;
+    margin-left: 18rpx;
+    background: var(--line);
+  }
+}
+
+/* 统一的软卡片:所有「一块白底内容」都用它,避免各页各写一套 */
+.softcard {
+  background: var(--card);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  padding: 26rpx;
 }
 
 /*

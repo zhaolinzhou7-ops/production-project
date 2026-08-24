@@ -139,3 +139,29 @@
   font-size: 24px;
   color: #6b7280;
 }
+
+/* 错题条目:左边点了直接做这道,右边是操作 */
+.item {
+  align-items: center;
+}
+
+.item__acts {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.item__go {
+  padding: 12rpx 22rpx;
+  margin-right: 12rpx;
+  border-radius: 24rpx;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.item__eye {
+  padding: 0 12rpx;
+  font-size: 30rpx;
+}

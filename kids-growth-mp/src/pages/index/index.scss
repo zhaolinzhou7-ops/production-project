@@ -11,9 +11,10 @@
   }
 
   &__title {
-    font-size: 44px;
+    font-size: 46px;
     font-weight: bold;
-    color: #374151;
+    color: var(--ink);
+    letter-spacing: 1px;
   }
 
   &__xp {
@@ -34,9 +35,10 @@
 }
 
 .deck {
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 28px;
-  padding: 24px;
+  background: var(--card);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  padding: 26px;
   margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 
@@ -137,13 +139,22 @@
   gap: 16px;
   margin-bottom: 24px;
 }
+/*
+ * 入口卡片。
+ *
+ * 统一成一套:同样的圆角、同样的内边距、同样的字号,颜色区分用途 ——
+ * 黄=算、蓝=工具、绿=记录、粉=奖励。
+ * 原先每个入口各写各的,大小和圆角都差一点点,连着看就是散的。
+ */
 .entry {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  border-radius: 24px;
-  padding: 26px;
+  gap: 16px;
+  border-radius: var(--r-md);
+  padding: 30px 26px;
+  box-shadow: var(--sh-2);
   &--math {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
   }
@@ -154,12 +165,17 @@
     font-size: 40px;
   }
   &__t {
-    font-size: 30px;
+    flex: 1;
+    min-width: 0;
+    font-size: 29px;
     font-weight: bold;
     color: #fff;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   &--eb .entry__t {
-    color: #374151;
+    color: var(--ink-2);
   }
 }
 
@@ -389,11 +405,11 @@
 
 /* 今日目标进度条:给孩子一个今天够得到的终点 */
 .dg {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 24px;
-  padding: 22px 24px;
+  background: var(--card);
+  border-radius: var(--r-md);
+  padding: 24px 26px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 14px rgba(249, 73, 122, 0.06);
+  box-shadow: var(--sh-1);
 
   &__hd {
     display: flex;
@@ -559,15 +575,19 @@
 }
 
 /* 「今天就做这个」—— 幼儿段唯一需要点的东西,所以它必须比页面上任何东西都大 */
+/*
+ * 「今天就做这个」是整个首页**唯一的主按钮**,所以它必须比别的都重:
+ * 更大的圆角、更高的阴影、更饱和的绿。一屏之内谁最显眼,孩子就点谁。
+ */
 .today {
   display: flex;
   align-items: center;
   gap: 20px;
   background: linear-gradient(135deg, #34d399, #059669);
-  border-radius: 30px;
-  padding: 34px 28px;
+  border-radius: var(--r-lg);
+  padding: 38px 30px;
   margin-bottom: 22px;
-  box-shadow: 0 8px 22px rgba(5, 150, 105, 0.25);
+  box-shadow: 0 12px 28px rgba(5, 150, 105, 0.28);
 
   &--done {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);

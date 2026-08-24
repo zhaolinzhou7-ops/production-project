@@ -13,15 +13,34 @@
 
   &__h {
     display: block;
-    font-size: 28px;
-    color: #6b7280;
-    margin: 16px 0 12px;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--ink-4);
+    letter-spacing: 2px;
+    margin: 32px 0 14px;
   }
 
   &__bar {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 60px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  /* 做题进度条:孩子对「还剩几题」比对「第几题」更有感觉 */
+  &__prog {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+
+  &__progfill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--mint), var(--mint-600));
+    transition: width 0.25s ease;
   }
 
   &__exit,
@@ -43,16 +62,24 @@
 }
 
 /* 难度档:放在题型上面,一眼能看见现在是哪一档、并且随手能换 */
+/*
+ * 难度档做成横向可滚的胶囊,而不是四个挤在一行的方块 ——
+ * 四个方块每个只剩 150rpx 宽,「幼儿档」四个字都放不下,说明文字更是看不清。
+ */
 .tiers {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   margin-bottom: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
 }
 .tier {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.75);
-  border: 2px solid transparent;
-  border-radius: 20px;
+  flex: 0 0 auto;
+  min-width: 190px;
+  background: var(--card);
+  border: 3px solid transparent;
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-1);
   padding: 20px;
 
   &--on {
@@ -80,20 +107,23 @@
   }
 }
 
+/* 展开后的题型:两列,和分组卡片有明显的缩进,一眼看得出「属于上面那一组」 */
 .kinds {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
+  margin-top: 14px;
+  padding-left: 10px;
 }
 .kind {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 45%;
+  width: 47%;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 20px;
-  padding: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--r-sm);
+  padding: 20px;
   &--on {
     background: #f9497a;
   }
@@ -335,12 +365,16 @@
 /* 题型分组:默认收起,点开才展开 —— 别把一面「题型墙」摆在家长面前 */
 .grp {
   margin-bottom: 16rpx;
-  padding: 20rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.75);
+  padding: 24rpx;
+  border-radius: var(--r-md);
+  background: var(--card);
+  box-shadow: var(--sh-1);
+  border: 3rpx solid transparent;
 
+  /* 当前选中的那一组描个边 —— 家长要能一眼看出「现在会出哪种题」 */
   &--on {
-    background: rgba(99, 102, 241, 0.1);
+    background: rgba(249, 73, 122, 0.08);
+    border-color: var(--brand-500);
   }
 
   &__hd {
