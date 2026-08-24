@@ -2314,6 +2314,51 @@ function run() {
     ok(md2.generateGroupDrill([], 10, 'toddler').length === 0, '空题型列表应返回空,不该崩')
   }
 
+  // ---- 每日积分上限:四个入口一个都不能漏 ----
+  {
+    reset()
+    const cidCap = study.getCurrentChildId()
+    study.setStage('toddler')
+    const cap = 120 // 幼儿档(见 core/pointCap)
+    ok(study.pointsRoomToday() === cap, '一天开始时额度是满的')
+
+    // 入口一:练习
+    const capDeck = study.ensureBuiltinDeck(cidCap, 'enlight-colors')
+    let guard = 0
+    while (study.pointsRoomToday() > 0 && guard++ < 200) {
+      study.finishSession({ childId: cidCap, deckId: capDeck, mode: 'picChooseEn', total: 10, correct: 10, durationSec: 30 })
+    }
+    ok(study.pointsRoomToday() === 0, '一直刷练习会把额度用完')
+    const atCap = study.getPoints().balance
+    const r1 = study.finishSession({ childId: cidCap, deckId: capDeck, mode: 'picChooseEn', total: 10, correct: 10, durationSec: 30 })
+    ok(study.getPoints().balance === atCap, '到顶之后练习不再加分')
+    ok(r1.pointsAwarded === 0 && r1.capped === true, '练习要如实报告「一分没加」')
+
+    // 入口二:口算 —— 换个入口照样不能刷
+    const r2 = study.finishDrill({ childId: cidCap, kind: 'add10', total: 20, correct: 20, durationSec: 60 })
+    ok(study.getPoints().balance === atCap, '到顶之后口算也不再加分')
+    ok(r2.pointsAwarded === 0 && r2.capped === true, '口算也要如实报告')
+
+    // 入口三:习惯打卡 / 入口四:口语跟读,都走 adjustPoints
+    study.adjustPoints(20)
+    ok(study.getPoints().balance === atCap, '到顶之后习惯打卡也不再加分')
+    ok(study.adjustPointsDetailed(20).actual === 0, '口语跟读同样拿不到分')
+
+    /*
+      **扣分不受上限限制。**
+      取消打卡要能扣回去 —— 否则「打卡→取消→打卡」就是一台印钞机。
+    */
+    study.adjustPoints(-15)
+    ok(study.getPoints().balance === atCap - 15, '扣分必须照扣')
+    // 扣完之后腾出来的额度可以重新拿(这是对的:他确实没拿满过那么多)
+    ok(study.pointsRoomToday() > 0, '扣分后额度应重新出现')
+
+    // 上限按学段走:大孩子的额度更高
+    const pc = L('core/pointCap.js')
+    ok(pc.dailyPointCap('toddler') < pc.dailyPointCap('primary'), '小学档的上限应高于幼儿档')
+    ok(pc.dailyPointCap('primary') < pc.dailyPointCap('junior'), '再大一档还要更高')
+  }
+
   // ---- 做题页必须是独立一页 ----
   {
     /*

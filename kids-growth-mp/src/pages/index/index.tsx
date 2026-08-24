@@ -25,8 +25,9 @@ import {
   todayByArea,
   yesterdayScore,
   recordTodayScore,
-
-  errorDueToday,} from '../../store/study'
+  errorDueToday,
+  pointsRoomToday,
+} from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
 import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
@@ -110,6 +111,10 @@ function Index() {
   const [stickerCount, setStickerCount] = useState(0)
   /** 今天有几道错题该重做 —— 显示在错题本入口上 */
   const [errDue, setErrDue] = useState(0)
+  /** 今天还能再拿多少成长值 —— 上限一直都在,但一直没显示过 */
+  const [room, setRoom] = useState(0)
+  /** 展开的是哪个卡组(空串=都收着)—— 列表默认只占一行 */
+  const [openDeck, setOpenDeck] = useState('')
   const [petEmoji, setPetEmoji] = useState('🥚')
   const [level, setLevel] = useState<LevelInfo>(levelOf(0))
   const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
@@ -289,6 +294,7 @@ function Index() {
       setHabit(todayProgress())
       setStickerCount(ownedStickers().length)
       setErrDue(errorDueToday(childId))
+      setRoom(pointsRoomToday())
       setCanSpend(spendable())
       setPending(pendingCount())
       const pet = getPet()
@@ -400,7 +406,20 @@ function Index() {
         */}
         <Text className='home__title'>成长学习 🌱</Text>
         <View className='home__stat'>
+          {/*
+            成长值旁边显示**今天还能拿多少分**。
+
+            每天的上限一直都在(练习/口算/习惯/口语四个入口都收口到同一个函数),
+            但它一直是**看不见的** —— 撞上了也只是「怎么不加分了」,
+            像个 bug。把额度摆出来,它才从「暗规则」变成「说清楚的规则」:
+            今天的分拿满了,剩下的时间照常练,只是不再涨分。
+          */}
           <Text className='home__xp'>成长值 {xp}</Text>
+          {room > 0 ? (
+            <Text className='home__room'>今日还可得 {room}</Text>
+          ) : (
+            <Text className='home__room home__room--full'>今日已拿满</Text>
+          )}
           {streak > 0 ? <Text className='home__streak'>🔥 {streak} 天</Text> : null}
           {/*
             云同步没配置时**根本不显示这个按钮**。
@@ -479,117 +498,6 @@ function Index() {
       ) : null}
 
       {/*
-        今日评分卡。
-
-        原则写在 core/scoreCard.ts:主要看「做了没有」而不是「对了多少」,
-        和昨天的自己比而不是和满分比,而且**没有不及格**。
-        一个 4 岁半的孩子如果从这套系统里学会的第一件事是「我不行」,
-        那前面做的所有内容都白搭。
-      */}
-      {/* 点进去是完整的今日评分(分项 + 点评 + 学习足迹) */}
-      {card && card.stars > 0 ? (
-        <View className='dcard' onClick={() => openPage('/pages/score/index')}>
-          <Text className='dcard__s'>{'⭐'.repeat(card.stars)}{'☆'.repeat(5 - card.stars)}</Text>
-          <Text className='dcard__c'>{card.cheer}</Text>
-          <Text className='dcard__go'>今日评分 ›</Text>
-        </View>
-      ) : null}
-      {card && card.stars === 0 ? (
-        <View className='dcard' onClick={() => openPage('/pages/score/index')}>
-          <Text className='dcard__s'>☆☆☆☆☆</Text>
-          <Text className='dcard__c'>今天还没开始</Text>
-          <Text className='dcard__go'>今日评分 ›</Text>
-        </View>
-      ) : null}
-
-      {/*
-        今日目标进度条。孩子对「还差几题」远比对「累计多少题」有感觉,
-        这条进度条就是给他一个今天能够到的终点。
-
-        原先这下面还有一条「今日挑战 x/3 组」。两条进度条并排放着说的是
-        同一件事(今天做够没有),只是一条按题数、一条按组数 ——
-        孩子看两条一模一样的条只会更糊涂。合成一条,组数并进这一行的右边。
-      */}
-      <View className='dg' onClick={() => openPage('/pages/fun/index')}>
-        <View className='dg__hd'>
-          <Text className='dg__t'>
-            今日目标{challenge.done >= challenge.goal ? ' 🏆' : ''}
-          </Text>
-          <Text className='dg__n'>
-            {todayN} / {goalN} 题 · {challenge.done}/{challenge.goal} 组
-          </Text>
-        </View>
-        <View className='dg__track'>
-          <View
-            className='dg__fill'
-            style={{ width: `${Math.min(100, Math.round((todayN / Math.max(1, goalN)) * 100))}%` }}
-          />
-        </View>
-        {todayN >= goalN ? <Text className='dg__done'>🎉 今天的目标达成啦!</Text> : null}
-      </View>
-
-      {err || errEntry ? (
-        <View className='errbox'>
-          <Text className='errbox__t'>⚠️ 出错了(把下面这行念给开发者听):</Text>
-          <Text className='errbox__m'>{err || (errEntry ? errEntry.msg : '')}</Text>
-          {errEntry ? (
-            <Text className='errbox__when'>
-              {formatWhen(errEntry.at)}
-              {errEntry.page ? ` · 在「${errEntry.page}」` : ''} · {errEntry.ver}
-            </Text>
-          ) : null}
-          <Text className='errbox__btn' onClick={resetLocal}>
-            清空本地数据重试
-          </Text>
-          <Text
-            className='errbox__btn errbox__btn--ghost'
-            onClick={() => {
-              clearErrors()
-              setErr('')
-              setErrEntry(null)
-            }}
-          >
-            知道了
-          </Text>
-        </View>
-      ) : null}
-
-      {installing ? (
-        <View className='rest'>
-          <Text className='rest__t'>{installing}</Text>
-        </View>
-      ) : null}
-
-      {minutes >= limitMin ? (
-        <View className='rest'>
-          <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
-        </View>
-      ) : null}
-
-      {pending > 0 ? (
-        <View className='pendbar'>
-          <Text className='pendbar__t'>🎁 有 {pending} 个奖励换好了,记得找爸爸妈妈兑现</Text>
-        </View>
-      ) : null}
-
-      {/* 生活习惯放最前:这是每天最先要做的事,不该埋在学习内容下面 */}
-      <View className='habitcard' onClick={() => openPage('/pages/habits/index')}>
-        <Text className='habitcard__e'>{habit.total > 0 && habit.done >= habit.total ? '🎉' : '🪥'}</Text>
-        <View className='habitcard__meta'>
-          <Text className='habitcard__t'>今日习惯</Text>
-          <Text className='habitcard__n'>
-            {habit.total > 0 ? `${habit.done}/${habit.total} 件已完成` : '点这里安排每天要做的事'}
-          </Text>
-        </View>
-        <View className='habitcard__track'>
-          <View
-            className='habitcard__fill'
-            style={{ width: `${habit.total > 0 ? (habit.done / habit.total) * 100 : 0}%` }}
-          />
-        </View>
-      </View>
-
-      {/*
         「今天就做这个」—— 幼儿段唯一需要点的东西。
 
         首页有 9 个入口、32 个内容包、11 种练法,而使用者是一个 4 岁半、
@@ -639,23 +547,109 @@ function Index() {
       ) : null}
 
       {/*
-        入口**全部直接显示**,不再藏在「更多」后面。
+        「今天怎么样」三件事合成**一行三格**:评分、题量、习惯。
 
-        上一版为了给 4 岁半的孩子减负,把错题本、成长档案、内容库、声音自检
-        这些收进了「更多(家长用)」。想法没错,做法错了:
-        家长每天要用的东西被藏了一层,而**家长才是每天晚上真正操作这台设备的人** ——
-        他要点四下才找得到内容库,那这个功能对他就等于不存在。
+        评分那一格的原则写在 core/scoreCard.ts:主要看「做了没有」而不是
+        「对了多少」,和昨天的自己比而不是和满分比,而且**没有不及格** ——
+        一个 4 岁半的孩子如果从这套系统里学会的第一件事是「我不行」,
+        那前面做的所有内容都白搭。
 
-        孩子那一侧已经有「今天就做这个」那一个大按钮兜住了,
-        他根本不会往下看;下面这些多几个入口并不会干扰到他。
-        真正需要减负的是选择,不是可见性 —— 这两件事上一版搞混了。
+        原先它们是三张各占一行的卡片(评分卡 + 目标进度条 + 习惯卡),
+        加起来吃掉半屏,而说的都是同一件事:今天做到哪儿了。
+        并排三格之后一眼扫完,点哪一格进哪一页。
       */}
+      <View className='tri'>
+        <View className='tri__c' onClick={() => openPage('/pages/score/index')}>
+          <Text className='tri__v'>
+            {'⭐'.repeat(card ? card.stars : 0)}
+            {'☆'.repeat(5 - (card ? card.stars : 0))}
+          </Text>
+          <Text className='tri__l'>今日评分 ›</Text>
+        </View>
+        <View className='tri__c' onClick={() => openPage('/pages/fun/index')}>
+          <Text className='tri__v tri__v--n'>
+            {todayN}
+            <Text className='tri__sub'>/{goalN} 题</Text>
+          </Text>
+          <View className='tri__track'>
+            <View
+              className='tri__fill'
+              style={{ width: `${Math.min(100, Math.round((todayN / Math.max(1, goalN)) * 100))}%` }}
+            />
+          </View>
+          <Text className='tri__l'>{todayN >= goalN ? '🎉 达成' : `还差 ${goalN - todayN} 题`}</Text>
+        </View>
+        <View className='tri__c' onClick={() => openPage('/pages/habits/index')}>
+          <Text className='tri__v tri__v--n'>
+            {habit.done}
+            <Text className='tri__sub'>/{habit.total || 0}</Text>
+          </Text>
+          <View className='tri__track'>
+            <View
+              className='tri__fill tri__fill--mint'
+              style={{ width: `${habit.total > 0 ? (habit.done / habit.total) * 100 : 0}%` }}
+            />
+          </View>
+          <Text className='tri__l'>{habit.total > 0 ? '今日习惯 ›' : '安排习惯 ›'}</Text>
+        </View>
+      </View>
+
+      {err || errEntry ? (
+        <View className='errbox'>
+          <Text className='errbox__t'>⚠️ 出错了(把下面这行念给开发者听):</Text>
+          <Text className='errbox__m'>{err || (errEntry ? errEntry.msg : '')}</Text>
+          {errEntry ? (
+            <Text className='errbox__when'>
+              {formatWhen(errEntry.at)}
+              {errEntry.page ? ` · 在「${errEntry.page}」` : ''} · {errEntry.ver}
+            </Text>
+          ) : null}
+          <Text className='errbox__btn' onClick={resetLocal}>
+            清空本地数据重试
+          </Text>
+          <Text
+            className='errbox__btn errbox__btn--ghost'
+            onClick={() => {
+              clearErrors()
+              setErr('')
+              setErrEntry(null)
+            }}
+          >
+            知道了
+          </Text>
+        </View>
+      ) : null}
+
+      {installing ? (
+        <View className='rest'>
+          <Text className='rest__t'>{installing}</Text>
+        </View>
+      ) : null}
+
+      {minutes >= limitMin ? (
+        <View className='rest'>
+          <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
+        </View>
+      ) : null}
+
+      {pending > 0 ? (
+        <View className='pendbar'>
+          <Text className='pendbar__t'>🎁 有 {pending} 个奖励换好了,记得找爸爸妈妈兑现</Text>
+        </View>
+      ) : null}
+
 
       {/*
-        分区标题。
+        分区标题 + 全部入口直接显示。
+
         原先十几张卡片一路排下来没有任何分界,找东西只能从上往下扫。
-        分成「今天要学 / 玩一玩 / 家长」三块之后,家长第一眼就知道看哪一段,
-        而孩子那一段永远在最上面。
+        分成「今天要学 / 玩一玩 / 家长」三块之后,家长第一眼就知道看哪一段。
+
+        更早一版曾把这些收进「更多(家长用)」,那是错的:
+        **家长才是每天晚上真正操作这台设备的人**,他每天要用的东西不能藏一层。
+        需要减负的是「选择」,不是「可见性」—— 孩子那侧已经有上面那个
+        绿色大按钮兜住了,他根本不会往下看。所以这里的做法是**摆紧凑**,
+        不是藏起来。
       */}
       <View className='sect'>
         <Text className='sect__t'>今天要学</Text>
@@ -667,57 +661,57 @@ function Index() {
         上一版我把它和错题本一起收进了「更多」—— 错的:错题本是家长偶尔查的,
         口算是孩子每天要做的。一个每天都用的东西藏起来,用户的感受就是「被删了」。
       */}
-      <View className='entries'>
-        <View className='entry entry--math' onClick={() => openPage('/pages/math/index')}>
-          <Text className='entry__icon'>🧮</Text>
-          <Text className='entry__t'>口算练习</Text>
+      {/*
+        入口改成**一行三个的小方块**。
+
+        原先是每行一到两个整宽大卡,九个入口就吃掉三四屏。
+        小方块一行三个,九个入口只占三行 —— 一个都没少,页面短了一多半。
+        (上一版把它们藏进「更多」是错的:家长每天要用的东西不能藏,
+        但可以摆得紧凑一点。)
+      */}
+      <View className='tiles'>
+        <View className='tile tile--math' onClick={() => openPage('/pages/math/index')}>
+          <Text className='tile__i'>🧮</Text>
+          <Text className='tile__t'>口算</Text>
         </View>
         {/*
           错题本上带一个数字。
           错题这件事的难点从来不是「收集」,是**回头去做** ——
           没有数字提醒,家长永远想不起来点它,收集得再全也白搭。
         */}
-        <View className='entry entry--eb' onClick={() => openPage('/pages/errorbook/index')}>
-          <Text className='entry__icon'>📕</Text>
-          <Text className='entry__t'>错题本{errDue > 0 ? ` ${errDue}` : ''}</Text>
+        <View className='tile tile--eb' onClick={() => openPage('/pages/errorbook/index')}>
+          <Text className='tile__i'>📕</Text>
+          <Text className='tile__t'>错题本</Text>
+          {errDue > 0 ? <Text className='tile__n'>{errDue}</Text> : null}
+        </View>
+        <View className='tile tile--talk' onClick={() => openPage('/pages/talk/index')}>
+          <Text className='tile__i'>💬</Text>
+          <Text className='tile__t'>英语口语</Text>
         </View>
       </View>
 
       {/* 等级条:孩子看不懂「Lv.7」,但家长用它判断整体投入,所以留在主屏 */}
-      <View className='lvbar' onClick={() => openPage('/pages/parent/index')}>
-        <Text className='lvbar__e'>{level.cur.emoji}</Text>
-        <View className='lvbar__meta'>
-          <Text className='lvbar__n'>
-            Lv.{level.cur.level} {level.cur.name}
-          </Text>
-          <View className='lvbar__track'>
-            <View className='lvbar__fill' style={{ width: `${level.progress * 100}%` }} />
-          </View>
-        </View>
-        <Text className='lvbar__h'>{level.next ? `再 ${level.toNext} 升级` : '满级'}</Text>
-      </View>
 
-
-      <View className='entries'>
-        <View className='entry entry--talk' onClick={() => openPage('/pages/talk/index')}>
-          <Text className='entry__icon'>💬</Text>
-          <Text className='entry__t'>英语口语</Text>
-        </View>
-      </View>
 
       <View className='sect'>
         <Text className='sect__t'>玩一玩</Text>
         <View className='sect__line' />
       </View>
 
-      <View className='entries'>
-        <View className='entry entry--fun' onClick={() => openPage('/pages/fun/index')}>
-          <Text className='entry__icon'>{petEmoji}</Text>
-          <Text className='entry__t'>宠物·贴纸 {stickerCount}</Text>
+      <View className='tiles'>
+        <View className='tile tile--fun' onClick={() => openPage('/pages/fun/index')}>
+          <Text className='tile__i'>{petEmoji}</Text>
+          <Text className='tile__t'>宠物贴纸</Text>
+          {stickerCount > 0 ? <Text className='tile__n'>{stickerCount}</Text> : null}
         </View>
-        <View className='entry entry--reward' onClick={() => openPage('/pages/rewards/index')}>
-          <Text className='entry__icon'>🎁</Text>
-          <Text className='entry__t'>换奖励 {canSpend}</Text>
+        <View className='tile tile--reward' onClick={() => openPage('/pages/rewards/index')}>
+          <Text className='tile__i'>🎁</Text>
+          <Text className='tile__t'>换奖励</Text>
+          {canSpend > 0 ? <Text className='tile__n'>{canSpend}</Text> : null}
+        </View>
+        <View className='tile tile--lv' onClick={() => openPage('/pages/parent/index')}>
+          <Text className='tile__i'>{level.cur.emoji}</Text>
+          <Text className='tile__t'>Lv.{level.cur.level}</Text>
         </View>
       </View>
 
@@ -726,25 +720,22 @@ function Index() {
         <View className='sect__line' />
       </View>
 
-      <View className='entries'>
-        <View className='entry entry--sound' onClick={() => void checkSound()}>
-          <Text className='entry__icon'>🔎</Text>
-          <Text className='entry__t'>声音自检</Text>
+      <View className='tiles'>
+        <View className='tile tile--parent' onClick={() => openPage('/pages/parent/index')}>
+          <Text className='tile__i'>👨‍👩‍👧</Text>
+          <Text className='tile__t'>家长中心</Text>
         </View>
-        <View className='entry entry--archive' onClick={() => openPage('/pages/archive/index')}>
-          <Text className='entry__icon'>🌱</Text>
-          <Text className='entry__t'>成长档案</Text>
+        <View className='tile tile--packs' onClick={() => openPage('/pages/packs/index')}>
+          <Text className='tile__i'>📚</Text>
+          <Text className='tile__t'>内容库</Text>
         </View>
-      </View>
-
-      <View className='entries'>
-        <View className='entry entry--packs' onClick={() => openPage('/pages/packs/index')}>
-          <Text className='entry__icon'>📚</Text>
-          <Text className='entry__t'>内容库</Text>
+        <View className='tile tile--archive' onClick={() => openPage('/pages/archive/index')}>
+          <Text className='tile__i'>🌱</Text>
+          <Text className='tile__t'>成长档案</Text>
         </View>
-        <View className='entry entry--parent' onClick={() => openPage('/pages/parent/index')}>
-          <Text className='entry__icon'>👨‍👩‍👧</Text>
-          <Text className='entry__t'>家长中心</Text>
+        <View className='tile tile--sound' onClick={() => void checkSound()}>
+          <Text className='tile__i'>🔎</Text>
+          <Text className='tile__t'>声音自检</Text>
         </View>
       </View>
 
@@ -785,12 +776,24 @@ function Index() {
         <Text className='home__tip'>还没有内容包,点上面的「📚 内容库」挑几个加进来。</Text>
       ) : null}
 
+      {/*
+        卡组列表默认**收成一行**,点开才展开练法。
+
+        原先每个卡组都摊开着:5 个练法 + 2 个「再练一遍」= 7 个按钮。
+        装了十个内容包,首页就有七十个按钮、要滑七八屏 ——
+        而其中孩子真正会用的是最上面那个「今天就做这个」。
+        列表在这里的作用是「想单独练某一组时找得到」,那它只需要一行。
+      */}
       {rows.map(({ deck, due }) => {
+        const open = openDeck === deck.id
         // 练习模式由卡片类型决定(单词/古诗/识字/看图/问答各有各的玩法)
         const modes = modesFor(deck.itemType, true)
         return (
-          <View key={deck.id} className='deck'>
-            <View className='deck__head'>
+          <View key={deck.id} className={open ? 'deck deck--open' : 'deck'}>
+            <View
+              className='deck__head'
+              onClick={() => setOpenDeck(open ? '' : deck.id)}
+            >
               <Text className='deck__icon'>{deck.icon}</Text>
               <View className='deck__meta'>
                 <Text className='deck__name'>{deck.name}</Text>
@@ -801,30 +804,35 @@ function Index() {
               ) : (
                 <Text className='deck__badge deck__badge--done'>已清空</Text>
               )}
+              <Text className='deck__arrow'>{open ? '▾' : '›'}</Text>
             </View>
-            <View className='deck__modes'>
-              {modes.map((m) => (
-                <View key={m.mode} className='mode' onClick={() => go(deck.id, m.mode)}>
-                  <Text className='mode__icon'>{m.icon}</Text>
-                  <Text className='mode__label'>{m.label}</Text>
+            {open ? (
+              <View className='deck__body'>
+                <View className='deck__modes'>
+                  {modes.map((m) => (
+                    <View key={m.mode} className='mode' onClick={() => go(deck.id, m.mode)}>
+                      <Text className='mode__icon'>{m.icon}</Text>
+                      <Text className='mode__label'>{m.label}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-            {/*
-              「再练一遍」—— 无论今天的复习清空没清空,想练随时能练。
-              间隔重复会把答对的卡排到几天之后,于是孩子今天还想练,
-              程序却说「已清空」把他挡在外面。那个算法是为「记得牢」设计的,
-              不是为「不准多练」设计的 —— 主动想练的时候拦住他,
-              是这套系统能犯的最糟糕的错误之一。
-              这一组照常给分、照常喂宠物,但不改动复习计划。
-            */}
-            <View className='again'>
-              {repeatModesFor(deck.itemType, true).map((m) => (
-                <View key={`again-${m.mode}`} className='again__b' onClick={() => go(deck.id, m.mode, true)}>
-                  <Text className='again__t'>🔄 再练一遍 · {m.label}</Text>
+                {/*
+                  「再练一遍」—— 无论今天的复习清空没清空,想练随时能练。
+                  间隔重复会把答对的卡排到几天之后,于是孩子今天还想练,
+                  程序却说「已清空」把他挡在外面。那个算法是为「记得牢」设计的,
+                  不是为「不准多练」设计的 —— 主动想练的时候拦住他,
+                  是这套系统能犯的最糟糕的错误之一。
+                  这一组照常给分、照常喂宠物,但不改动复习计划。
+                */}
+                <View className='again'>
+                  {repeatModesFor(deck.itemType, true).map((m) => (
+                    <View key={`again-${m.mode}`} className='again__b' onClick={() => go(deck.id, m.mode, true)}>
+                      <Text className='again__t'>🔄 再练一遍 · {m.label}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
+              </View>
+            ) : null}
           </View>
         )
       })}

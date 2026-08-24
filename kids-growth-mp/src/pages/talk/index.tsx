@@ -34,7 +34,7 @@ import {
   sanitizeTalk,
   type LevelChoice,
 } from '../../store/talk'
-import { getStage, adjustPoints } from '../../store/study'
+import { getStage, adjustPointsDetailed } from '../../store/study'
 import {
   playWordAudio,
   playEnglishSlow,
@@ -209,6 +209,8 @@ function Talk() {
   const [step, setStep] = useState(0)
   const [showZh, setShowZh] = useState(false)
   const [burst, setBurst] = useState(0)
+  /** 今天的成长值已经拿满了 —— 照常练,但要说明一声为什么不加分了 */
+  const [capped, setCapped] = useState(false)
   const [recPath, setRecPath] = useState('')
   const [recording, setRecording] = useState(false)
   const [listening, setListening] = useState(false)
@@ -263,7 +265,8 @@ function Talk() {
   }
 
   const reward = () => {
-    adjustPoints(POINTS_PER_LINE)
+    // 撞上每日上限时不再加分,但照常练 —— 记下来给结算页说明一句
+    if (adjustPointsDetailed(POINTS_PER_LINE).actual <= 0) setCapped(true)
     setBurst((b) => b + 1)
     try {
       Taro.vibrateShort({ type: 'light' })
@@ -452,6 +455,10 @@ function Talk() {
         </Text>
       ) : null}
       {msg ? <Text className='msg'>{msg}</Text> : null}
+      {/* 今天的分拿满了要说一声,否则「读了半天不涨分」看着像坏了 */}
+      {capped ? (
+        <Text className='msg'>🌙 今天的成长值已经拿满啦,继续练照样有记录,明天再来涨分</Text>
+      ) : null}
     </View>
   )
 

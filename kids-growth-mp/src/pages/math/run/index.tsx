@@ -52,7 +52,14 @@ function MathRun() {
   const [input, setInput] = useState('')
   const [correct, setCorrect] = useState(0)
   const [feedback, setFeedback] = useState<'none' | 'ok' | 'no'>('none')
-  const [summary, setSummary] = useState<{ correct: number; total: number; points: number; sec: number } | null>(null)
+  const [summary, setSummary] = useState<{
+    correct: number
+    total: number
+    points: number
+    sec: number
+    /** 这一组有没有撞上「今天的分拿满了」 */
+    capped: boolean
+  } | null>(null)
   const [combo, setCombo] = useState(0)
   /** 答对特效:每答对一题 +1,用来重新触发动画 */
   const [burst, setBurst] = useState(0)
@@ -86,7 +93,13 @@ function MathRun() {
     } catch {
       /* 忽略 */
     }
-    setSummary({ correct: nextCorrect, total: problems.length, points: res.pointsAwarded, sec })
+    setSummary({
+      correct: nextCorrect,
+      total: problems.length,
+      points: res.pointsAwarded,
+      sec,
+      capped: !!res.capped,
+    })
     flushNow()
   }
 
@@ -172,6 +185,10 @@ function MathRun() {
             <Text className='mresult__l'>积分</Text>
           </View>
         </View>
+        {/* 撞上上限要说清楚 —— 认真做完看到「+0」不像规则,像程序坏了 */}
+        {summary.capped ? (
+          <Text className='reward__line'>🌙 今天的成长值已经拿满啦,明天再来接着涨</Text>
+        ) : null}
         {gotSticker ? <Text className='reward__line'>🎁 获得贴纸「{gotSticker.name}」{gotSticker.emoji}</Text> : null}
         {evolved ? <Text className='reward__line'>✨ 宠物进化啦!</Text> : null}
         {challengeDone ? <Text className='reward__line'>🏆 今日挑战完成!</Text> : null}

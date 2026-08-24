@@ -753,12 +753,18 @@ export function finishDrill(params: {
   // 同上:报实际加进去的分,否则撞上每日上限时结算页的数字是假的
   const beforeDrill = getPoints()
   const after = addPoints(points)
+  const actual = after.balance - beforeDrill.balance
   return {
     correct,
     total,
-    pointsAwarded: after.balance - beforeDrill.balance,
+    pointsAwarded: actual,
     newBalance: after.balance,
     newXp: after.xp,
+    /*
+      撞上每日上限时**必须告诉他一声**。
+      不说的话,孩子认真做完 20 道题看到「+0」—— 那不像规则,像程序坏了。
+    */
+    capped: actual < points,
   }
 }
 

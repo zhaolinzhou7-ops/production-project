@@ -134,55 +134,6 @@
   }
 }
 
-.entries {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-/*
- * 入口卡片。
- *
- * 统一成一套:同样的圆角、同样的内边距、同样的字号,颜色区分用途 ——
- * 黄=算、蓝=工具、绿=记录、粉=奖励。
- * 原先每个入口各写各的,大小和圆角都差一点点,连着看就是散的。
- */
-.entry {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border-radius: var(--r-md);
-  padding: 30px 26px;
-  box-shadow: var(--sh-2);
-  &--math {
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  }
-  &--eb {
-    background: rgba(255, 255, 255, 0.8);
-  }
-  &__icon {
-    font-size: 40px;
-  }
-  &__t {
-    flex: 1;
-    min-width: 0;
-    font-size: 29px;
-    font-weight: bold;
-    color: #fff;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  &--eb .entry__t {
-    color: var(--ink-2);
-  }
-}
-
-.entry--sound {
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
-}
-
 .errbox {
   background: rgba(239, 68, 68, 0.1);
   border-radius: 22px;
@@ -295,105 +246,6 @@
   border-radius: 999px;
 }
 
-.entry--packs {
-  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
-}
-
-.entry--archive {
-  background: linear-gradient(135deg, #6ee7b7, #10b981);
-}
-
-.entry--fun {
-  background: linear-gradient(135deg, #f472b6, #ec4899);
-}
-
-/* 今日挑战条 */
-.chalbar {
-  background: rgba(251, 191, 36, 0.18);
-  border-radius: 22px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-
-  &__t {
-    display: block;
-    font-size: 26px;
-    color: #b45309;
-    font-weight: bold;
-    margin-bottom: 12px;
-  }
-
-  &__track {
-    height: 14px;
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 999px;
-    overflow: hidden;
-  }
-
-  &__fill {
-    height: 100%;
-    background: linear-gradient(90deg, #fbbf24, #f59e0b);
-    border-radius: 999px;
-  }
-}
-
-.entry--parent {
-  background: linear-gradient(135deg, #34d399, #10b981);
-}
-
-/* 等级条 */
-.lvbar {
-  display: flex;
-  align-items: center;
-  background: rgba(52, 211, 153, 0.16);
-  border-radius: 22px;
-  padding: 18px 24px;
-  margin-bottom: 20px;
-
-  &__e { font-size: 48px; margin-right: 18px; }
-  &__meta { flex: 1; }
-  &__n { display: block; font-size: 26px; color: #047857; font-weight: bold; }
-  &__track {
-    height: 12px;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 999px;
-    margin-top: 10px;
-    overflow: hidden;
-  }
-  &__fill { height: 100%; background: linear-gradient(90deg, #34d399, #10b981); border-radius: 999px; }
-  &__h { font-size: 22px; color: #059669; margin-left: 16px; }
-}
-
-/* 今日习惯卡片(首页第一位) */
-.habitcard {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
-  border-radius: 28px;
-  padding: 26px;
-  padding-bottom: 34px;
-  margin-bottom: 22px;
-  overflow: hidden;
-
-  &__e { font-size: 56px; margin-right: 20px; }
-  &__meta { flex: 1; }
-  &__t { display: block; font-size: 32px; color: #fff; font-weight: bold; }
-  &__n { font-size: 24px; color: rgba(255, 255, 255, 0.92); }
-
-  &__track {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 12px;
-    background: rgba(255, 255, 255, 0.3);
-  }
-  &__fill { height: 100%; background: #fff; }
-}
-
-.entry--talk { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
-.entry--reward { background: linear-gradient(135deg, #fb7185, #f43f5e); }
-
 .pendbar {
   background: rgba(244, 63, 94, 0.14);
   border-radius: 22px;
@@ -401,56 +253,6 @@
   margin-bottom: 20px;
 
   &__t { font-size: 24px; color: #be123c; line-height: 1.5; }
-}
-
-/* 今日目标进度条:给孩子一个今天够得到的终点 */
-.dg {
-  background: var(--card);
-  border-radius: var(--r-md);
-  padding: 24px 26px;
-  margin-bottom: 20px;
-  box-shadow: var(--sh-1);
-
-  &__hd {
-    display: flex;
-    align-items: baseline;
-    margin-bottom: 12px;
-  }
-
-  &__t {
-    flex: 1;
-    font-size: 26px;
-    color: #6b7280;
-  }
-
-  &__n {
-    font-size: 30px;
-    font-weight: bold;
-    color: #f9497a;
-  }
-
-  &__track {
-    height: 24px;
-    border-radius: 999px;
-    background: rgba(249, 73, 122, 0.1);
-    overflow: hidden;
-  }
-
-  &__fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #ffb26b, #f9497a);
-    transition: width 0.3s ease;
-  }
-
-  &__done {
-    display: block;
-    font-size: 24px;
-    color: #10b981;
-    font-weight: bold;
-    margin-top: 12px;
-    text-align: center;
-  }
 }
 
 /* 报错发生的时间/版本/页面 —— 有了它才分得清「刚出的」和「上个版本的」 */
@@ -627,21 +429,6 @@
   margin-bottom: 12px;
 }
 
-/* 今日评分卡:给孩子看的只有星星和一句话 —— 分项和点评在家长中心 */
-.dcard {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: rgba(251, 191, 36, 0.14);
-  border-radius: 24px;
-  padding: 22px 24px;
-  margin-bottom: 20px;
-
-  &__s { font-size: 30px; letter-spacing: 2px; }
-  &__c { flex: 1; font-size: 26px; color: #b45309; font-weight: 500; }
-  &__up { font-size: 22px; color: #059669; }
-}
-
 /* 今天为什么先练这个 */
 .todayreason {
   display: block;
@@ -663,9 +450,163 @@
   margin: -8px 0 20px;
 }
 
-/* 评分卡是可点的:点进去是分项、点评和学习足迹 */
-.dcard__go {
-  font-size: 22px;
-  color: #b45309;
-  white-space: nowrap;
+/*
+ * 「今天怎么样」三格:评分 / 题量 / 习惯。
+ *
+ * 原先是三张各占一行的卡片,加起来吃掉半屏,而说的都是同一件事:
+ * 今天做到哪儿了。并排三格一眼扫完,点哪格进哪页。
+ */
+.tri {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 22px;
+
+  &__c {
+    flex: 1;
+    min-width: 0;
+    background: var(--card);
+    border-radius: var(--r-md);
+    box-shadow: var(--sh-1);
+    padding: 22px 14px;
+    text-align: center;
+  }
+
+  &__v {
+    display: block;
+    font-size: 26px;
+    color: var(--sun-600);
+    line-height: 1.3;
+
+    &--n {
+      font-size: 40px;
+      font-weight: bold;
+      color: var(--ink);
+    }
+  }
+
+  &__sub {
+    font-size: 22px;
+    font-weight: normal;
+    color: var(--ink-4);
+  }
+
+  &__track {
+    height: 8px;
+    margin: 10px 6px 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--brand-500);
+
+    &--mint {
+      background: var(--mint);
+    }
+  }
+
+  &__l {
+    display: block;
+    margin-top: 10px;
+    font-size: 21px;
+    color: var(--ink-4);
+  }
+}
+
+/*
+ * 入口小方块:一行三个。
+ *
+ * 原先每行一到两个整宽大卡,九个入口吃掉三四屏。
+ * 小方块一行三个,九个入口只占三行 —— 一个都没少,页面短了一多半。
+ */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.tile {
+  position: relative;
+  width: calc((100% - 28px) / 3);
+  box-sizing: border-box;
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-2);
+  padding: 24px 10px 20px;
+  text-align: center;
+
+  &__i {
+    display: block;
+    font-size: 46px;
+    line-height: 1.1;
+  }
+
+  &__t {
+    display: block;
+    margin-top: 8px;
+    font-size: 24px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  /* 角标:错题几道、贴纸几张、能换几个奖励 —— 不点进去也知道有没有事要做 */
+  &__n {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    min-width: 34px;
+    height: 34px;
+    line-height: 34px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--brand-500);
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  &--math { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+  &--eb { background: linear-gradient(135deg, #fb7185, #e11d48); }
+  &--talk { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
+  &--fun { background: linear-gradient(135deg, #34d399, #059669); }
+  &--reward { background: linear-gradient(135deg, #f472b6, #db2777); }
+  &--lv { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+  &--parent { background: linear-gradient(135deg, #94a3b8, #64748b); }
+  &--packs { background: linear-gradient(135deg, #60a5fa, #3b82f6); }
+  &--archive { background: linear-gradient(135deg, #4ade80, #16a34a); }
+  &--sound { background: linear-gradient(135deg, #22d3ee, #0891b2); }
+}
+
+/* 今日剩余额度:上限一直都在,但一直没显示过 —— 看不见的规则等于 bug */
+.home__room {
+  margin-left: 12px;
+  font-size: 21px;
+  color: var(--ink-4);
+  background: rgba(0, 0, 0, 0.04);
+  padding: 6px 16px;
+  border-radius: 999px;
+
+  &--full {
+    color: var(--mint-600);
+    background: rgba(52, 211, 153, 0.14);
+  }
+}
+
+/* 卡组列表:默认收成一行,点开才展开练法 */
+.deck__arrow {
+  font-size: 30px;
+  color: #c4c8cc;
+  padding-left: 12px;
+}
+
+.deck__body {
+  margin-top: 18px;
+}
+
+.deck--open {
+  box-shadow: var(--sh-2);
 }
