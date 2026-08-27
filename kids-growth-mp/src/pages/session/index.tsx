@@ -11,6 +11,8 @@ import {
   addStudyTime,
   autoAddErrorCard,
   retireErrorCard,
+  findOriginCard,
+  dueTomorrow,
   getStage,
   type DueCard,
 } from '../../store/study'
@@ -76,6 +78,8 @@ function Session() {
   const [nextStep, setNextStep] = useState<PlanStep | null>(null)
   /** 这一组有没有撞上「今天的分拿满了」 */
   const [capped, setCapped] = useState(false)
+  /** 明天有多少张卡到期 —— 结算页用它给一句预告 */
+  const [tomorrowN, setTomorrowN] = useState(0)
   /*
     睡前降刺激:彩带、连击、震动都是提高兴奋度的设计,睡前半小时该反着来。
     只关特效,不关内容 —— 他照常能学,只是屏幕安静下来。
@@ -390,9 +394,11 @@ function Session() {
         emoji: (current.card.extra as { emoji?: string } | undefined)?.emoji,
       },
       allCards.map((c) => ({ front: c.front, back: c.back })),
+      // 先回内容包里找原题 —— 找得到就按原来那种形式出,不会把点图题换成选词题
+      (c) => findOriginCard(childId, c.front, c.back),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, mode, allCards])
+  }, [current, mode, allCards, childId])
 
   /** 重做题的「再听一遍」;RedoSpec 里存的是 'zh'/'en',这里转成语音接口要的写法 */
   const playRedoAudio = () => {
@@ -415,6 +421,21 @@ function Session() {
         advance(right)
       },
       right ? 520 : 1200,
+    )
+  }
+
+  /** 拼写类错题:比对文本,不比数字 */
+  const submitRedoSpell = () => {
+    if (!redo || redo.type !== 'spell' || redoMark !== 'none') return
+    const right = normalizeForCompare(redoInput) === normalizeForCompare(redo.answer)
+    setRedoMark(right ? 'ok' : 'no')
+    setTimeout(
+      () => {
+        setRedoInput('')
+        setRedoMark('none')
+        advance(right)
+      },
+      right ? 620 : 1500,
     )
   }
 
@@ -453,7 +474,7 @@ function Session() {
     const answer = pick(current.card)
     const distractors = shuffle(allCards.filter((c) => pick(c) !== answer).map(pick)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, allCards])
+  }, [current, mode, allCards, childId])
 
   /** 看图题「选图片」:选项是 emoji */
   const picEmojiOptions = useMemo(() => {
@@ -462,7 +483,7 @@ function Session() {
     const answer = emojiOf(current.card)
     const distractors = shuffle(allCards.filter((c) => emojiOf(c) !== answer).map(emojiOf)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, allCards])
+  }, [current, mode, allCards, childId])
 
   /** 看拼音选字:选项是汉字,题面是拼音 */
   const pinyinOptions = useMemo(() => {
@@ -470,7 +491,7 @@ function Session() {
     const answer = current.card.front
     const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, allCards])
+  }, [current, mode, allCards, childId])
 
   /**
    * 拼写题的字母块:目标单词的字母 + 几个干扰字母,打乱顺序。
@@ -502,7 +523,7 @@ function Session() {
     const answer = current.card.back
     const distractors = shuffle(allCards.filter((c) => c.back !== answer).map((c) => c.back)).slice(0, optCount - 1)
     return shuffle([answer, ...distractors])
-  }, [current, mode, allCards])
+  }, [current, mode, allCards, childId])
 
   const playCurrent = () => {
     if (!current) return
@@ -595,6 +616,7 @@ function Session() {
       /* 忽略 */
     }
     setCapped(!!res.capped)
+    setTomorrowN(dueTomorrow(childId))
     setSummary({ correct: finalCorrect, total, points: res.pointsAwarded })
     setPhase('done')
     // 一组练完是关键节点,把攒着的写入立刻落盘,别等合并窗口
@@ -863,6 +885,15 @@ function Session() {
         ) : null}
         {capped ? (
           <Text className='reward__line'>🌙 今天的成长值已经拿满啦,明天再来接着涨</Text>
+        ) : null}
+        {/*
+          明天预告。
+          一次学习结束的那一刻,决定的是「明天他还会不会来」。
+          一句具体的数字比「明天见」有效得多 ——
+          它把明天从「又要学习」变成「有东西在等我」。
+        */}
+        {tomorrowN > 0 ? (
+          <Text className='reward__line'>📅 明天有 {tomorrowN} 个在等你,记得来</Text>
         ) : null}
         {inPlan && nextStep ? (
           <View
@@ -1392,6 +1423,42 @@ function Session() {
             <View className='qbox'><Text className='qbox__t'>{current.card.front}</Text></View>
           ) : null}
           <Text className='card__tip'>上次这道没做对,再试一次</Text>
+          {/*
+            **图选项要摆成图**,不能挤在文字行里。
+            听音选图错的题,重做时还是听音选图 —— 这是「不要换类型」的最后一环:
+            光是选项内容对了不够,呈现方式也得是原来那个样子,
+            否则孩子看到的仍然是「一列字」。
+          */}
+          {redo.optionKind === 'emoji' ? (
+            <View className='picgrid'>
+              {redo.options.map((opt) => {
+                const show = picked !== null
+                const cls = show
+                  ? opt === redo.answer
+                    ? 'picopt picopt--right'
+                    : opt === picked
+                      ? 'picopt picopt--wrong'
+                      : 'picopt'
+                  : 'picopt'
+                return (
+                  <View
+                    key={opt}
+                    className={cls}
+                    onClick={() => {
+                      if (picked || locked()) return
+                      setPicked(opt)
+                      const right = opt === redo.answer
+                      if (right) playRedoAudio()
+                      setTimeout(() => advance(right), right ? 620 : 1100)
+                    }}
+                  >
+                    <Text className='picopt__e'>{opt}</Text>
+                  </View>
+                )
+              })}
+            </View>
+          ) : null}
+          {redo.optionKind !== 'emoji' ? (
           <View className='opts'>
             {redo.options.map((opt, oi) => {
               const show = picked !== null
@@ -1420,6 +1487,69 @@ function Session() {
                 </View>
               )
             })}
+          </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* 拼写/听写错的 → 还是让他拼一遍,不换成选择题 */}
+      {mode === 'review' && redo?.type === 'spell' ? (
+        <View className='card'>
+          {redo.emoji ? <Text className='pic__emoji'>{redo.emoji}</Text> : null}
+          <View className='audio audio--big' onClick={() => void playWordAudio(redo.answer)}>
+            <Text className='audio__t'>🔊</Text>
+          </View>
+          <Text className='card__tip'>上次这个词没拼对,再拼一次</Text>
+          {redoMark === 'none' ? (
+            <View className='card__form'>
+              <Input
+                className='inp'
+                value={redoInput}
+                onInput={(e) => setRedoInput(e.detail.value)}
+                placeholder='输入英文'
+              />
+              <View className='btn btn--primary' onClick={submitRedoSpell}>
+                <Text className='btn__t'>检查</Text>
+              </View>
+            </View>
+          ) : null}
+          {redoMark !== 'none' ? (
+            <View className='card__reveal'>
+              <Text className={redoMark === 'ok' ? 'card__front card__front--ok' : 'card__front card__front--no'}>
+                {redo.answer}
+              </Text>
+              {redoMark === 'no' ? <Text className='card__extra'>你写的:{redoInput || '(空)'}</Text> : null}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {/* 跟我读错的 → 还是听范读、读出来、家长判 */}
+      {mode === 'review' && redo?.type === 'speak' ? (
+        <View className='card card--say'>
+          <Text className='say__e'>{redo.emoji ?? '🔤'}</Text>
+          <Text className='say__en'>{redo.answer}</Text>
+          <View className='row row--wrap'>
+            <View className='chip' onClick={() => void playWordAudio(redo.answer, 2)}>
+              <Text className='chip__t'>🔊 听范读</Text>
+            </View>
+            <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
+              <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
+            </View>
+            {recPath ? (
+              <View className='chip' onClick={() => playFile(recPath)}>
+                <Text className='chip__t'>▶️ 回放</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text className='say__hint'>上次这个词没读对,下面由家长点</Text>
+          <View className='row'>
+            <View className='btn btn--gray' onClick={() => advance(false)}>
+              <Text className='btn__t'>还要练</Text>
+            </View>
+            <View className='btn btn--mint' onClick={() => advance(true)}>
+              <Text className='btn__t'>读对了</Text>
+            </View>
           </View>
         </View>
       ) : null}

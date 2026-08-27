@@ -10,9 +10,10 @@ import type {
   BuiltinPoemCard,
   BuiltinWordCard,
 } from '../core/learningContent'
-import { todayISO } from '../core/dateUtils'
+import { todayISO, addDays } from '../core/dateUtils'
 import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
 import { dailyPointCap, allowedAward } from '../core/pointCap'
+import type { OriginCard } from '../core/redo'
 import type { DeckSignal } from '../core/recommend'
 import { adjustFor, nextLevel, type Adjust } from '../core/adaptive'
 import { getProfile, saveProfile } from './records'
@@ -828,6 +829,37 @@ export function addErrorCard(
  * 教学上这一步很关键:孩子答错的当下最有印象,但过后既不会自己记录、
  * 也想不起来错过什么。自动收进来,再由 SRS 安排重做,错题才真的被消化。
  */
+/**
+ * 错题本的条数上限。
+ *
+ * 为什么要有:一晚上连着错三十道是完全可能的(题出难了、他累了、
+ * 或者只是在乱点)。没有上限的话,错题本会先变成一份两百条的清单,
+ * 然后被彻底放弃 —— 而**被放弃的错题本比没有错题本更糟**,
+ * 它会让家长以为「这套系统在管错题」,实际上没人再打开它。
+ *
+ * 到顶之后**丢最老的**,不丢最新的:最近错的那些正是他现在的弱点,
+ * 而三周前错的那道题,要么早就会了,要么会再错一次重新进来。
+ */
+const ERROR_DECK_MAX = 60
+
+function trimErrorDeck(childId: string): void {
+  const deckId = getErrorDeckId(childId)
+  if (!deckId) return
+  const mine = readTable<LearnCard>(KEYS.cards)
+    .filter((c) => c.deckId === deckId)
+    .sort((a, b) => a.order - b.order)
+  if (mine.length <= ERROR_DECK_MAX) return
+  const drop = new Set(mine.slice(0, mine.length - ERROR_DECK_MAX).map((c) => c.id))
+  writeTable(
+    KEYS.cards,
+    readTable<LearnCard>(KEYS.cards).filter((c) => !drop.has(c.id)),
+  )
+  writeTable(
+    KEYS.states,
+    readTable<StudyState>(KEYS.states).filter((st) => !drop.has(st.cardId)),
+  )
+}
+
 export function autoAddErrorCard(
   childId: string,
   entry: { front: string; back: string; subject?: string; redo?: RedoSpec },
@@ -842,6 +874,7 @@ export function autoAddErrorCard(
     if (dup) return
   }
   addErrorCard(childId, entry)
+  trimErrorDeck(childId)
 }
 
 export function getErrorDeckId(childId: string): string | undefined {
@@ -917,6 +950,51 @@ export function errorDueToday(childId: string): number {
   return readTable<StudyState>(KEYS.states).filter(
     (st) => st.childId === childId && st.deckId === deckId && isDue(st, today),
   ).length
+}
+
+/**
+ * 按题干/答案回内容包里找到「这道错题原来是哪张卡」。
+ *
+ * 老错题只存了题干和答案,没记当初是哪种练法、也没记那张图。
+ * 但原卡通常还在孩子的某个卡组里 —— 找到它就能恢复出图、英文和内容类型,
+ * 重做时才能保持原来那种形式(该点图的还是点图)。
+ */
+export function findOriginCard(childId: string, front: string, back: string): OriginCard | undefined {
+  const errDeck = getErrorDeckId(childId)
+  const decks = readTable<LearnDeck>(KEYS.decks).filter(
+    (d) => d.childId === childId && d.id !== errDeck,
+  )
+  if (decks.length === 0) return undefined
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = readTable<LearnCard>(KEYS.cards).filter((c) => byId.has(c.deckId))
+
+  const f = String(front ?? '').trim()
+  const b = String(back ?? '').trim()
+  const hit = cards.find((c) => {
+    if (c.front === f && c.back === b) return true
+    // 老错题的题干可能被包装过(「认字:好」「🐱 这是什么?」),所以也按「答案+题干包含」匹配
+    if (c.back === b && f.indexOf(c.front) >= 0) return true
+    if (c.front === f) return true
+    return false
+  })
+  if (!hit) return undefined
+
+  const deck = byId.get(hit.deckId)
+  if (!deck) return undefined
+  const ext = (hit.extra ?? {}) as { emoji?: string; en?: string }
+  return {
+    front: hit.front,
+    back: hit.back,
+    emoji: ext.emoji,
+    en: ext.en,
+    itemType: deck.itemType,
+    siblings: cards
+      .filter((c) => c.deckId === hit.deckId && c.id !== hit.id)
+      .map((c) => {
+        const e = (c.extra ?? {}) as { emoji?: string; en?: string }
+        return { front: c.front, back: c.back, emoji: e.emoji, en: e.en }
+      }),
+  }
 }
 
 export function deleteCard(cardId: string): void {
@@ -1370,4 +1448,18 @@ export function tuneDeckLevel(childId: string, deckId: string): Adjust {
   const adjust = adjustFor(recent)
   if (adjust !== 'keep') setDeckLevel(deckId, nextLevel(deckLevel(deckId), adjust))
   return adjust
+}
+
+/**
+ * 明天有多少张卡到期 —— 结算页用它给一句「明天有 N 个在等你」。
+ *
+ * 为什么值得做:一次学习结束的那一刻,是决定「明天他还会不会来」的关键点。
+ * 一句具体的预告(有多少、是什么)比「明天见」有效得多 ——
+ * 它把明天从「又要学习」变成「有东西在等我」。
+ */
+export function dueTomorrow(childId: string): number {
+  const tomorrow = addDays(todayISO(), 1)
+  return readTable<StudyState>(KEYS.states).filter(
+    (st) => st.childId === childId && st.status !== 'new' && st.due <= tomorrow,
+  ).length
 }

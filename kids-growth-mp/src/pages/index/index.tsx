@@ -44,6 +44,7 @@ import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageSt
 import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
 import { rankDecks } from '../../core/recommend'
 import { getInterests, INTEREST_TAGS } from '../../store/notes'
+import { screenAdvice } from '../../core/screenTime'
 import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
 import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
@@ -118,6 +119,8 @@ function Index() {
   const [petEmoji, setPetEmoji] = useState('🥚')
   const [level, setLevel] = useState<LevelInfo>(levelOf(0))
   const [limitMin, setLimitMin] = useState(DAILY_LIMIT_MIN)
+  /** 今天的屏幕时间建议(分龄两档) */
+  const [screen, setScreen] = useState(() => screenAdvice(0, 'toddler'))
   const [habit, setHabit] = useState({ done: 0, total: 0 })
   const [canSpend, setCanSpend] = useState(0)
   const [pending, setPending] = useState(0)
@@ -264,7 +267,10 @@ function Index() {
       setStreak(getStudyStreak())
       setGoalN(getDailyGoal())
       setTodayN(todayAnswered(childId))
-      setMinutes(getTodayStudyMinutes())
+      const mins = getTodayStudyMinutes()
+      setMinutes(mins)
+      // 家长在家长中心设过每日分钟上限就以他的为准,没设才用分龄默认值
+      setScreen(screenAdvice(mins, getStage(), readObject<number>('dailyMinuteLimit', 0) || undefined))
       setChallenge(getChallenge())
       /*
         今日评分。各板块的目标按每日题量目标摊开 ——
@@ -626,9 +632,15 @@ function Index() {
         </View>
       ) : null}
 
-      {minutes >= limitMin ? (
-        <View className='rest'>
-          <Text className='rest__t'>今天已经学了 {minutes} 分钟啦,起来活动一下、看看远处,保护小眼睛 👀</Text>
+      {/*
+        屏幕时间分两档提醒(见 core/screenTime):
+        先温和(抬头看远处),再明确(今天到此为止)。
+        **只提醒、不锁死** —— 家长比程序更清楚现在该不该停;
+        一个会突然把孩子锁在外面的学习工具,家长下次就不敢打开了。
+      */}
+      {screen.level !== 'ok' ? (
+        <View className={screen.level === 'hard' ? 'rest rest--hard' : 'rest'}>
+          <Text className='rest__t'>{screen.msg}</Text>
         </View>
       ) : null}
 

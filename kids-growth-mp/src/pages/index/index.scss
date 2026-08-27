@@ -610,3 +610,9 @@
 .deck--open {
   box-shadow: var(--sh-2);
 }
+
+/* 到了「今天够了」那一档,提示要更显眼一点(但仍然不拦人) */
+.rest--hard {
+  background: rgba(251, 191, 36, 0.16);
+  border: 3px solid rgba(245, 158, 11, 0.4);
+}

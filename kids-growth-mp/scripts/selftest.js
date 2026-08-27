@@ -2181,11 +2181,18 @@ function run() {
     // 纯英文:选项里不能混进中文
     ok(re.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语重做题的选项必须全是英文')
 
+    /*
+      跟我读错了 → 重做**还是跟我读**,不再退化成选择题。
+      退化成选择题看着「能重做」,实际上把一道要开口的题换成了一道能蒙的题。
+    */
     const rw = redoM.buildRedo({ mode: 'speakEn', itemType: 'word', card: { front: 'cat', back: '猫' }, pool: [
       { front: 'dog', back: '狗' }, { front: 'cap', back: '帽' }, { front: 'cut', back: '切' }, { front: 'cow', back: '牛' },
     ] })
-    ok(rw && rw.answer === 'cat', '没有现成选项的练法也要能退回选择题')
-    ok(rw.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
+    ok(rw && rw.type === 'speak' && rw.answer === 'cat', '跟我读错了,重做还是跟我读')
+    const rl = redoM.buildRedo({ mode: 'listenChoose', itemType: 'word', card: { front: 'cat', back: '猫' }, pool: [
+      { front: 'dog', back: '狗' }, { front: 'cap', back: '帽' }, { front: 'cut', back: '切' }, { front: 'cow', back: '牛' },
+    ] })
+    ok(rl.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
 
     // 池子太小时不该造出一个「只有正确答案」的假选择题
     const tiny = redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool: [card] })
@@ -2270,6 +2277,75 @@ function run() {
     ok(rd.inferRedo({ front: 'x', back: '只有我一个' }, []) === undefined, '没有干扰项时不生成假选择题')
   }
 
+  // ---- 错了什么类型的题,就归入什么类型的错题(不许换类型) ----
+  {
+    const rd2 = L('core/redo.js')
+    const picPool = [
+      { front: '猫', back: 'cat', emoji: '🐱', en: 'cat' },
+      { front: '狗', back: 'dog', emoji: '🐶', en: 'dog' },
+      { front: '鱼', back: 'fish', emoji: '🐟', en: 'fish' },
+      { front: '鸟', back: 'bird', emoji: '🐦', en: 'bird' },
+      { front: '马', back: 'horse', emoji: '🐴', en: 'horse' },
+      { front: '牛', back: 'cow', emoji: '🐮', en: 'cow' },
+    ]
+    const picCard = picPool[0]
+    const mk = (mode) => rd2.buildRedo({ mode, itemType: 'pic', card: picCard, pool: picPool })
+
+    /*
+      这是用户明确提的一条:「错了什么类型的题就自动归入什么错题,不要换类型」。
+      听音选图考的是**听懂**,看图选单词考的是**认字形** ——
+      把前者换成后者,等于用一道他没错的题替换掉他真正错的那道。
+    */
+    const listen = mk('listenPicEn')
+    ok(listen.type === 'choice' && listen.optionKind === 'emoji', '听音选图错了 → 重做还是点图')
+    ok(listen.options.every((o) => !/[a-zA-Z\u4e00-\u9fa5]/.test(o)), '点图题的选项必须是图,不能是词')
+    ok(listen.answer === '🐱', '点图题的答案是那张图')
+
+    const chooseEn = mk('picChooseEn')
+    ok(chooseEn.optionKind === 'text', '看图选单词错了 → 重做还是选单词')
+    ok(chooseEn.answer === 'cat', '选单词题的答案是英文词')
+    ok(chooseEn.emoji === '🐱', '选单词题仍然要把图摆在题面上')
+
+    ok(mk('spell').type === 'spell', '拼写错了 → 还是让他拼')
+    ok(mk('spell').answer === 'cat', '拼的是英文,不是中文')
+    ok(mk('dictation').type === 'spell', '听写错了 → 还是让他写')
+    ok(mk('speakEn').type === 'speak', '跟我读错了 → 还是听范读、读出来')
+    ok(mk('speakEn').answer === 'cat', '读的是英文')
+
+    // 没明确映射的练法(磨耳朵…)也不能改变媒介:看图卡还是给图
+    const fallback = mk('earTrain')
+    ok(fallback.optionKind === 'emoji', '看图卡的兜底重做仍然是点图,不该变成选词')
+
+    // 识字卡不该被塞进图片题
+    const hzPool = [
+      { front: '好', back: 'hǎo' },
+      { front: '天', back: 'tiān' },
+      { front: '人', back: 'rén' },
+      { front: '大', back: 'dà' },
+      { front: '小', back: 'xiǎo' },
+    ]
+    const hz = rd2.buildRedo({ mode: 'listenChoose', itemType: 'hanzi', card: hzPool[0], pool: hzPool })
+    ok(hz.optionKind === 'text' && hz.answer === '好', '识字题重做仍然是选字')
+
+    /*
+      老错题:回内容包里找到原题之后,也要按原来的类型出。
+      这正是用户看到「错题全是选择单词」的原因 —— 老卡上只有中文和英文两行文本,
+      按文本推断只能推出「选英文单词」。
+    */
+    const legacyPic = { front: '猫', back: 'cat' }
+    const withOrigin = rd2.inferRedo(legacyPic, [], () => ({
+      ...picCard,
+      itemType: 'pic',
+      siblings: picPool.slice(1),
+    }))
+    ok(withOrigin && withOrigin.optionKind === 'emoji', '老的看图错题应恢复成点图题')
+    const noOrigin = rd2.inferRedo(legacyPic, [
+      { front: '狗', back: 'dog' },
+      { front: '鱼', back: 'fish' },
+    ])
+    ok(noOrigin && noOrigin.optionKind === 'text', '找不到原题时才退回文字选择题')
+  }
+
   // ---- 错题做对就消失 ----
   {
     reset()
@@ -2312,6 +2388,69 @@ function run() {
     ok(drill.length === 24, '整组随机要出够题数')
     ok(drill.every((p) => typeof p.answer === 'number' && p.text.length > 0), '整组随机出的题要完整')
     ok(md2.generateGroupDrill([], 10, 'toddler').length === 0, '空题型列表应返回空,不该崩')
+  }
+
+  // ---- 屏幕时间:分龄两档,而且不能推翻家长设过的值 ----
+  {
+    const st2 = L('core/screenTime.js')
+    /*
+      4 岁半和 10 岁不该是同一个数:学龄前的持续专注力约 10–15 分钟,
+      近视防控指引也建议学龄前单次视屏不超过 15 分钟。
+      原先所有年龄一刀切 30 分钟,对幼儿太久。
+    */
+    ok(st2.screenAdvice(5, 'toddler').level === 'ok', '刚开始不提醒')
+    ok(st2.screenAdvice(18, 'toddler').level === 'soft', '幼儿 15 分钟后温和提醒')
+    ok(st2.screenAdvice(30, 'toddler').level === 'hard', '幼儿 25 分钟后明确建议收尾')
+    ok(st2.screenAdvice(18, 'primary').level === 'ok', '同样 18 分钟,小学生还不用提醒')
+    ok(st2.screenAdvice(30, 'primary').level === 'soft', '小学 25 分钟后才温和提醒')
+    // 门槛必须随年龄单调放宽
+    ok(
+      st2.screenAdvice(0, 'toddler').hardAt < st2.screenAdvice(0, 'primary').hardAt,
+      '越大的孩子门槛越宽',
+    )
+    ok(
+      st2.screenAdvice(0, 'primary').hardAt < st2.screenAdvice(0, 'junior').hardAt,
+      '再大一档还要更宽',
+    )
+    // 两档之间必须有间隔,否则等于只有一档
+    for (const stg of ['toddler', 'primary', 'junior']) {
+      const a = st2.screenAdvice(0, stg)
+      ok(a.softAt < a.hardAt, `${stg}:温和档必须早于明确档`)
+    }
+    /*
+      家长设过的值优先。程序不该悄悄推翻家长明确设过的数字 ——
+      那会让「我明明设了 40 分钟」变成一个查不出原因的怪现象。
+    */
+    ok(st2.screenAdvice(35, 'toddler', 40).level === 'soft', '家长设了 40 分钟,35 分钟还没到硬档')
+    ok(st2.screenAdvice(41, 'toddler', 40).level === 'hard', '超过家长设的值才到硬档')
+    ok(st2.screenAdvice(0, 'toddler', 40).hardAt === 40, '硬档门槛应等于家长设的值')
+    ok(st2.screenAdvice(0, 'toddler', 40).softAt < 40, '温和档要早于家长设的值')
+    // 负数/零/异常值不能把提醒弄坏
+    ok(st2.screenAdvice(-5, 'toddler').level === 'ok', '负分钟数按 0 处理')
+    ok(st2.screenAdvice(10, 'toddler', 0).hardAt === 25, '上限设成 0 视为没设,退回分龄默认值')
+  }
+
+  // ---- 错题本不能无限长 ----
+  {
+    reset()
+    const cidT = study.getCurrentChildId()
+    /*
+      一晚上错三十道是完全可能的。没有上限,错题本会先变成两百条的清单,
+      然后被彻底放弃 —— 而**被放弃的错题本比没有错题本更糟**。
+    */
+    for (let i = 0; i < 90; i++) {
+      study.autoAddErrorCard(cidT, { front: `题目 ${i}`, back: `答案 ${i}`, subject: '数学' })
+    }
+    const kept = study.listErrorCards(cidT)
+    ok(kept.length <= 60, `错题本应有上限(实际 ${kept.length} 条)`)
+    // 丢的必须是**最老的**:最近错的正是他现在的弱点
+    ok(kept.some((c) => c.front === '题目 89'), '最新错的那道必须留着')
+    ok(!kept.some((c) => c.front === '题目 0'), '最老的那道应被丢掉')
+    // 卡被丢掉时对应的学习状态也要一起清,否则会留下一堆孤儿记录
+    const orphan = db
+      .readTable('states')
+      .filter((x) => x.childId === cidT && !db.readTable('cards').some((c) => c.id === x.cardId))
+    ok(orphan.length === 0, '丢卡时必须连它的学习状态一起清掉')
   }
 
   // ---- 每日积分上限:四个入口一个都不能漏 ----
