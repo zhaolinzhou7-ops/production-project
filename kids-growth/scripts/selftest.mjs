@@ -36,6 +36,7 @@ writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ type: 'commonjs' 
 const MODULES = [
   'examples',
   'redo',
+  'screenTime',
   'mathDrill',
   'adaptive',
   'scoreCard',
@@ -80,6 +81,7 @@ const voicePriority = await load('voicePriority')
 const srs = await load('srs')
 const examples = await load('examples')
 const redoM = await load('redo')
+const screenTime = await load('screenTime')
 const mathDrill = await load('mathDrill')
 
 let checks = 0
@@ -129,12 +131,12 @@ for (let i = 1; i < adaptive.LEVEL_COUNT; i++) {
 
 // 练法阶梯:难度真正被感觉到的地方
 const picLadder = [0, 1, 2, 3, 4].map((l) => adaptive.modeLadder('pic', l))
-eq(picLadder[0], 'listenPic', '看图包最低档是「听中文点图」(不用认字)')
+eq(picLadder[0], 'listenPicEn', '看图包最低档是「听英语点图」—— 只要听得懂,不用认字')
 // 新卡组默认在第 2 档 —— 那一档不能直接是「看图选英文」,对刚开始的孩子太跳
-eq(picLadder[2], 'listenPicEn', '默认档是「听英文点图」,英语分两步进来')
-eq(picLadder[4], 'speakEn', '最高档是「读出来」——「产出」没有蒙对率')
+eq(picLadder[2], 'speakEn', '默认档要他开口 —— 四选一有 25% 蒙对率,说出来没有')
+eq(picLadder[4], 'dictation', '最高档是听写 —— 没有图没有选项,真会了才写得出')
 ok(new Set(picLadder).size >= 4, '五档里至少四种不同练法,孩子要能感觉到「变了」')
-eq(adaptive.modeLadder('hanzi', 4), 'sayIt', '识字最高档是「说给我听」')
+eq(adaptive.modeLadder('hanzi', 4), 'pinyin', '识字最高档是看拼音找字(「说给我听」已并入「跟我读」)')
 eq(adaptive.modeLadder('fact', 2), undefined, '没有阶梯的类型返回 undefined,由调用方回退')
 
 // ---------------------------------------------------------------- 打分
@@ -194,8 +196,8 @@ const planDecks = [
 const steps = dailyPlan.buildPlan(planDecks, 'toddler')
 ok(steps.length > 0 && steps.length <= 4, '幼儿一天不超过四步')
 // 练法必须跟着**这个卡组自己的**难度档走 —— 这是用户报的「做了很多次还是一样」
-eq(steps[0].mode, 'listenPic', '入门档的卡组给最简单的练法')
-eq(steps[1].mode, 'speakEn', '挑战档的卡组给「读出来」')
+eq(steps[0].mode, 'listenPicEn', '入门档的卡组给最简单的练法(听英语点图)')
+eq(steps[1].mode, 'dictation', '挑战档的卡组给听写')
 // 题量也要跟着难度档,不能永远是 6
 eq(steps[0].limit, adaptive.specOf(0).size, '入门档题量按档位给')
 eq(steps[1].limit, adaptive.specOf(4).size, '挑战档题量按档位给')
@@ -363,6 +365,10 @@ eq(redoM.OPTION_LETTERS.join(''), 'ABCDE', '选项字母是 A–E')
   eq(re.lang, 'en', '英语题按英文朗读')
   ok(re.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语重做题的选项必须全是英文')
 
+  /*
+    跟我读错了 → 重做**还是跟我读**,不再退化成选择题。
+    退化成选择题看着「能重做」,实际上把一道要开口的题换成了一道能蒙的题。
+  */
   const rw = redoM.buildRedo({
     mode: 'speakEn',
     itemType: 'word',
@@ -374,11 +380,105 @@ eq(redoM.OPTION_LETTERS.join(''), 'ABCDE', '选项字母是 A–E')
       { front: 'cow', back: '牛' },
     ],
   })
-  eq(rw.answer, 'cat', '没有现成选项的练法也要能退回选择题')
-  ok(rw.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
+  eq(rw.type, 'speak', '跟我读错了,重做还是跟我读')
+  eq(rw.answer, 'cat', '读的是英文')
+  const rl = redoM.buildRedo({
+    mode: 'listenChoose',
+    itemType: 'word',
+    card: { front: 'cat', back: '猫' },
+    pool: [
+      { front: 'dog', back: '狗' },
+      { front: 'cap', back: '帽' },
+      { front: 'cut', back: '切' },
+      { front: 'cow', back: '牛' },
+    ],
+  })
+  ok(rl.options.every((o) => !/[\u4e00-\u9fa5]/.test(o)), '英语单词的重做题不出现中文')
 
   // 池子太小时不该造出一个「只有正确答案」的假选择题
   eq(redoM.buildRedo({ mode: 'picChoose', itemType: 'pic', card, pool: [card] }), undefined, '凑不出干扰项时不生成选择题')
+}
+
+// ---------------------------------------------------------------- 重做不许换类型
+
+{
+  const picPool = [
+    { front: '猫', back: 'cat', emoji: '🐱', en: 'cat' },
+    { front: '狗', back: 'dog', emoji: '🐶', en: 'dog' },
+    { front: '鱼', back: 'fish', emoji: '🐟', en: 'fish' },
+    { front: '鸟', back: 'bird', emoji: '🐦', en: 'bird' },
+    { front: '马', back: 'horse', emoji: '🐴', en: 'horse' },
+    { front: '牛', back: 'cow', emoji: '🐮', en: 'cow' },
+  ]
+  const mk = (mode) => redoM.buildRedo({ mode, itemType: 'pic', card: picPool[0], pool: picPool })
+
+  /*
+    「错了什么类型的题就归入什么类型的错题,不要换类型。」
+    听音选图考的是**听懂**,看图选单词考的是**认字形** ——
+    把前者换成后者,等于用一道他没错的题替换掉他真正错的那道。
+  */
+  const listen = mk('listenPicEn')
+  eq(listen.optionKind, 'emoji', '听音选图错了 → 重做还是点图')
+  ok(listen.options.every((o) => !/[a-zA-Z\u4e00-\u9fa5]/.test(o)), '点图题的选项必须是图,不能是词')
+  eq(listen.answer, '🐱', '点图题的答案是那张图')
+
+  const chooseEn = mk('picChooseEn')
+  eq(chooseEn.optionKind, 'text', '看图选单词错了 → 重做还是选单词')
+  eq(chooseEn.answer, 'cat', '选单词题的答案是英文词')
+  eq(chooseEn.emoji, '🐱', '选单词题仍然要把图摆在题面上')
+
+  eq(mk('spell').type, 'spell', '拼写错了 → 还是让他拼')
+  eq(mk('spell').answer, 'cat', '拼的是英文,不是中文')
+  eq(mk('dictation').type, 'spell', '听写错了 → 还是让他写')
+  eq(mk('speakEn').type, 'speak', '跟我读错了 → 还是听范读、读出来')
+  eq(mk('earTrain').optionKind, 'emoji', '看图卡的兜底重做仍然是点图,不该变成选词')
+
+  // 老错题:找到原题之后按原类型出;找不到才退回文字选择题
+  const withOrigin = redoM.inferRedo({ front: '猫', back: 'cat' }, [], () => ({
+    ...picPool[0],
+    itemType: 'pic',
+    siblings: picPool.slice(1),
+  }))
+  eq(withOrigin.optionKind, 'emoji', '老的看图错题应恢复成点图题')
+  const noOrigin = redoM.inferRedo({ front: '猫', back: 'cat' }, [
+    { front: '狗', back: 'dog' },
+    { front: '鱼', back: 'fish' },
+  ])
+  eq(noOrigin.optionKind, 'text', '找不到原题时才退回文字选择题')
+}
+
+// ---------------------------------------------------------------- 屏幕时间
+
+eq(screenTime.screenAdvice(5, 'toddler').level, 'ok', '刚开始不提醒')
+eq(screenTime.screenAdvice(18, 'toddler').level, 'soft', '幼儿 15 分钟后温和提醒')
+eq(screenTime.screenAdvice(30, 'toddler').level, 'hard', '幼儿 25 分钟后明确建议收尾')
+eq(screenTime.screenAdvice(18, 'primary').level, 'ok', '同样 18 分钟,小学生还不用提醒')
+ok(
+  screenTime.screenAdvice(0, 'toddler').hardAt < screenTime.screenAdvice(0, 'primary').hardAt,
+  '越大的孩子门槛越宽',
+)
+for (const stg of ['toddler', 'primary', 'junior']) {
+  const a = screenTime.screenAdvice(0, stg)
+  ok(a.softAt < a.hardAt, `${stg}:温和档必须早于明确档`)
+}
+// 家长设过的值优先 —— 程序不该悄悄推翻家长明确设过的数字
+eq(screenTime.screenAdvice(35, 'toddler', 40).level, 'soft', '家长设了 40 分钟,35 分钟还没到硬档')
+eq(screenTime.screenAdvice(41, 'toddler', 40).level, 'hard', '超过家长设的值才到硬档')
+eq(screenTime.screenAdvice(0, 'toddler', 40).hardAt, 40, '硬档门槛应等于家长设的值')
+eq(screenTime.screenAdvice(-5, 'toddler').level, 'ok', '负分钟数按 0 处理')
+eq(screenTime.screenAdvice(10, 'toddler', 0).hardAt, 25, '上限设成 0 视为没设,退回分龄默认值')
+
+// ---------------------------------------------------------------- 练法全程英语
+
+{
+  const ladder = [0, 1, 2, 3, 4].map((l) => adaptive.modeLadder('pic', l))
+  eq(new Set(ladder).size, 5, '五档练法不该重复 —— 重复就等于那一档白设')
+  ok(
+    !ladder.some((m) => m === 'listenPic' || m === 'picChoose'),
+    '看图卡的阶梯里不该再有中文练法',
+  )
+  eq(ladder[0], 'listenPicEn', '最低档是「听英语点图」—— 只要听得懂')
+  eq(ladder[4], 'dictation', '最高档是听写 —— 没有图没有选项,真会了才写得出')
 }
 
 // ---------------------------------------------------------------- 数形结合

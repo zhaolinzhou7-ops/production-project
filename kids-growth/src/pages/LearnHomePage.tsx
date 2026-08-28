@@ -6,7 +6,9 @@ import { db } from '../db/db'
 import { useAppStore } from '../store/useAppStore'
 import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
-import { getStageMeta } from '../lib/ageStage'
+import { getStageMeta, getAgeStage } from '../lib/ageStage'
+import { screenAdvice } from '../lib/screenTime'
+import { dailyPointCap } from '../lib/pointCap'
 import {
   listVoices,
   setPreferredVoice,
@@ -207,6 +209,43 @@ export function LearnHomePage() {
     return card
   }, [currentChildId])
 
+  /**
+   * 屏幕时间建议(分龄两档,见 lib/screenTime)。
+   *
+   * 原先没有任何提醒。学龄前的持续专注力约 10–15 分钟,近视防控指引
+   * 也建议学龄前单次视屏不超过 15 分钟 —— 而这是他每天都要用的东西。
+   * **只提醒、不锁死**:家长比程序更清楚现在该不该停。
+   */
+  const screen = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const today = todayISO()
+    const [sessions, drills] = await Promise.all([
+      db.studySessions.where('[childId+date]').equals([currentChildId, today]).toArray(),
+      db.drillResults.where('childId').equals(currentChildId).filter((d) => d.date === today).toArray(),
+    ])
+    const sec =
+      sessions.reduce((n, x) => n + (x.durationSec || 0), 0) +
+      drills.reduce((n, x) => n + (x.durationSec || 0), 0)
+    return screenAdvice(Math.round(sec / 60), stage)
+  }, [currentChildId, stage])
+
+  /** 今天还能再拿多少积分 —— 上限一直都在,但一直没显示过 */
+  const pointRoom = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const child2 = await db.children.get(currentChildId)
+    if (!child2) return null
+    const cap = dailyPointCap(getAgeStage(child2.birthdate))
+    const dayStart = new Date()
+    dayStart.setHours(0, 0, 0, 0)
+    const rows = await db.pointLedger
+      .where('childId')
+      .equals(currentChildId)
+      .and((l) => l.reason === 'study' && l.delta > 0 && l.timestamp >= dayStart.getTime())
+      .toArray()
+    const earned = rows.reduce((n, l) => n + l.delta, 0)
+    return { cap, left: Math.max(0, cap - earned) }
+  }, [currentChildId])
+
   /** 今天有几道错题该重做 —— 显示在错题本入口上 */
   const errDue = useLiveQuery(
     async () => (currentChildId ? errorDueToday(currentChildId) : 0),
@@ -337,6 +376,31 @@ export function LearnHomePage() {
           {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
       </div>
+
+      {/*
+        屏幕时间提醒。只提醒、不锁死 —— 一个会突然把孩子锁在外面的学习工具,
+        家长下次就不敢在他面前打开了。
+      */}
+      {screen && screen.level !== 'ok' && (
+        <div
+          className={`mb-3 rounded-2xl p-3 text-sm ${
+            screen.level === 'hard'
+              ? 'bg-sun-400/20 text-orange-700'
+              : 'bg-white/70 text-gray-500'
+          }`}
+        >
+          {screen.msg}
+        </div>
+      )}
+
+      {/* 今天还能拿多少分 —— 上限一直都在,把它说清楚就不像 bug 了 */}
+      {pointRoom && (
+        <div className="mb-3 text-right text-[11px] text-gray-400">
+          {pointRoom.left > 0
+            ? `今天还可得 ${pointRoom.left} 分`
+            : '今天的积分已拿满,继续练照样有记录'}
+        </div>
+      )}
 
       {/*
         「今天就做这个」。

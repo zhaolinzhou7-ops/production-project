@@ -17,6 +17,7 @@ import { getAgeStage } from '../lib/ageStage'
 import { dailyPointCap } from '../lib/pointCap'
 import { adjustFor, nextLevel, type Adjust } from '../lib/adaptive'
 import type { DeckSignal } from '../lib/recommend'
+import type { OriginCard } from '../lib/redo'
 import type {
   CardItemType,
   LearnCard,
@@ -666,6 +667,7 @@ export async function autoAddErrorCard(
     .count()
   if (dup > 0) return
   await addErrorCard(childId, entry)
+  await trimErrorDeck(childId)
 }
 
 /** 列出错题本中的卡片(用于家长/孩子端管理) */
@@ -1096,6 +1098,114 @@ export async function wrongDueToday(childId: string): Promise<number> {
   const today = todayISO()
   const states = await db.studyStates.where('childId').equals(childId).toArray()
   return states.filter((s) => (s.lapses || 0) > 0 && isDue(s, today)).length
+}
+
+/**
+ * 错题本的条数上限。
+ *
+ * 一晚上连着错三十道是完全可能的。没有上限的话,错题本会先变成一份
+ * 两百条的清单,然后被彻底放弃 —— 而**被放弃的错题本比没有错题本更糟**,
+ * 它会让家长以为「这套系统在管错题」,实际上没人再打开它。
+ *
+ * 到顶之后**丢最老的**:最近错的那些正是他现在的弱点,
+ * 而三周前错的那道题,要么早就会了,要么会再错一次重新进来。
+ */
+const ERROR_DECK_MAX = 60
+
+async function trimErrorDeck(childId: string): Promise<void> {
+  const deckId = await ensureErrorDeck(childId)
+  const cards = (await db.cards.where('deckId').equals(deckId).toArray()).sort(
+    (a, b) => a.order - b.order,
+  )
+  if (cards.length <= ERROR_DECK_MAX) return
+  const drop = cards.slice(0, cards.length - ERROR_DECK_MAX).map((c) => c.id)
+  const states = await db.studyStates.where('[childId+deckId]').equals([childId, deckId]).toArray()
+  const dropStates = states.filter((st) => drop.includes(st.cardId)).map((st) => st.id)
+  await db.transaction('rw', db.cards, db.studyStates, async () => {
+    await db.cards.bulkDelete(drop)
+    // 卡丢掉时学习状态要一起清,否则会留下一堆孤儿记录
+    await db.studyStates.bulkDelete(dropStates)
+  })
+}
+
+/**
+ * 重做答对 → **立刻移出错题本**。
+ *
+ * 原先是「连对两次才毕业」,而且只在进错题本页时结算。想法是稳妥,
+ * 实际效果是:孩子辛辛苦苦做完一轮,列表一条没少 —— 他看不到自己
+ * 「消灭掉」了什么,那件事本身就没意思了。
+ *
+ * 4 岁半的孩子需要的是**立刻看见结果**。做对一道它就没了,列表变短一格,
+ * 这才是他愿意再做一轮的理由。蒙对了也不要紧:同一道题下次再错会重新进来。
+ */
+export async function retireErrorCard(childId: string, cardId: string): Promise<boolean> {
+  const deckId = await ensureErrorDeck(childId)
+  const card = await db.cards.get(cardId)
+  if (!card || card.deckId !== deckId) return false
+  await deleteCard(cardId)
+  return true
+}
+
+/**
+ * 按题干/答案回内容包里找到「这道错题原来是哪张卡」。
+ *
+ * 老错题只存了题干和答案,没记当初是哪种练法、也没记那张图。
+ * 但原卡通常还在孩子的某个卡组里 —— 找到它就能恢复出图、英文和内容类型,
+ * 重做时才能保持原来那种形式(该点图的还是点图)。
+ */
+export async function findOriginCard(
+  childId: string,
+  front: string,
+  back: string,
+): Promise<OriginCard | undefined> {
+  const errDeck = await ensureErrorDeck(childId)
+  const decks = (await db.decks.where('childId').equals(childId).toArray()).filter(
+    (d) => d.id !== errDeck,
+  )
+  if (decks.length === 0) return undefined
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = (await db.cards.toArray()).filter((c) => byId.has(c.deckId))
+
+  const f = String(front ?? '').trim()
+  const b = String(back ?? '').trim()
+  const hit = cards.find((c) => {
+    if (c.front === f && c.back === b) return true
+    // 老错题的题干可能被包装过(「认字:好」「🐱 这是什么?」),所以也按「答案+题干包含」匹配
+    if (c.back === b && f.includes(c.front)) return true
+    if (c.front === f) return true
+    return false
+  })
+  if (!hit) return undefined
+
+  const deck = byId.get(hit.deckId)
+  if (!deck) return undefined
+  const ext = (hit.extra ?? {}) as { emoji?: string; en?: string }
+  return {
+    front: hit.front,
+    back: hit.back,
+    emoji: ext.emoji,
+    en: ext.en,
+    itemType: deck.itemType,
+    siblings: cards
+      .filter((c) => c.deckId === hit.deckId && c.id !== hit.id)
+      .map((c) => {
+        const e = (c.extra ?? {}) as { emoji?: string; en?: string }
+        return { front: c.front, back: c.back, emoji: e.emoji, en: e.en }
+      }),
+  }
+}
+
+/**
+ * 明天有多少张卡到期 —— 结算页用它给一句「明天有 N 个在等你」。
+ *
+ * 一次学习结束的那一刻,是决定「明天他还会不会来」的关键点。
+ * 一句具体的预告比「明天见」有效得多 ——
+ * 它把明天从「又要学习」变成「有东西在等我」。
+ */
+export async function dueTomorrow(childId: string): Promise<number> {
+  const tomorrow = addDays(todayISO(), 1)
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+  return states.filter((s) => s.status !== 'new' && s.due <= tomorrow).length
 }
 
 /**

@@ -414,6 +414,14 @@ export type RedoSpec =
       options: string[]
       /** 正确选项的文本(比存下标稳:选项顺序将来变了也不会错位) */
       answer: string
+      /**
+       * 选项是**图**还是**文字**。
+       *
+       * 这一条是「不要换类型」的关键:听音选图错了,重做还得是点图;
+       * 看图选单词错了,重做还得是选单词。
+       * 少了它,界面只能一律按文字排,图片题就被悄悄变成了单词题。
+       */
+      optionKind?: 'text' | 'emoji'
       /** 题面上要显示的大图(emoji),没有就不显示 */
       emoji?: string
       /** 点「再听一遍」时读什么 */
@@ -426,6 +434,20 @@ export type RedoSpec =
       answer: number
       /** 数形结合图示(口算错题带过来的) */
       visual?: MathVisual
+    }
+  | {
+      /** 拼写/听写错的 → 还是让他拼一遍 */
+      type: 'spell'
+      answer: string
+      emoji?: string
+      audio?: string
+    }
+  | {
+      /** 跟我读错的 → 还是听范读、读出来、家长判 */
+      type: 'speak'
+      answer: string
+      emoji?: string
+      audio?: string
     }
 
 /** 数形结合图示(与 core/mathDrill 的同名类型一致,放这里避免类型层反向依赖) */

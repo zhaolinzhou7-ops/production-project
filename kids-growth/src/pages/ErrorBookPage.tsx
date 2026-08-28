@@ -52,6 +52,8 @@ export function ErrorBookPage() {
     让题目从列表里消失是家长的事,不该打断他。
   */
   const [graduated, setGraduated] = useState(0)
+  /** 展开答案的那一条(空串=都藏着) */
+  const [shown, setShown] = useState('')
   useEffect(() => {
     if (!currentChildId) return
     void graduateErrorCards(currentChildId).then((n) => {
@@ -198,8 +200,39 @@ export function ErrorBookPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-sm text-gray-800 line-clamp-2 whitespace-pre-line">{c.front}</div>
-                    <div className="mt-0.5 text-xs text-gray-400 line-clamp-1">答案:{c.back}</div>
+                    {/* 点题干就直接做这一道 —— 家长常常是有目标的:先把昨天那道弄懂 */}
+                    <button
+                      onClick={() =>
+                        errorDeck &&
+                        navigate(`/learn/session/${errorDeck.id}/review?cardId=${c.id}`)
+                      }
+                      className="w-full text-left"
+                    >
+                      <div className="text-sm text-gray-800 line-clamp-2 whitespace-pre-line">{c.front}</div>
+                    </button>
+                    {/*
+                      答案默认**藏起来**。摊在列表上等于每次翻错题本都把答案
+                      又看了一遍 —— 看多了记住的是答案的样子,不是这道题。
+                    */}
+                    {shown === c.id ? (
+                      <div className="mt-0.5 text-xs text-gray-400 whitespace-pre-line">答案:{c.back}</div>
+                    ) : (
+                      <button
+                        onClick={() => setShown(c.id)}
+                        className="mt-0.5 text-xs text-gray-300 underline"
+                      >
+                        看答案
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        errorDeck &&
+                        navigate(`/learn/session/${errorDeck.id}/review?cardId=${c.id}`)
+                      }
+                      className="mt-1.5 rounded-full bg-brand-100 px-3 py-1 text-[11px] font-bold text-brand-600 active:scale-95"
+                    >
+                      做这道
+                    </button>
                   </div>
                   {(c.extra as { photo?: string } | undefined)?.photo && (
                     <img

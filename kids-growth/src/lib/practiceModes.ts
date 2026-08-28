@@ -31,7 +31,6 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
     { mode: 'speakEn', label: '跟我读', icon: '🗣️', desc: '听范读→读出来→读例句', lowAgeFriendly: true },
     { mode: 'spell', label: '拼写', icon: '⌨️', desc: '把字母拼成这个词', lowAgeFriendly: true },
     { mode: 'dictation', label: '听写', icon: '✍️', desc: '听发音写单词', lowAgeFriendly: true },
-    { mode: 'speak', label: '跟读', icon: '🎤', desc: '跟着读一遍', needsMic: true, lowAgeFriendly: true },
   ],
   poem: [
     { mode: 'recite', label: '朗读背诵', icon: '📖', desc: '听读并背诵', lowAgeFriendly: true },
@@ -40,26 +39,29 @@ export const MODES_BY_TYPE: Record<CardItemType, PracticeModeDef[]> = {
   hanzi: [
     { mode: 'recognize', label: '认字', icon: '👀', desc: '看字读音组词', lowAgeFriendly: true },
     { mode: 'listenChoose', label: '听音选字', icon: '👂', desc: '听读音选汉字', lowAgeFriendly: true },
-    { mode: 'sayIt', label: '说给我听', icon: '🗣️', desc: '自己说出来,家长判', lowAgeFriendly: true },
   ],
   wrong: [{ mode: 'review', label: '重做', icon: '🔁', desc: '回想再自评', lowAgeFriendly: true }],
   fact: [
     { mode: 'quiz', label: '选一选', icon: '🧠', desc: '看题目选答案', lowAgeFriendly: true },
     { mode: 'review', label: '想一想', icon: '💭', desc: '先回想再翻答案自评', lowAgeFriendly: true },
   ],
+  /*
+    看图卡的练法**全程英语**,而且不留重复的。
+
+    删掉的:
+    - 「看图选一选」(看图选中文名):对一个中文母语的孩子,🐱 叫猫这件事
+      他三岁就会了 —— 这一档不是学习,是占位。
+    - 「听音选图」(听中文点图):同上,和英语版是同一个动作,只是换了语言,
+      而中文那一半没有任何增益。
+    - 「说给我听」:和「跟我读」是同一件事(他说、家长判),只是少了范读,
+      合并成一个就够了。
+  */
   pic: [
-    { mode: 'picChoose', label: '看图选一选', icon: '🖼️', desc: '看图片选名字', lowAgeFriendly: true },
-    { mode: 'listenPic', label: '听音选图', icon: '👂', desc: '听声音点图片', lowAgeFriendly: true },
-    { mode: 'picChooseEn', label: '英语·看图选词', icon: '🅰️', desc: '看图选英语单词', lowAgeFriendly: true },
-    { mode: 'listenPicEn', label: '英语·听音选图', icon: '🎧', desc: '听英语点图片', lowAgeFriendly: true },
-    { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '英语中文自动连播', lowAgeFriendly: true },
-    /*
-      「读出来」是难度阶梯的最后一档,也是这套系统原先缺掉的一环。
-      四选一有 25% 的蒙对率,而说出来没有 —— 一个内容真正学会的标志,
-      是他能说出来,不是能认出来。
-    */
-    { mode: 'speakEn', label: '英语·跟我读', icon: '🗣️', desc: '听范读→读出来→家长判', lowAgeFriendly: true },
-    { mode: 'sayIt', label: '说给我听', icon: '💬', desc: '看图自己说,家长判', lowAgeFriendly: true },
+    { mode: 'listenPicEn', label: '听英语点图', icon: '🎧', desc: '听英语,点出对应的图', lowAgeFriendly: true },
+    { mode: 'picChooseEn', label: '看图选单词', icon: '🅰️', desc: '看图选出英语单词', lowAgeFriendly: true },
+    { mode: 'speakEn', label: '跟我读', icon: '🎙️', desc: '听范读→读出来→读例句', lowAgeFriendly: true },
+    { mode: 'spell', label: '拼出来', icon: '⌨️', desc: '听发音+看图,把词拼出来', lowAgeFriendly: true },
+    { mode: 'earTrain', label: '磨耳朵', icon: '🎵', desc: '单词和例句自动连播,不用操作', lowAgeFriendly: true },
   ],
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import { ArrowLeft, Timer } from 'lucide-react'
 import { db } from '../db/db'
@@ -26,6 +26,15 @@ export function MathDrillPage() {
   const currentChildId = useAppStore((s) => s.currentChildId)
   const { child, stage, tone } = useCurrentChild()
 
+  /*
+    做题状态放到**地址里**(?run=1),不是放在组件 state 里。
+
+    这样浏览器的返回键天然退回选题页,而不是一步跳回学习首页 ——
+    实际用起来几乎每次都是连着做两三组,回首页再点进来要三下。
+    返回键是系统的,页面拦不住它;唯一可靠的办法就是让它有一层可退的历史。
+  */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const running = searchParams.get('run') === '1'
   const [screen, setScreen] = useState<Screen>('config')
   const [kind, setKind] = useState<MathKind>('add')
   const [count, setCount] = useState(20)
@@ -53,7 +62,20 @@ export function MathDrillPage() {
   }, [screen, startedAt])
 
   const start = () => {
-    setProblems(generateDrill(kind, count, stage))
+    // 推一条历史,返回键就能退回选题页
+    setSearchParams({ run: '1', kind, count: String(count) })
+  }
+
+  // 地址里带上 run=1 就开一组新题;返回键把它去掉,自动回到选题页
+  useEffect(() => {
+    if (!running) {
+      setScreen('config')
+      setSummary(null)
+      return
+    }
+    const k = (searchParams.get('kind') as MathKind) || kind
+    const n = Number(searchParams.get('count')) || count
+    setProblems(generateDrill(k, n, stage))
     setIdx(0)
     setCorrect(0)
     setCombo(0)
@@ -63,7 +85,8 @@ export function MathDrillPage() {
     setStartedAt(Date.now())
     setElapsed(0)
     setScreen('run')
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running])
 
   const finish = useCallback(
     async (finalCorrect: number, total: number, sec: number) => {
@@ -270,16 +293,20 @@ export function MathDrillPage() {
           )}
           <div className="mt-8 flex gap-3 justify-center">
             <button
-              onClick={() => setScreen('config')}
+              onClick={() => navigate('/learn')}
               className="rounded-2xl bg-white/80 px-6 py-3 font-bold text-gray-600 active:scale-95 transition"
             >
-              再来一组
+              回学习首页
             </button>
+            {/*
+              做完之后**先回到选题页**,不是学习首页 —— 浏览器返回键也是这个行为,
+              两边一致,不会让人愣一下。
+            */}
             <button
-              onClick={() => navigate('/learn')}
+              onClick={() => navigate(-1)}
               className="rounded-2xl bg-brand-500 px-6 py-3 font-bold text-white active:scale-95 transition"
             >
-              完成
+              ← 再来一组
             </button>
           </div>
         </div>
@@ -296,8 +323,9 @@ export function MathDrillPage() {
     <div className="pt-4 pb-10 min-h-screen flex flex-col">
       <CorrectBurst trigger={burst} combo={combo} big={stage === 'toddler'} />
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/learn')} className="text-gray-400 text-sm">
-          退出
+        {/* 中途退出退回选题页 —— 通常是想换个题型,不是想离开 */}
+        <button onClick={() => navigate(-1)} className="text-gray-400 text-sm">
+          ‹ 退出
         </button>
         <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
           <div className="h-full rounded-full bg-brand-400 transition-all" style={{ width: `${progress}%` }} />
