@@ -278,6 +278,93 @@ function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const current = cards[idx]
+
+  /**
+   * 这道错题的重做规格(答错时就一起存下来的)。
+   * 没有的话说明是手动记的老错题,退回「看题回想」。
+   */
+  const redo = useMemo(() => {
+    const stored = (current?.card.extra as { redo?: RedoSpec } | undefined)?.redo
+    if (stored) return stored
+    /*
+      **老错题也要能重做。**
+
+      新做法只对「以后答错的题」生效,而错题本里已经攒着的那些一条 redo 都没有 ——
+      家长打开一看和以前一模一样,会以为根本没改。
+      所以这里按题干和答案现推一份:数字答案当算术题让他重算,
+      其它做成选择题,干扰项从错题本里别的题的答案里挑。
+    */
+    if (!current || mode !== 'review') return undefined
+    return inferRedo(
+      {
+        front: current.card.front,
+        back: current.card.back,
+        emoji: (current.card.extra as { emoji?: string } | undefined)?.emoji,
+      },
+      allCards.map((c) => ({ front: c.front, back: c.back })),
+      // 先回内容包里找原题 —— 找得到就按原来那种形式出,不会把点图题换成选词题
+      (c) => findOriginCard(childId, c.front, c.back),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, mode, allCards, childId])
+
+  /**
+   * 重做题的朗读。
+   *
+   * 语言**以文本本身为准**,不只看存下来的 lang。
+   * 老错题里的 lang 可能缺失或过时(那些卡是好几个版本前存的),
+   * 而「一句纯英文被当成中文念」听起来就是彻底错的 ——
+   * 一眼能判断的事,不该依赖一个可能没存对的字段。
+   *
+   * 英文走 playWordAudio(真人音源管线),不走 playText:
+   * 后者会先试中文插件,英文交给它容易读出中文腔。
+   */
+  const playRedoAudio = () => {
+    if (!redo || redo.type === 'input') return
+    const text = redo.audio ?? ''
+    if (!text) return
+    const declaredEn = redo.type === 'choice' && redo.lang === 'en'
+    if (declaredEn || /^[A-Za-z][A-Za-z\s'’.\-!?,]*$/.test(text.trim())) {
+      void playWordAudio(text)
+      return
+    }
+    void playText(text, 'zh_CN')
+  }
+
+  /** 算术错题:重做时输入答案 */
+  const [redoInput, setRedoInput] = useState('')
+  const [redoMark, setRedoMark] = useState<'none' | 'ok' | 'no'>('none')
+  const submitRedo = () => {
+    if (!redo || redo.type !== 'input') return
+    if (redoMark !== 'none') return
+    const right = redoInput.trim() !== '' && Number(redoInput.trim()) === redo.answer
+    setRedoMark(right ? 'ok' : 'no')
+    setTimeout(
+      () => {
+        setRedoInput('')
+        setRedoMark('none')
+        advance(right)
+      },
+      right ? 520 : 1200,
+    )
+  }
+
+  /** 拼写类错题:比对文本,不比数字 */
+  const submitRedoSpell = () => {
+    if (!redo || redo.type !== 'spell' || redoMark !== 'none') return
+    const right = normalizeForCompare(redoInput) === normalizeForCompare(redo.answer)
+    setRedoMark(right ? 'ok' : 'no')
+    setTimeout(
+      () => {
+        setRedoInput('')
+        setRedoMark('none')
+        advance(right)
+      },
+      right ? 620 : 1500,
+    )
+  }
+
   /**
    * 低龄:每换一张卡就把题目念出来。
    *
@@ -290,17 +377,35 @@ function Session() {
    * 磨耳朵有自己的连播逻辑,这里让开。
    */
   useEffect(() => {
-    if (getStage() !== 'toddler') return
     if (mode === 'earTrain' || mode === 'listenChoose' || mode === 'dictation') return
     if (mode === 'listenPic' || mode === 'listenPicEn') return
     const card = cards[idx]?.card
     if (!card || phase !== 'prompt') return
+
+    /*
+      **错题重做走自己的朗读,而且不限年龄。**
+
+      这里原先无条件念 `card.front`、而且写死 'zh_CN' —— 错题卡的 front 是中文
+      (看图卡的正面就是中文名),于是一道英文题被用中文念了出来。
+      用户看到的「错题都是中文读」就是这一行造成的。
+
+      而且点图题**必须**出声:四张图摆在那儿不响,他根本无从判断该点哪个,
+      那道题就变成了瞎猜 —— 所以这一条对大孩子同样生效。
+    */
+    if (mode === 'review') {
+      if (!redo || redo.type === 'input') return
+      const timer = setTimeout(() => playRedoAudio(), 420)
+      return () => clearTimeout(timer)
+    }
+
+    // 以下是「低龄:每换一张卡就把题目念出来」,大孩子自己会读,不用念
+    if (getStage() !== 'toddler') return
     const timer = setTimeout(() => {
       void playText(card.audioText ?? card.front, 'zh_CN')
     }, 420)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, cards, mode, phase])
+  }, [idx, cards, mode, phase, redo])
 
   /**
    * 磨耳朵的自动连播:英文 → 停 → 中文 → 停 → 下一张,循环。
@@ -369,75 +474,6 @@ function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, cards])
 
-  const current = cards[idx]
-
-  /**
-   * 这道错题的重做规格(答错时就一起存下来的)。
-   * 没有的话说明是手动记的老错题,退回「看题回想」。
-   */
-  const redo = useMemo(() => {
-    const stored = (current?.card.extra as { redo?: RedoSpec } | undefined)?.redo
-    if (stored) return stored
-    /*
-      **老错题也要能重做。**
-
-      新做法只对「以后答错的题」生效,而错题本里已经攒着的那些一条 redo 都没有 ——
-      家长打开一看和以前一模一样,会以为根本没改。
-      所以这里按题干和答案现推一份:数字答案当算术题让他重算,
-      其它做成选择题,干扰项从错题本里别的题的答案里挑。
-    */
-    if (!current || mode !== 'review') return undefined
-    return inferRedo(
-      {
-        front: current.card.front,
-        back: current.card.back,
-        emoji: (current.card.extra as { emoji?: string } | undefined)?.emoji,
-      },
-      allCards.map((c) => ({ front: c.front, back: c.back })),
-      // 先回内容包里找原题 —— 找得到就按原来那种形式出,不会把点图题换成选词题
-      (c) => findOriginCard(childId, c.front, c.back),
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, mode, allCards, childId])
-
-  /** 重做题的「再听一遍」;RedoSpec 里存的是 'zh'/'en',这里转成语音接口要的写法 */
-  const playRedoAudio = () => {
-    if (!redo || redo.type !== 'choice' || !redo.audio) return
-    void playText(redo.audio, redo.lang === 'en' ? 'en_US' : 'zh_CN')
-  }
-
-  /** 算术错题:重做时输入答案 */
-  const [redoInput, setRedoInput] = useState('')
-  const [redoMark, setRedoMark] = useState<'none' | 'ok' | 'no'>('none')
-  const submitRedo = () => {
-    if (!redo || redo.type !== 'input') return
-    if (redoMark !== 'none') return
-    const right = redoInput.trim() !== '' && Number(redoInput.trim()) === redo.answer
-    setRedoMark(right ? 'ok' : 'no')
-    setTimeout(
-      () => {
-        setRedoInput('')
-        setRedoMark('none')
-        advance(right)
-      },
-      right ? 520 : 1200,
-    )
-  }
-
-  /** 拼写类错题:比对文本,不比数字 */
-  const submitRedoSpell = () => {
-    if (!redo || redo.type !== 'spell' || redoMark !== 'none') return
-    const right = normalizeForCompare(redoInput) === normalizeForCompare(redo.answer)
-    setRedoMark(right ? 'ok' : 'no')
-    setTimeout(
-      () => {
-        setRedoInput('')
-        setRedoMark('none')
-        advance(right)
-      },
-      right ? 620 : 1500,
-    )
-  }
 
   const options = useMemo(() => {
     if (!current || mode !== 'listenChoose') return []
@@ -1563,7 +1599,9 @@ function Session() {
             <View className='vis'>
               {redo.visual.groups.map((g, gi) => (
                 <View key={gi} className='vis__row'>
-                  {gi > 0 ? <Text className='vis__op'>{redo.visual!.ops[gi - 1] ?? '+'}</Text> : null}
+                  {gi > 0 && redo.visual!.ops[gi - 1] ? (
+                    <Text className='vis__op'>{redo.visual!.ops[gi - 1]}</Text>
+                  ) : null}
                   <View className='vis__items'>
                     {Array.from({ length: g.n }).map((_, i) => {
                       const struck =
@@ -1695,6 +1733,30 @@ function Session() {
               )
             })}
           </View>
+          {/*
+            答完之后把**那个词本身**亮出来并读一遍。
+
+            「听音选图」有一个真实的风险:孩子可能只是记住了「听到这个声音就点那只猫」,
+            而从没把那个声音和 c-a-t 这个词联系起来 —— 换一批图他就不会了。
+            把词摆出来,是把「声音—图」这条单线,变成「声音—词—图」的三角。
+            (阶梯后面两档「拼出来」「听写」没有图也没有选项,那两关**无法靠记图片通过** ——
+            那才是这件事的结构性答案,这里只是提前打个底。)
+          */}
+          {picked && picEn ? (
+            <View
+              className='afterpic'
+              onClick={() =>
+                void playWordAudio(
+                  (current.card.extra as { en?: string } | undefined)?.en ?? current.card.back,
+                )
+              }
+            >
+              <Text className='afterpic__w'>
+                {(current.card.extra as { en?: string } | undefined)?.en ?? current.card.back}
+              </Text>
+              <Text className='afterpic__h'>🔊 再听一遍这个词</Text>
+            </View>
+          ) : null}
         </View>
       )}
 

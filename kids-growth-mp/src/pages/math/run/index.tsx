@@ -229,7 +229,10 @@ function MathRun() {
           <View className='vis'>
             {p.visual.groups.map((g, gi) => (
               <View key={gi} className='vis__row'>
-                {gi > 0 ? <Text className='vis__op'>{p.visual!.ops[gi - 1] ?? '+'}</Text> : null}
+                {/* 连接符为空串表示「同一堆东西换行」,不该画出任何符号 */}
+                {gi > 0 && p.visual!.ops[gi - 1] ? (
+                  <Text className='vis__op'>{p.visual!.ops[gi - 1]}</Text>
+                ) : null}
                 <View className='vis__items'>
                   {Array.from({ length: g.n }).map((_, i) => {
                     // 减法:后面几个划掉,表示「拿走了」

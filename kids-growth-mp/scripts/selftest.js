@@ -335,21 +335,52 @@ function run() {
     所以每一种都按**题面里给出的数字**独立算一遍,而不是信生成器。
   */
   for (let i = 0; i < 400; i++) {
+    /*
+      看图题的图现在放在 visual 里,不再拼进题干字符串。
+      所以这里直接按 visual 里的数量核对 —— 比数题干里的 emoji 更可靠,
+      也顺带保证了「图和答案对得上」(图错了比答案错了更难发现)。
+    */
+    const sumOf = (v) => v.groups.reduce((n, g) => n + g.n, 0)
     // 看图·合起来
     const pa = md.generateProblem('picAdd', 'toddler')
-    const parts = pa.text.split('\n')[0].split('和').map((x) => x.trim())
-    eq([...parts[0]].length + [...parts[1]].length, pa.answer, '看图合起来:两堆之和必须等于答案')
+    ok(pa.visual, '看图合起来必须带图')
+    eq(sumOf(pa.visual), pa.answer, '看图合起来:图上的总数必须等于答案')
+    eq(pa.visual.groups.length, 2, '看图合起来要摆成两堆')
     // 看图·拿走了
     const ps = md.generateProblem('picSub', 'toddler')
-    const psLines = ps.text.split('\n')
-    const took = Number(/(\d+) 个/.exec(psLines[1])[1])
-    eq([...psLines[0]].length - took, ps.answer, '看图拿走了:剩下的必须等于答案')
+    ok(ps.visual, '看图拿走了必须带图')
+    eq(sumOf(ps.visual) - ps.visual.strike, ps.answer, '看图拿走了:划掉之后剩下的必须等于答案')
     ok(ps.answer >= 1, '拿走之后至少还剩 1 个 —— 剩 0 个对幼儿没有意义')
     // 看图·多几个
     const pd = md.generateProblem('picDiff', 'toddler')
-    const pdL = pd.text.split('\n')
-    eq([...pdL[0]].length - [...pdL[1]].length, pd.answer, '看图多几个:差必须等于答案')
+    ok(pd.visual, '看图多几个必须带图')
+    eq(pd.visual.groups[0].n - pd.visual.groups[1].n, pd.answer, '看图多几个:两排之差必须等于答案')
     ok(pd.answer >= 1, '「多几个」的答案至少是 1,否则题目问得不成立')
+    // 数一数:图必须排成每行五个,而且总数等于答案
+    const c10 = md.generateProblem('count10', 'toddler')
+    ok(c10.visual, '数一数必须带图')
+    eq(sumOf(c10.visual), c10.answer, '数一数:图上的个数必须等于答案')
+    ok(
+      c10.visual.groups.every((g) => g.n <= 5),
+      '数一数的图必须每行不超过五个 —— 挤成一长排孩子数不清',
+    )
+    ok(
+      c10.visual.ops.every((o) => o === ''),
+      '同一堆东西换行时不该画出任何符号',
+    )
+    // 题干里**不该再有一长串 emoji** —— 图和问题挤在一起正是「表达有问题」的来源
+    ok(
+      !/(\p{Extended_Pictographic})\1\1/u.test(c10.text),
+      '题干里不该再拼图,图交给 visual',
+    )
+    /*
+      **纯算式题一律不配图。**
+      上一版把图铺到所有算式题上,结果每道题都变成了数糖果 ——
+      他不再算 7+5,而是低头数十二颗糖。那对已经会算的孩子是退步。
+    */
+    for (const k of ['add10', 'sub10', 'add20', 'sub20', 'chain', 'makeTen', 'compare']) {
+      ok(!md.generateProblem(k, 'toddler').visual, `${k} 是算式题,不该配图`)
+    }
     // 认方位
     const po = md.generateProblem('position', 'toddler')
     const poRow = [...po.text.split('\n')[0]]
@@ -2514,36 +2545,71 @@ function run() {
     ok(runPage.indexOf('navigateBack') >= 0, '做题页的退出/完成要退回选题页')
   }
 
-  // ---- 数形结合:算式必须配得上那堆实物 ----
+  // ---- 看图题:图必须配得上答案,而且只有看图题才有图 ----
   {
     const md = L('core/mathDrill.js')
     let checked = 0
+    /*
+      图**只留在本来就是看图数数的题型上**。
+      算式题配图的后果是每道题都变成数糖果 —— 对一个已经会算 20 以内加减的
+      孩子来说那是退步:数出来又慢又容易错,而且练不出数感。
+    */
+    const PIC_KINDS = ['count10', 'picAdd', 'picSub', 'picDiff']
+    const CALC_KINDS = ['add10', 'sub10', 'add20', 'sub20', 'chain', 'makeTen', 'compare']
     for (let i = 0; i < 300; i++) {
-      for (const kind of ['add10', 'sub10', 'add20', 'sub20', 'chain', 'makeTen', 'compare']) {
+      for (const kind of PIC_KINDS) {
         const p = md.generateProblem(kind, 'toddler')
-        if (!p.visual) continue
+        ok(p.visual, `${kind} 是看图题,必须有图`)
         checked += 1
         const total = p.visual.groups.reduce((n, g) => n + g.n, 0)
         ok(total > 0 && total <= 20, '图示总数要在 20 个以内,多了孩子数不清')
         ok(p.visual.ops.length === Math.max(0, p.visual.groups.length - 1), '连接符个数比组数少一个')
-        // 加法:图上的东西加起来就是答案 —— 数得出来才叫数形结合
-        if (kind === 'add10' || kind === 'add20') {
+        // 每行不超过五个 —— 挤成一长排孩子数不清,这正是「表达有问题」的来源
+        // 数一数按「五个一行」分组(建立五这个基准量);其余看图题是「一堆/两堆」,
+        // 靠界面自动换行,这里只保证一堆不会多到数不清
+        if (kind === 'count10') {
+          ok(p.visual.groups.every((g) => g.n <= 5), '数一数必须每行不超过五个')
+        } else {
+          ok(p.visual.groups.every((g) => g.n <= 9), `${kind}:一堆不该超过九个`)
+        }
+        if (kind === 'count10' || kind === 'picAdd') {
           ok(total === p.answer, `${kind}:图上的总数应等于答案`)
         }
-        // 减法:画出来 a 个划掉 b 个,剩下的就是答案
-        if (kind === 'sub10' || kind === 'sub20') {
-          ok(total - (p.visual.strike || 0) === p.answer, `${kind}:减掉划去的应等于答案`)
+        if (kind === 'picSub') {
+          ok(total - (p.visual.strike || 0) === p.answer, 'picSub:划掉之后剩下的应等于答案')
         }
-        if (kind === 'chain') {
-          ok(total - (p.visual.strike || 0) === p.answer, 'chain:先合起来再拿走应等于答案')
+        if (kind === 'picDiff') {
+          ok(
+            p.visual.groups[0].n - p.visual.groups[1].n === p.answer,
+            'picDiff:两排之差应等于答案',
+          )
         }
-        if (kind === 'compare') {
-          ok(Math.max(...p.visual.groups.map((g) => g.n)) === p.answer, 'compare:图上多的那排就是答案')
-        }
+        // 图搬进 visual 之后,题干里不该再有连成串的 emoji
+        ok(!/(\p{Extended_Pictographic})\1\1/u.test(p.text), `${kind}:题干里不该再拼图`)
+      }
+      for (const kind of CALC_KINDS) {
+        ok(!md.generateProblem(kind, 'toddler').visual, `${kind} 是算式题,不该配图`)
       }
     }
-    ok(checked > 1000, '应抽查到足够多的带图算式')
+    ok(checked > 1000, '应抽查到足够多的看图题')
   }
+
+  // ---- 做题页必须是独立一页 ----
+  {
+    /*
+      微信顶部那个返回箭头是系统的,页面内部拦不住 ——
+      做题和选题挤在同一页时,「做完按返回」一定回到首页。
+      拆成两页之后返回天然退回选题页,所以这条注册必须在。
+    */
+    const appCfg = fs.readFileSync(path.join(ROOT, 'src', 'app.config.ts'), 'utf8')
+    ok(appCfg.indexOf("'pages/math/run/index'") >= 0, '做题页必须注册在 app.config 的 pages 里')
+    const cfgPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'index.tsx'), 'utf8')
+    ok(cfgPage.indexOf('/pages/math/run/index') >= 0, '选题页要跳到做题页,而不是自己切屏')
+    ok(cfgPage.indexOf("screen === 'run'") < 0, '选题页里不该再留做题的分支')
+    const runPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'run', 'index.tsx'), 'utf8')
+    ok(runPage.indexOf('navigateBack') >= 0, '做题页的退出/完成要退回选题页')
+  }
+
 }
 
 // ---------------------------------------------------------------- main

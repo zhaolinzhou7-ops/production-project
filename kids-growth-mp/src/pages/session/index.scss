@@ -837,3 +837,26 @@
 .vis__i--out {
   opacity: 0.25;
 }
+
+/* 听音选图答完之后:把那个词亮出来,把「声音—图」变成「声音—词—图」 */
+.afterpic {
+  margin-top: 36px;
+  padding: 24px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.8);
+  text-align: center;
+
+  &__w {
+    display: block;
+    font-size: 48px;
+    font-weight: 700;
+    color: #4f46e5;
+  }
+
+  &__h {
+    display: block;
+    margin-top: 10px;
+    font-size: 24px;
+    color: #9ca3af;
+  }
+}

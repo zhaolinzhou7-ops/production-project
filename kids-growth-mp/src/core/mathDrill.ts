@@ -50,17 +50,19 @@ export type MathKind =
   | 'average'
 
 /**
- * 数形结合的图示:把算式配上看得见的实物。
+ * 实物图示。
  *
- * 为什么必须有:「5 + 5 = ?」对一个 5 岁的孩子是**两个抽象符号**,
- * 他只能靠背。而「🍬🍬🍬🍬🍬 和 🍬🍬🍬🍬🍬 合起来是几颗糖」他能**数出来** ——
- * 数出来的答案是他自己得到的,背下来的答案是别人给的。
+ * **只用在本来就是「看图数数」的题型上**(数一数、看图合起来、看图拿走…),
+ * 算式题一律不配图。
  *
- * 这一步在数学教育里叫「具体—表象—抽象」:实物 → 图示 → 符号。
- * 跳过前两步直接练符号,算得快也走不远,一遇到应用题就不会列式。
+ * 上一版把图铺到了所有算式题上,想法是「数形结合」,实际结果是
+ * **每道题都变成了数糖果** —— 他不再算 7+5,而是低头数十二颗糖。
+ * 对一个 20 以内加减已经做得不错的孩子,这是退步:数出来又慢又容易错,
+ * 而且练不出数感。图该出现在看图题里,算式题就该是干干净净的算式。
  *
- * 所以图示和算式**同时出现**,不是二选一:他先看图数出来,
- * 慢慢就把「5 + 5」这个符号和那堆糖对上了。
+ * 图示按**每行五个**排。五个一组是数数教学里的标准做法 ——
+ * 它让孩子逐渐建立「五」这个基准量,以后看到七个能一眼认出「五加二」,
+ * 而不是每次都从一数到七。挤成一长排则相反:数到一半就乱了。
  */
 export type { MathVisual } from '../types'
 
@@ -85,6 +87,26 @@ function visualOf(groups: Array<{ emoji: string; n: number }>, ops: string[], st
   const total = groups.reduce((n, g) => n + g.n, 0)
   if (total <= 0 || total > 20) return undefined
   return { groups, ops, strike }
+}
+
+/**
+ * 把 n 个东西排成**每行五个**。
+ *
+ * 五个一组是数数教学里的标准做法:孩子逐渐建立「五」这个基准量,
+ * 以后看到七个能一眼认出「五加二」,而不是每次从一数到七。
+ * 挤成一长排则相反 —— 数到一半就乱了,而且他会以为「数错」是自己的问题。
+ */
+function rowsOfFive(emoji: string, n: number): MathVisual | undefined {
+  if (n <= 0 || n > 20) return undefined
+  const groups: Array<{ emoji: string; n: number }> = []
+  let left = n
+  while (left > 0) {
+    const take = Math.min(5, left)
+    groups.push({ emoji, n: take })
+    left -= take
+  }
+  // 行与行之间不放任何符号 —— 这是「同一堆东西的换行」,不是两堆相加
+  return { groups, ops: groups.slice(1).map(() => '') }
 }
 
 export interface MathKindDef {
@@ -324,81 +346,70 @@ function genCount10(): MathProblem {
   const shapes = ['🍎', '⭐', '🐟', '🌸', '🚗', '🐤', '🍬', '🎈']
   const n = randInt(2, 10)
   const emoji = pick(shapes)
-  return { text: `${emoji.repeat(n)}\n一共有几个?`, answer: n }
+  /*
+    题干里**不再塞图**。
+
+    原先是把十个 emoji 拼进题干字符串里,和问题挤在一起 ——
+    换行靠 \n、间距靠运气,一行十个挤成一坨,孩子根本数不清,
+    家长看到的就是「表达很有问题」。
+    现在图交给 visual(每行五个、可以点着数),题干只留那句问题。
+  */
+  return { text: `数一数,一共有几个 ${emoji}?`, answer: n, visual: rowsOfFive(emoji, n) }
 }
+
+/**
+ * 纯算式题**不配图**。
+ *
+ * 上一版给 10/20 以内加减、凑十、连加连减、比大小都配了实物图,
+ * 想法是「数形结合」。用户试下来的结果是:**每道题都变成了数糖果** ——
+ * 他不再算 7+5,而是低头数十二颗糖。对一个 20 以内加减已经做得不错的孩子,
+ * 这是**退步**:数出来又慢又容易错,而且练不出数感。
+ *
+ * 数形结合本身没错,错在把它铺到所有题上。图该出现在**本来就是看图数数**
+ * 的题型里(数一数、看图合起来、看图拿走、比长短…),那些题型家长可以
+ * 单独选;算式题就该是干干净净的算式。
+ */
 
 /** 10 以内加法:和不超过 10,先把「不进位」练熟 */
 function genAdd10(): MathProblem {
   const a = randInt(1, 8)
   const b = randInt(1, 9 - a + 1)
-  const e = pick(COUNTABLES)
-  return {
-    text: `${a} + ${b} =`,
-    answer: a + b,
-    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+']),
-  }
+  return { text: `${a} + ${b} =`, answer: a + b }
 }
 
 /** 10 以内减法:结果不为负 */
 function genSub10(): MathProblem {
   const a = randInt(2, 10)
   const b = randInt(1, a)
-  // 减法的图示是「画出来再划掉几个」,这比另起一排更接近「拿走」的动作
-  return {
-    text: `${a} - ${b} =`,
-    answer: a - b,
-    visual: visualOf([{ emoji: pick(COUNTABLES), n: a }], [], b),
-  }
+  return { text: `${a} - ${b} =`, answer: a - b }
 }
 
 /** 凑十:进位加法的地基,单独练熟收益最大 */
 function genMakeTen(): MathProblem {
   const a = randInt(1, 9)
-  const e = pick(COUNTABLES)
-  return {
-    text: `${a} + ( ) = 10`,
-    answer: 10 - a,
-    // 已有的画出来,要凑的留白 —— 他数一数还差几个
-    visual: visualOf([{ emoji: e, n: a }], []),
-  }
+  return { text: `${a} + ( ) = 10`, answer: 10 - a }
 }
 
-/** 比大小:答 1 表示前面大,答 2 表示后面大 —— 题干里写清楚怎么答 */
+/** 比大小:答大的那个数 —— 题干里写清楚怎么答 */
 function genCompare(): MathProblem {
   let a = randInt(1, 20)
   let b = randInt(1, 20)
   if (a === b) b = a + 1
-  const e = pick(COUNTABLES)
-  return {
-    text: `${a} 和 ${b}\n哪个大?大的那个是几?`,
-    answer: Math.max(a, b),
-    // 比大小最该配图 —— 两排摆在一起,哪排长一眼就看出来,不用先会数
-    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['和']),
-  }
+  return { text: `${a} 和 ${b}\n哪个大?大的那个是几?`, answer: Math.max(a, b) }
 }
 
 /** 20 以内进位加:幼小衔接的重点题型 */
 function genAdd20(): MathProblem {
   const a = randInt(5, 9)
   const b = randInt(11 - a, 9)
-  const e = pick(COUNTABLES)
-  return {
-    text: `${a} + ${b} =`,
-    answer: a + b,
-    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+']),
-  }
+  return { text: `${a} + ${b} =`, answer: a + b }
 }
-
 
 /** 20 以内退位减:13-5 这类。和进位加是配套的一对,只练加不练减会瘸腿 */
 function genSub20(): MathProblem {
   const a = randInt(11, 18)
   const b = randInt(a - 9, 9)
-  return {
-    text: `${a} - ${b} =`,
-    answer: a - b,
-    visual: visualOf([{ emoji: pick(COUNTABLES), n: a }], [], b),
-  }
+  return { text: `${a} - ${b} =`, answer: a - b }
 }
 
 /** 连加连减:一步一步往下算,练的是「保持住中间结果」这件事 */
@@ -407,12 +418,7 @@ function genChain(): MathProblem {
   const b = randInt(1, 9 - Math.min(a, 8))
   const mid = a + b
   const c = randInt(1, mid)
-  const e = pick(COUNTABLES)
-  return {
-    text: `${a} + ${b} - ${c} =`,
-    answer: mid - c,
-    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['+'], c),
-  }
+  return { text: `${a} + ${b} - ${c} =`, answer: mid - c }
 }
 
 /** 排第几:序数概念。孩子常把「第 3 个」和「3 个」混起来,值得单独练 */
@@ -556,7 +562,11 @@ function genPicAdd(): MathProblem {
   const e = pick(['🍎', '🐟', '⭐', '🎈', '🍬', '🐤'])
   const a = randInt(1, 6)
   const b = randInt(1, 9 - a)
-  return { text: `${e.repeat(a)}   和   ${e.repeat(b)}\n合起来一共有几个?`, answer: a + b }
+  return {
+    text: '两堆合起来,一共有几个?',
+    answer: a + b,
+    visual: visualOf([{ emoji: e, n: a }, { emoji: e, n: b }], ['和']),
+  }
 }
 
 function genPicSub(): MathProblem {
@@ -569,7 +579,12 @@ function genPicSub(): MathProblem {
   ])
   const a = randInt(3, 9)
   const b = randInt(1, a - 1)
-  return { text: `${e.repeat(a)}\n${verb} ${b} 个,还剩几个?`, answer: a - b }
+  // 划掉的那几个就是「走掉的」—— 比另起一排更接近「拿走」这个动作
+  return {
+    text: `${verb} ${b} 个,还剩几个?`,
+    answer: a - b,
+    visual: visualOf([{ emoji: e, n: a }], [], b),
+  }
 }
 
 function genPicDiff(): MathProblem {
@@ -577,7 +592,11 @@ function genPicDiff(): MathProblem {
   const e2 = pick(['🦴', '🐟', '🥕'])
   const a = randInt(3, 9)
   const b = randInt(1, a - 1)
-  return { text: `${e1.repeat(a)}\n${e2.repeat(b)}\n上面比下面多几个?`, answer: a - b }
+  return {
+    text: '上面比下面多几个?',
+    answer: a - b,
+    visual: visualOf([{ emoji: e1, n: a }, { emoji: e2, n: b }], ['']),
+  }
 }
 
 // ---------------- 思维板块:方位 / 分类 / 比较 / 推理 / 专注 ----------------
