@@ -2529,21 +2529,6 @@ function run() {
     ok(pc.dailyPointCap('primary') < pc.dailyPointCap('junior'), '再大一档还要更高')
   }
 
-  // ---- 做题页必须是独立一页 ----
-  {
-    /*
-      微信顶部那个返回箭头是系统的,页面内部拦不住 ——
-      做题和选题挤在同一页时,「做完按返回」一定回到首页。
-      拆成两页之后返回天然退回选题页,所以这条注册必须在。
-    */
-    const appCfg = fs.readFileSync(path.join(ROOT, 'src', 'app.config.ts'), 'utf8')
-    ok(appCfg.indexOf("'pages/math/run/index'") >= 0, '做题页必须注册在 app.config 的 pages 里')
-    const cfgPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'index.tsx'), 'utf8')
-    ok(cfgPage.indexOf('/pages/math/run/index') >= 0, '选题页要跳到做题页,而不是自己切屏')
-    ok(cfgPage.indexOf("screen === 'run'") < 0, '选题页里不该再留做题的分支')
-    const runPage = fs.readFileSync(path.join(ROOT, 'src', 'pages', 'math', 'run', 'index.tsx'), 'utf8')
-    ok(runPage.indexOf('navigateBack') >= 0, '做题页的退出/完成要退回选题页')
-  }
 
   // ---- 看图题:图必须配得上答案,而且只有看图题才有图 ----
   {
@@ -2592,6 +2577,129 @@ function run() {
       }
     }
     ok(checked > 1000, '应抽查到足够多的看图题')
+  }
+
+  // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
+  {
+    const ex2 = L('core/exam.js')
+    const mkCand = (i, deck, type) => ({
+      cardId: `c${i}`,
+      deckId: deck,
+      deckName: deck,
+      itemType: type,
+      front: type === 'pic' ? `中文${i}` : `w${i}`,
+      back: type === 'pic' ? `en${i}` : `b${i}`,
+      emoji: type === 'pic' ? '🐱' : undefined,
+      en: type === 'pic' ? `en${i}` : undefined,
+      reps: 2,
+      lapses: i % 3,
+    })
+    const cands = [
+      ...Array.from({ length: 12 }, (_, i) => mkCand(i, 'deckA', 'pic')),
+      ...Array.from({ length: 12 }, (_, i) => mkCand(100 + i, 'deckB', 'word')),
+      ...Array.from({ length: 12 }, (_, i) => mkCand(200 + i, 'deckC', 'hanzi')),
+    ]
+
+    const paper = ex2.buildExam(cands, 12)
+    ok(paper.length === 12, `应出够题数(实际 ${paper.length})`)
+    ok(new Set(paper.map((q) => q.cardId)).size === paper.length, '同一张卡不该在一份卷子里出现两次')
+    // 每一包都要被考到:只从一包里抽,考的是那一包,不是他的水平
+    ok(new Set(paper.map((q) => q.deckId)).size === 3, '三个卡组都应该被考到')
+    for (const q of paper) {
+      ok(q.options.indexOf(q.answer) >= 0, '正确答案必须在选项里')
+      ok(new Set(q.options).size === q.options.length, '选项不能重复')
+      ok(q.options.length >= 2, '至少要有两个选项')
+    }
+    // **英语题一律纯英文**:平时练纯英文,考试突然冒出中文,考的就是另一件事
+    for (const q of paper.filter((x) => x.lang === 'en')) {
+      ok(q.options.every((o) => !/[一-龥]/.test(o)), '英语题的选项里不该出现中文')
+    }
+
+    // **只考学过的。** 考没教过的东西不是测验,是打击。
+    const fresh = cands.map((c) => ({ ...c, reps: 0 }))
+    ok(ex2.buildExam(fresh, 10).length === 0, '一张学过的卡都没有时不该出卷')
+    const few = cands.slice(0, 3).map((c) => ({ ...c, reps: 1 }))
+    ok(ex2.buildExam(few, 10).length <= 3, '学过的不够时不该硬凑题目')
+
+    // **没有不及格。** 一次考砸就再也不肯考的孩子,后面所有测验都白设。
+    ok(ex2.pickScoreBand(0, 10).stars >= 1, '全错也至少一颗星')
+    ok(ex2.pickScoreBand(0, 10).title.indexOf('难') >= 0, '最低一档说的是「题难」,不是「你不行」')
+    ok(ex2.pickScoreBand(10, 10).stars === 5, '全对给五颗星')
+    let prevStars = -1
+    for (let c = 0; c <= 10; c++) {
+      const st = ex2.pickScoreBand(c, 10).stars
+      ok(st >= prevStars, `答对 ${c} 题的星级不该低于答对 ${c - 1} 题`)
+      prevStars = st
+    }
+
+    // 和上一次比 —— 测验真正的价值在这里,不在分数本身
+    ok(ex2.compareWithLast(80, -1).indexOf('第一次') >= 0, '第一次考试要说明这是第一次')
+    ok(ex2.compareWithLast(90, 70).indexOf('进步') >= 0, '进步明显时要说出来')
+    ok(ex2.compareWithLast(60, 80).indexOf('不用在意') >= 0, '退步时不该指责,要给出解释')
+
+    // 周期:到点才提示 —— 天天考就成了另一种刷题
+    const day = 24 * 60 * 60 * 1000
+    ok(ex2.examDue(0, 'week'), '从没考过时应该提示')
+    ok(!ex2.examDue(Date.now() - 3 * day, 'week'), '才过三天不该提示周测')
+    ok(ex2.examDue(Date.now() - 8 * day, 'week'), '过了一周应该提示')
+    ok(!ex2.examDue(Date.now() - 8 * day, 'month'), '过了一周还不到月测')
+    ok(ex2.examDue(Date.now() - 31 * day, 'month'), '过了一个月应该提示月测')
+    for (const d of ex2.EXAM_PERIODS) {
+      ok(d.size >= 8 && d.size <= 24, `${d.label} 的题量应在 8–24 之间`)
+    }
+  }
+
+  // ---- 连贯对话回放:把一句一句的跟读串成一段话 ----
+  {
+    const pl = L('core/playlist.js')
+    const lines = [
+      { speaker: 'bot', text: 'Good morning' },
+      { speaker: 'kid', text: 'Good morning' },
+      { speaker: 'bot', text: 'How are you' },
+      { speaker: 'kid', text: 'I am fine' },
+    ]
+    const recorded = { 'I am fine': '/voice/fine.mp3' }
+    const items = pl.buildPlaylist(lines, (t) => recorded[t] || '')
+    ok(items.length === 4, '四句都要排进去')
+    // 没录过的那几句要用机器音顶上,**不能跳过** —— 跳过整段会缺一半
+    ok(items.every((i) => !!i.text), '每一句都要有文本(没录音也要能用机器音顶上)')
+    ok(items[1].isOwnVoice === false, '没录过的那句不算「他自己的声音」')
+    ok(items[3].isOwnVoice === true, '录过的那句要认出来是他自己的声音')
+    ok(items[0].gapMs > 0 && items[0].gapMs >= items[2].gapMs, '换人时的停顿不该更短')
+
+    const st = pl.ownVoiceCount(items)
+    ok(st.kid === 2 && st.own === 1, '要能统计出「这段里有几句是你自己的声音」')
+
+    // 角色互换:提问和回答是两种能力,提问还更难
+    const swapped = pl.swapRoles(lines)
+    ok(swapped[0].speaker === 'kid', '互换后第一句该由孩子说')
+    ok(swapped[1].speaker === 'bot', '互换后第二句该由机器说')
+    ok(swapped.length === lines.length, '互换不该丢句子')
+    ok(swapped.every((l, i) => l.text === lines[i].text), '互换只换角色,不该动内容')
+    ok(pl.buildPlaylist([{ speaker: 'bot', text: '  ' }], () => '').length === 0, '空句子应被略过')
+  }
+
+  // ---- 数字包的表达:图要读得出「几个」 ----
+  {
+    const numPack = content.BUILTIN_PACKS.find((p) => p.key === 'enlight-numbers').load()
+    const byEn = new Map(numPack.cards.map((c) => [c.en, c]))
+    /*
+      1–10 用「同一样东西重复 N 个」表示 —— 图上有几个就是几,
+      孩子不用先认识数字也能对上。原先 one 用的是一个太阳 🌞,
+      读不出「一个东西」,和 2–10 也不成序列。
+    */
+    const WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+    WORDS.forEach((w, i) => {
+      const card = byEn.get(w)
+      ok(card, `数字包应有 ${w}`)
+      const chars = [...card.emoji]
+      ok(chars.length === i + 1, `${w} 的图应该正好是 ${i + 1} 个(实际 ${chars.length} 个)`)
+      ok(new Set(chars).size === 1, `${w} 的图应该是同一样东西重复,不能混着摆`)
+    })
+    // 零用数字 0️⃣ —— 空罐子表达不了「零」,孩子只会认成「罐子」
+    ok(byEn.get('zero').emoji.indexOf('0') >= 0, '零应该用数字 0 表示')
+    // 序数配名次:奖牌本身没错,错在卡面只写「第一」,和金牌对不上
+    ok(byEn.get('first').front.indexOf('名') >= 0, '序数的卡面要写「第一名」,才对得上那块金牌')
   }
 
   // ---- 做题页必须是独立一页 ----

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import {
@@ -48,6 +48,7 @@ import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount, pruneMissing } from '../../store/voice'
+import { buildPlaylist, ownVoiceCount, swapRoles, type DialogLine } from '../../core/playlist'
 import { rankForRecording, type RankedSentence } from '../../core/voicePriority'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
@@ -263,6 +264,60 @@ function Talk() {
     setStep(0)
     resetLine()
   }
+
+  /*
+    ---- 连贯对话回放 ----
+    排期是纯逻辑(core/playlist),这里只负责按排期一句一句放。
+    用定时器串,不靠 onEnded —— 音源偶尔不出声时靠 onEnded 会卡死不动,
+    这个坑在磨耳朵那里已经踩过一次了。
+  */
+  const [playing, setPlaying] = useState(false)
+  const convoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const dialogLines = (d: Dialog, swap = false): DialogLine[] => {
+    const lines: DialogLine[] = []
+    for (const t of d.turns) {
+      lines.push({ speaker: 'bot', text: t.bot })
+      lines.push({ speaker: 'kid', text: t.expect })
+    }
+    return swap ? swapRoles(lines) : lines
+  }
+
+  const convoStats = (d: Dialog) =>
+    ownVoiceCount(buildPlaylist(dialogLines(d), (t) => getMyVoice(t, 'kid')))
+
+  const stopConvo = () => {
+    if (convoTimer.current) clearTimeout(convoTimer.current)
+    convoTimer.current = null
+    stopAudio()
+    setPlaying(false)
+  }
+
+  const playConvo = (d: Dialog, swap = false) => {
+    stopConvo()
+    const items = buildPlaylist(dialogLines(d, swap), (t) => getMyVoice(t, 'kid'))
+    if (items.length === 0) return
+    setPlaying(true)
+    let i = 0
+    const step = () => {
+      if (i >= items.length) {
+        setPlaying(false)
+        return
+      }
+      const it = items[i]
+      i += 1
+      // 他自己录过就放他的;没录过用机器音顶上,不跳过
+      if (it.voice) playFile(it.voice)
+      else void playWordAudio(it.text)
+      // 句子越长读得越久,停顿也要跟着长一点,否则会互相打断
+      const dur = 900 + it.text.split(/\s+/).length * 320
+      convoTimer.current = setTimeout(step, dur + it.gapMs)
+    }
+    step()
+  }
+
+  // 离开页面把连播停掉,免得返回首页还在响
+  useEffect(() => () => stopConvo(), [])
 
   const reward = () => {
     // 撞上每日上限时不再加分,但照常练 —— 记下来给结算页说明一句
@@ -737,6 +792,45 @@ function Talk() {
           }}
         >
           <Text className='next__t'>{last ? '完成' : '下一句 →'}</Text>
+        </View>
+
+        {/*
+          **把整段串起来放一遍。**
+
+          现在的练习是一句一句割裂的:机器说一句、他跟一句、翻页、再来一句。
+          练完他脑子里留下的是十个碎片,而不是「我和人说了一段话」。
+
+          而语言真正的成就感来自**连起来那一刻** —— 机器的声音和他自己的声音
+          一来一回地放出来,他会发现「原来这一整段是我说的」。
+          这一下比十次正确率反馈都管用。
+
+          没录过的那几句用机器音顶上,**不跳过** ——
+          跳过会让整段缺一半,听起来像机器在自言自语。
+        */}
+        <View className='convo'>
+          <View
+            className={playing ? 'convo__b convo__b--on' : 'convo__b'}
+            onClick={() => (playing ? stopConvo() : playConvo(dialog))}
+          >
+            <Text className='convo__t'>
+              {playing ? '⏹ 停止播放' : '▶️ 连起来听一遍(像真的对话)'}
+            </Text>
+          </View>
+          <Text className='convo__n'>
+            {(() => {
+              const st = convoStats(dialog)
+              return st.kid > 0
+                ? `这段里有 ${st.own}/${st.kid} 句是你自己的声音`
+                : ''
+            })()}
+          </Text>
+          {/*
+            角色互换:一直是机器问、他答,他练的只有「回答」。
+            而提问和回答是两种能力,提问还更难 —— 它要求他先想清楚自己想知道什么。
+          */}
+          <View className='convo__b convo__b--swap' onClick={() => playConvo(dialog, true)}>
+            <Text className='convo__t'>🔁 换你来问(角色互换)</Text>
+          </View>
         </View>
       </View>
     )

@@ -662,3 +662,49 @@
   &__bt { font-size: 23px; color: #be123c; font-weight: 500; }
   &__b--stop .toprec__bt { color: #fff; }
 }
+
+/* 连贯对话回放:把一句一句的跟读串成「我和人说了一段话」 */
+.convo {
+  margin-top: 34px;
+  padding: 24px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.75);
+
+  &__b {
+    padding: 22px;
+    border-radius: var(--r-sm);
+    background: rgba(99, 102, 241, 0.12);
+    text-align: center;
+
+    &--on {
+      background: rgba(239, 68, 68, 0.14);
+    }
+
+    &--swap {
+      margin-top: 14px;
+      background: rgba(52, 211, 153, 0.16);
+    }
+  }
+
+  &__t {
+    font-size: 28px;
+    font-weight: 600;
+    color: #4f46e5;
+  }
+
+  &__b--on .convo__t {
+    color: #dc2626;
+  }
+
+  &__b--swap .convo__t {
+    color: #059669;
+  }
+
+  &__n {
+    display: block;
+    margin-top: 14px;
+    text-align: center;
+    font-size: 23px;
+    color: var(--ink-4);
+  }
+}

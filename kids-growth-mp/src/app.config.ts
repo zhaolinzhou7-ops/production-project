@@ -33,6 +33,8 @@ export default defineAppConfig({
     'pages/habits/index',
     'pages/parent/index',
     'pages/score/index',
+    // 阶段测验:撤掉脚手架,看看他到底会多少
+    'pages/exam/index',
     'pages/privacy/index',
     // 成长档案(家长记、孩子看):档案首页 + 生长曲线 + 通用记录 + 成绩 + 事例 + 年度报告
     'pages/archive/index',

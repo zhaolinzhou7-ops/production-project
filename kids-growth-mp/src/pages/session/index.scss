@@ -860,3 +860,27 @@
     color: #9ca3af;
   }
 }
+
+/* 选项左边的试听按钮:先听出哪个读作 goat,才点得对 */
+.opt__spk {
+  flex-shrink: 0;
+  width: 76px;
+  height: 76px;
+  line-height: 76px;
+  margin-right: 8px;
+  text-align: center;
+  border-radius: 38px;
+  background: rgba(99, 102, 241, 0.12);
+  font-size: 34px;
+}
+
+.opt--right .opt__spk,
+.opt--wrong .opt__spk {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 选项文字要占满剩余宽度 —— 它才是「选中」的点击区 */
+.opt__t {
+  flex: 1;
+  min-width: 0;
+}

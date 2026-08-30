@@ -27,6 +27,8 @@ import {
   recordTodayScore,
   errorDueToday,
   pointsRoomToday,
+  examCandidates,
+  lastExamAt,
 } from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
@@ -45,6 +47,7 @@ import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
 import { rankDecks } from '../../core/recommend'
 import { getInterests, INTEREST_TAGS } from '../../store/notes'
 import { screenAdvice } from '../../core/screenTime'
+import { examDue } from '../../core/exam'
 import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
 import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
@@ -114,6 +117,8 @@ function Index() {
   const [errDue, setErrDue] = useState(0)
   /** 今天还能再拿多少成长值 —— 上限一直都在,但一直没显示过 */
   const [room, setRoom] = useState(0)
+  /** 距离上次周测够不够一周 —— 到点才提示,不到不打扰 */
+  const [examReady, setExamReady] = useState(false)
   /** 展开的是哪个卡组(空串=都收着)—— 列表默认只占一行 */
   const [openDeck, setOpenDeck] = useState('')
   const [petEmoji, setPetEmoji] = useState('🥚')
@@ -301,6 +306,10 @@ function Index() {
       setStickerCount(ownedStickers().length)
       setErrDue(errorDueToday(childId))
       setRoom(pointsRoomToday())
+      // 有学过的内容 + 到了周期,才提示可以考
+      setExamReady(
+        examDue(lastExamAt(childId, 'week'), 'week') && examCandidates(childId).length >= 8,
+      )
       setCanSpend(spendable())
       setPending(pendingCount())
       const pet = getPet()
@@ -701,6 +710,23 @@ function Index() {
           <Text className='tile__t'>英语口语</Text>
         </View>
       </View>
+
+      {/*
+        阶段测验。
+        平时的练习都带着脚手架(有图、有选项、错了当场告诉他答案),
+        所以有一个问题永远看不清:**撤掉脚手架之后他到底会多少?**
+        到了周期才提示,不到不打扰 —— 天天考就成了另一种刷题。
+      */}
+      {examReady ? (
+        <View className='examcard' onClick={() => openPage('/pages/exam/index?period=week')}>
+          <Text className='examcard__e'>📝</Text>
+          <View className='examcard__meta'>
+            <Text className='examcard__t'>可以做一次周测了</Text>
+            <Text className='examcard__s'>10 题 · 跨内容包抽 · 做完给分,和上次比一比</Text>
+          </View>
+          <Text className='examcard__go'>›</Text>
+        </View>
+      ) : null}
 
       {/* 等级条:孩子看不懂「Lv.7」,但家长用它判断整体投入,所以留在主屏 */}
 

@@ -3,13 +3,13 @@
   "name": "数一数",
   "subject": "启蒙",
   "itemType": "pic",
-  "source": "常识性看图词汇(动物/食物/颜色/数字),配 emoji 大图",
+  "source": "常识性看图词汇(动物/食物/颜色/数字),配 emoji 大图 | 数字用「同一样东西重复 N 个」表示,零用数字 0️⃣,序数配名次",
   "count": 15,
   "cards": [
     {
       "front": "1",
       "en": "one",
-      "emoji": "🌞",
+      "emoji": "🍎",
       "say": "一"
     },
     {
@@ -67,22 +67,22 @@
       "say": "十"
     },
     {
-      "front": "零",
+      "front": "零(一个也没有)",
       "en": "zero",
-      "emoji": "🫙"
+      "emoji": "0️⃣"
     },
     {
-      "front": "第一",
+      "front": "第一名",
       "en": "first",
       "emoji": "🥇"
     },
     {
-      "front": "第二",
+      "front": "第二名",
       "en": "second",
       "emoji": "🥈"
     },
     {
-      "front": "第三",
+      "front": "第三名",
       "en": "third",
       "emoji": "🥉"
     },

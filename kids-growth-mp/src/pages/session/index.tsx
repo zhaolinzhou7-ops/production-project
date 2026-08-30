@@ -1661,25 +1661,51 @@ function Session() {
         <View className='card'>
           <Text className='pic__emoji'>{(current.card.extra as { emoji?: string } | undefined)?.emoji ?? '❓'}</Text>
           <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
-          <Text className='card__tip'>{picEn ? '这是什么?选英语单词' : '这是什么?选出名字'}</Text>
+          <Text className='card__tip'>
+            {picEn ? '这是什么?先听听每个词,再选' : '这是什么?选出名字'}
+          </Text>
           <View className='opts'>
-            {picTextOptions.map((opt) => {
+            {picTextOptions.map((opt, oi) => {
               const answer = picEn ? current.card.back : current.card.front
               const show = picked !== null
               const cls = show ? (opt === answer ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View
-                  key={opt}
-                  className={cls}
-                  onClick={() => {
-                    if (picked) return
-                    if (picked || locked()) return
-                    setPicked(opt)
-                    if (opt === answer) playPic(current.card)
-                    setTimeout(() => advance(opt === answer), 550)
-                  }}
-                >
-                  <Text className='opt__t'>{opt}</Text>
+                <View key={opt} className={cls}>
+                  {/*
+                    **每个选项都能单独点着听。**
+
+                    原先只有正确答案会出声(而且是在选完之后)。后果是:孩子看到图
+                    就知道是山羊,于是在四个他读不出来的词里瞎点一个 ——
+                    答对了,但他既不知道 goat 怎么读,也不知道另外三个是什么。
+                    那道题练的是「认图」,不是英语。
+
+                    现在左边那个 🔊 可以逐个试听:他要先听出哪一个读作 goat,
+                    才点得对。这一下就把题目从「认图」变成了**音—形—义三者对上**,
+                    而这正是拼读的地基。
+                  */}
+                  <Text
+                    className='opt__spk'
+                    onClick={() => {
+                      if (locked()) return
+                      void playWordAudio(opt)
+                    }}
+                  >
+                    🔊
+                  </Text>
+                  <Text className='opt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
+                  <Text
+                    className='opt__t'
+                    onClick={() => {
+                      if (picked || locked()) return
+                      setPicked(opt)
+                      // 选完把正确答案再读一遍 —— 错了也要听见对的那个长什么样
+                      if (picEn) void playWordAudio(answer)
+                      else playPic(current.card)
+                      setTimeout(() => advance(opt === answer), opt === answer ? 700 : 1200)
+                    }}
+                  >
+                    {opt}
+                  </Text>
                 </View>
               )
             })}

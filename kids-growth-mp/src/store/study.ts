@@ -14,6 +14,7 @@ import { todayISO, addDays } from '../core/dateUtils'
 import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
 import { dailyPointCap, allowedAward } from '../core/pointCap'
 import type { OriginCard } from '../core/redo'
+import type { ExamCandidate, ExamPeriod } from '../core/exam'
 import type { DeckSignal } from '../core/recommend'
 import { adjustFor, nextLevel, type Adjust } from '../core/adaptive'
 import { getProfile, saveProfile } from './records'
@@ -1462,4 +1463,104 @@ export function dueTomorrow(childId: string): number {
   return readTable<StudyState>(KEYS.states).filter(
     (st) => st.childId === childId && st.status !== 'new' && st.due <= tomorrow,
   ).length
+}
+
+// ============ 阶段性测验 ============
+
+/**
+ * 组卷用的候选卡:**只取学过的**(reps ≥ 1)。
+ * 考没教过的东西不是测验,是打击。
+ */
+export function examCandidates(childId: string): ExamCandidate[] {
+  const errDeck = getErrorDeckId(childId)
+  const decks = readTable<LearnDeck>(KEYS.decks).filter(
+    (d) => d.childId === childId && d.id !== errDeck,
+  )
+  if (decks.length === 0) return []
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = new Map(readTable<LearnCard>(KEYS.cards).map((c) => [c.id, c]))
+
+  const out: ExamCandidate[] = []
+  for (const st of readTable<StudyState>(KEYS.states)) {
+    if (st.childId !== childId || (st.reps ?? 0) < 1) continue
+    const card = cards.get(st.cardId)
+    if (!card) continue
+    const deck = byId.get(card.deckId)
+    if (!deck) continue
+    const ext = (card.extra ?? {}) as { emoji?: string; en?: string }
+    out.push({
+      cardId: card.id,
+      deckId: deck.id,
+      deckName: deck.name,
+      itemType: deck.itemType,
+      front: card.front,
+      back: card.back,
+      emoji: ext.emoji,
+      en: ext.en,
+      reps: st.reps ?? 0,
+      lapses: st.lapses ?? 0,
+    })
+  }
+  return out
+}
+
+export interface ExamRecord {
+  id: string
+  childId: string
+  period: ExamPeriod
+  date: string
+  total: number
+  correct: number
+  /** 百分制,便于跨次数比较(题量不一样时分数才可比) */
+  score: number
+  at: number
+}
+
+const EXAM_KEY = 'examRecords'
+
+export function listExams(childId: string): ExamRecord[] {
+  return readObject<ExamRecord[]>(EXAM_KEY, [])
+    .filter((r) => r && r.childId === childId)
+    .sort((a, b) => b.at - a.at)
+}
+
+/** 上一次同周期测验的分数;没考过返回 -1 */
+export function lastExamScore(childId: string, period: ExamPeriod): number {
+  const hit = listExams(childId).find((r) => r.period === period)
+  return hit ? hit.score : -1
+}
+
+export function lastExamAt(childId: string, period: ExamPeriod): number {
+  const hit = listExams(childId).find((r) => r.period === period)
+  return hit ? hit.at : 0
+}
+
+export function saveExam(
+  childId: string,
+  period: ExamPeriod,
+  total: number,
+  correct: number,
+): ExamRecord {
+  const all = readObject<ExamRecord[]>(EXAM_KEY, [])
+  const list = Array.isArray(all) ? all : []
+  /*
+    时间戳严格递增。同一天连着考两次很容易落在同一毫秒里,
+    那样「上一次」取到哪一条就成了随机的 —— 而整个测验的意义
+    就是「和上一次比」。
+  */
+  let maxAt = 0
+  for (const r of list) if (r && r.at > maxAt) maxAt = r.at
+  const rec: ExamRecord = {
+    id: newId(),
+    childId,
+    period,
+    date: todayISO(),
+    total,
+    correct,
+    score: total > 0 ? Math.round((correct / total) * 100) : 0,
+    at: Math.max(Date.now(), maxAt + 1),
+  }
+  // 只留最近 40 条 —— 再多家长也不会翻,白占存储
+  writeObject(EXAM_KEY, [rec, ...list].slice(0, 40))
+  return rec
 }
