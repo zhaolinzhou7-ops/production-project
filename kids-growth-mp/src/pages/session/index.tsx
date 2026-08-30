@@ -398,6 +398,37 @@ function Session() {
       return () => clearTimeout(timer)
     }
 
+    /*
+      **英语练法一律念英文,不念中文。**
+
+      这里原先无条件念 `card.front` 并写死 'zh_CN'。而看图卡的 front 是
+      **中文名** —— 于是「跟我读」「看图选单词」「拼出来」这几个纯英文的练法,
+      每翻一张卡都先冒出一句中文。用户说的「跟读里面还是一个一个中文」
+      就是这一行。
+      更糟的是「跟我读」自己还有一段英文自动播,两个声音会叠在一起。
+
+      所以:英语练法交给下面那段 speakEn 的自动播(或者本来就有的听力自动播),
+      这里直接让开;剩下的中文练法才念中文。
+    */
+    const enOf = (c: LearnCard) =>
+      itemType === 'pic' ? ((c.extra as { en?: string } | undefined)?.en ?? c.back) : c.front
+
+    /*
+      「跟我读」和「拼出来」要**自动念英文**:
+      - 跟我读的第一步本来就是听范读,不听他读什么?
+      - 拼出来是听音拼词,不出声这道题根本没法做。
+    */
+    if (mode === 'speakEn' || mode === 'spell') {
+      const t = setTimeout(() => void playWordAudio(enOf(card)), 420)
+      return () => clearTimeout(t)
+    }
+
+    /*
+      「看图选单词」**故意不自动念** —— 念出来等于直接把答案报给他。
+      这一档考的就是「看图想起那个词长什么样」,想听的话下面每个选项都能点着听。
+    */
+    if (mode === 'picChooseEn' || mode === 'speak') return
+
     // 以下是「低龄:每换一张卡就把题目念出来」,大孩子自己会读,不用念
     if (getStage() !== 'toddler') return
     const timer = setTimeout(() => {

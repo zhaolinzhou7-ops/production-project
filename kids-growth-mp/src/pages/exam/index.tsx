@@ -54,6 +54,8 @@ function ExamPage() {
   const [answers, setAnswers] = useState<string[]>([])
   const [done, setDone] = useState(false)
   const [reviewing, setReviewing] = useState(false)
+  /** 刚试听过哪个选项 —— 只做高亮,不代表选中 */
+  const [picked, setPicked] = useState('')
 
   const q = questions[idx]
 
@@ -74,6 +76,7 @@ function ExamPage() {
       测出来的是短时记忆,不是他真正掌握的东西。
       所以这里只是往下走一题。
     */
+    setPicked('')
     setTimeout(() => {
       if (idx + 1 >= questions.length) finish(next)
       else setIdx(idx + 1)
@@ -91,8 +94,15 @@ function ExamPage() {
     questions.forEach((x, i) => {
       if (finalAnswers[i] === x.answer) return
       try {
+        /*
+          题干要能**认出是哪道题**。
+
+          原先直接用 x.prompt,而看图题的 prompt 全都是「What is it?」——
+          错题本里列出来是一排一模一样的「What is it?」,家长根本分不清
+          是哪个词错了。带上那张图之后,一眼就认得出来。
+        */
         autoAddErrorCard(childId, {
-          front: x.prompt,
+          front: x.emoji ? `${x.emoji} ${x.prompt}` : x.prompt,
           back: x.answer,
           subject: '测验',
           redo: {
@@ -217,25 +227,33 @@ function ExamPage() {
       {q?.emoji ? <Text className='exam__pic'>{q.emoji}</Text> : null}
       <Text className='exam__q'>{q?.prompt}</Text>
       {q?.audio ? (
-        <View className='audio audio--big' onClick={() => play(q.audio, q.lang)}>
-          <Text className='audio__t'>🔊</Text>
+        <View className='ebigplay' onClick={() => play(q.audio, q.lang)}>
+          <Text>🔊</Text>
         </View>
       ) : null}
 
-      <View className='opts'>
+      <View className='eopts'>
         {(q?.options ?? []).map((opt, oi) => (
-          <View key={opt} className='opt'>
+          <View key={opt} className={picked === opt ? 'eopt eopt--picked' : 'eopt'}>
             {/*
-              考试时每个选项同样可以单独试听 —— 这是在考「音、形、义对不对得上」,
-              不是在考「猜」。听不到选项的读音,英语题就退化成了看图连线。
+              试听和「选中」是**两块独立的点击区**:
+              🔊 只负责放音,单词那一块才是选中。
+              合在一起的话,他想听一下就把答案交了 —— 而这道题本来就是让他
+              逐个听过再选的。
             */}
             {q.lang === 'en' ? (
-              <Text className='opt__spk' onClick={() => void playWordAudio(opt)}>
+              <Text
+                className='eopt__spk'
+                onClick={() => {
+                  setPicked(opt)
+                  void playWordAudio(opt)
+                }}
+              >
                 🔊
               </Text>
             ) : null}
-            <Text className='opt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
-            <Text className='opt__t' onClick={() => choose(opt)}>
+            <Text className='eopt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
+            <Text className='eopt__t' onClick={() => choose(opt)}>
               {opt}
             </Text>
           </View>

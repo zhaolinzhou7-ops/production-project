@@ -142,3 +142,85 @@ page {
 .entry {
   box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.1);
 }
+
+/*
+ * 共用组件样式。
+ *
+ * 小程序的页面样式是**按页隔离**的:一个页面用了另一个页面定义的 class,
+ * 不会报任何错,只会静默塌掉。测验页就栽在这上面 —— 它用了 .btn--primary、
+ * .row 这些定义在 session 里的类,结果按钮没有底色、选项挤成一行、
+ * 点击区只有文字那么大。
+ *
+ * 凡是**多个页面都会用**的东西(按钮、一行按钮、朗读圆钮),就该放在这里,
+ * 而不是散在各页各写一份。
+ */
+
+/* 一行并排的按钮 */
+.row {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 48rpx;
+
+  &--wrap {
+    flex-wrap: wrap;
+  }
+}
+
+/* 主按钮的三种配色 —— 基础尺寸和按下态在上面已经定义过 */
+.btn {
+  padding: 24rpx 48rpx;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+
+  &--wide {
+    width: 100%;
+    margin-top: 24rpx;
+  }
+
+  &--primary {
+    background: var(--brand-500);
+  }
+
+  &--mint {
+    background: var(--mint);
+  }
+
+  &--gray {
+    background: #f0f0f2;
+  }
+
+  &__t {
+    font-size: 30rpx;
+    font-weight: bold;
+    color: #fff;
+  }
+
+  &--gray .btn__t {
+    color: var(--ink-3);
+  }
+}
+
+/* 朗读圆钮 */
+.audio {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 999px;
+  background: rgba(255, 143, 163, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24rpx auto 0;
+
+  &--big {
+    width: 128rpx;
+    height: 128rpx;
+    margin-top: 40rpx;
+  }
+
+  &__t {
+    font-size: 44rpx;
+  }
+}

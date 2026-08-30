@@ -871,8 +871,20 @@ export function autoAddErrorCard(
   if (!front) return
   const deckId = getErrorDeckId(childId)
   if (deckId) {
+    /*
+      去重要看**题干 + 答案**,不能只看题干。
+
+      只看题干时踩过一个实打实的坑:测验里所有看图题的题干都是
+      「What is it?」—— 于是第一道错题存进来之后,后面所有看图错题
+      都被当成重复**静默丢掉了**。用户看到的现象是「新加的错题
+      没办法原原本本进到错题本里」。
+
+      加上答案之后,同一道题反复错仍然只存一条(这是要的),
+      而题干碰巧相同、答案不同的两道题会各存各的。
+    */
+    const back = entry.back.trim()
     const dup = readTable<LearnCard>(KEYS.cards).some(
-      (c) => c.deckId === deckId && c.front === front,
+      (c) => c.deckId === deckId && c.front === front && c.back === back,
     )
     if (dup) return
   }

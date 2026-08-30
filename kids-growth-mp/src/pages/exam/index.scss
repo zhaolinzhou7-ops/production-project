@@ -175,3 +175,80 @@
     color: var(--ink-3);
   }
 }
+
+/*
+ * 选项。
+ *
+ * ⚠️ 这些样式**必须写在本页**。
+ * 小程序的页面样式是按页隔离的 —— 我原先直接用了 .opt / .opt__k / .opt__t,
+ * 而它们定义在 session/index.scss 里,在这一页**一条都不生效**。
+ * 结果就是 🔊、字母、单词三样挤成一行(用户说的「和 ABCD 混在一起」),
+ * 而且单词那块没有尺寸,点击区只有文字本身那么大 —— 所以「读出来之后点不中」。
+ * 这一类「跨页面复用 class」的错在小程序里不会报任何错,只会静默塌掉。
+ */
+.eopts {
+  margin-top: 20px;
+}
+
+.eopt {
+  display: flex;
+  align-items: center;
+  min-height: 112px;
+  margin-bottom: 18px;
+  padding: 10px 20px;
+  box-sizing: border-box;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--sh-1);
+
+  /* 试听按钮:单独一块,和「选中」分开 —— 想听的时候不会误选 */
+  &__spk {
+    flex-shrink: 0;
+    width: 84px;
+    height: 84px;
+    line-height: 84px;
+    text-align: center;
+    border-radius: 42px;
+    background: rgba(99, 102, 241, 0.12);
+    font-size: 36px;
+  }
+
+  &__k {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    line-height: 56px;
+    margin: 0 18px;
+    text-align: center;
+    border-radius: 28px;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--ink-3);
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  /* 单词本身就是「选中」的点击区,要占满剩下的宽度、够高 */
+  &__t {
+    flex: 1;
+    min-width: 0;
+    padding: 26px 0;
+    font-size: 34px;
+    color: var(--ink);
+  }
+
+  &--picked {
+    background: rgba(99, 102, 241, 0.14);
+  }
+}
+
+/* 题面朗读按钮 */
+.ebigplay {
+  width: 132px;
+  height: 132px;
+  line-height: 132px;
+  margin: 0 auto 10px;
+  text-align: center;
+  border-radius: 66px;
+  background: rgba(99, 102, 241, 0.12);
+  font-size: 56px;
+}

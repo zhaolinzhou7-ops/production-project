@@ -28,13 +28,35 @@ import './index.scss'
  */
 function SpotCheck() {
   const [childId] = useState(() => getCurrentChildId())
-  const [items] = useState<SpotItem[]>(() => pickSpotCheck(spotCandidates(getCurrentChildId())))
+  const [items, setItems] = useState<SpotItem[]>(() =>
+    pickSpotCheck(spotCandidates(getCurrentChildId())),
+  )
+  /** 这一轮问过的,下一轮不再问 —— 连着问同样五个就没意义了 */
+  const [askedIds, setAskedIds] = useState<string[]>([])
   const [idx, setIdx] = useState(0)
   /** 每一条的结果:true=说出来了 */
   const [marks, setMarks] = useState<boolean[]>([])
   const [done, setDone] = useState(false)
   /** 家长还没让孩子说之前,答案是藏着的 —— 摊开来孩子会照着念 */
   const [showAnswer, setShowAnswer] = useState(false)
+
+  /** 再抽五个继续问;已经问过的排除掉 */
+  const again = () => {
+    const asked = [...askedIds, ...items.map((i) => i.cardId)]
+    const next = pickSpotCheck(
+      spotCandidates(childId).filter((c) => asked.indexOf(c.cardId) < 0),
+    )
+    if (next.length === 0) {
+      Taro.showToast({ title: '暂时没有更多可抽查的了', icon: 'none' })
+      return
+    }
+    setAskedIds(asked)
+    setItems(next)
+    setIdx(0)
+    setMarks([])
+    setDone(false)
+    setShowAnswer(false)
+  }
 
   const mark = (ok: boolean) => {
     const next = [...marks]
@@ -100,8 +122,21 @@ function SpotCheck() {
             </View>
           ))}
         </View>
-        <View className='btn btn--primary btn--wide' onClick={() => Taro.navigateBack()}>
-          <Text className='btn__t'>完成</Text>
+        {/*
+          「再来一组」。
+
+          默认一轮五个,是按「家长的耐心」定的 —— 但真用起来他挺喜欢这个环节
+          (被大人拿着手机问、他答得上来,这本身就是奖励)。
+          所以给一个继续的口子,而不是把默认值调大:
+          喜欢的那天可以连做三轮,不喜欢的那天五个也就结束了。
+        */}
+        <View className='row'>
+          <View className='btn btn--gray' onClick={() => Taro.navigateBack()}>
+            <Text className='btn__t'>完成</Text>
+          </View>
+          <View className='btn btn--primary' onClick={again}>
+            <Text className='btn__t'>再来 5 个</Text>
+          </View>
         </View>
       </View>
     )

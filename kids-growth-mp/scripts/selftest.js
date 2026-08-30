@@ -2579,6 +2579,122 @@ function run() {
     ok(checked > 1000, '应抽查到足够多的看图题')
   }
 
+  // ---- 这三个 bug 的守门测试 ----
+  {
+    /*
+      ① 页面样式是**按页隔离**的:一个页面用了另一个页面定义的 class,
+         在小程序里不会报任何错,只会静默塌掉 —— 测验页的选项挤成一行、
+         点击区只有文字那么大,就是这么来的。
+         所以:凡是页面里用到的 class,必须在**自己那份 scss** 里定义。
+    */
+    const pagesDir = path.join(ROOT, 'src', 'pages')
+
+    /**
+     * 把 scss 里的嵌套选择器展开成完整类名。
+     *
+     * `.btn { &--primary { } &__t { } }` → .btn / .btn--primary / .btn__t
+     * 不展开的话没法判断一个类到底有没有被定义 —— 而这正是这条测试要查的事。
+     */
+    /**
+     * 这个文件里定义了哪些类名。
+     *
+     * 不写完整的 scss 解析器 —— 只做一件事:把 `.blk` 和嵌套里的
+     * `&__el` / `&--mod` 组合起来。同一个文件里的组合会有富余(把 A 块的
+     * &__el 也算给 B 块),但这条测试要查的是**跨文件**的遗漏:
+     * 一个页面用了另一个页面才有的类。富余不会漏掉那种错。
+     */
+    const definedIn = (scss) => {
+      const out = new Set()
+      const blocks = []
+      for (const m of scss.matchAll(/(^|\n)\s*\.([A-Za-z0-9_-]+)/g)) {
+        out.add(m[2])
+        // 顶层块(行首没有缩进的 .xxx)才拿来和 & 组合
+        if (/\n\.$|^\.$/.test(m[1] + '.') || /\n\./.test(m[1] + '.')) blocks.push(m[2])
+      }
+      for (const m of scss.matchAll(/\.([A-Za-z0-9_-]+)/g)) out.add(m[1])
+      const suffixes = [...scss.matchAll(/&([_-]{1,2}[A-Za-z0-9_-]+)/g)].map((m) => m[1])
+      // 组合两轮:.tri → .tri__v → .tri__v--n(嵌套两层的修饰符很常见)
+      for (let round = 0; round < 2; round++) {
+        for (const b of [...out]) {
+          for (const suf of suffixes) out.add(b + suf)
+        }
+      }
+      for (const b of blocks) for (const suf of suffixes) out.add(b + suf)
+      return out
+    }
+
+    /** 跟着 @use / @import 把被引入的样式一并算进来 */
+    const definedWithImports = (scssPath, seen = new Set()) => {
+      if (seen.has(scssPath) || !fs.existsSync(scssPath)) return new Set()
+      seen.add(scssPath)
+      const text = fs.readFileSync(scssPath, 'utf8')
+      const out = definedIn(text)
+      for (const m of text.matchAll(/@(?:use|import)\s+'([^']+)'/g)) {
+        let ref = m[1]
+        if (!ref.endsWith('.scss')) ref += '.scss'
+        for (const c of definedWithImports(path.resolve(path.dirname(scssPath), ref), seen)) {
+          out.add(c)
+        }
+      }
+      return out
+    }
+
+    const walk = (dir) => {
+      const out = []
+      for (const f of fs.readdirSync(dir)) {
+        const p2 = path.join(dir, f)
+        if (fs.statSync(p2).isDirectory()) out.push(...walk(p2))
+        else if (f === 'index.tsx') out.push(p2)
+      }
+      return out
+    }
+
+    const globals = definedIn(fs.readFileSync(path.join(ROOT, 'src', 'app.scss'), 'utf8'))
+    // 组件目录里的样式是跟着组件走的,任何页面用到那个组件都会带上
+    const compDir = path.join(ROOT, 'src', 'components')
+    for (const f of fs.readdirSync(compDir)) {
+      if (f.endsWith('.scss')) {
+        for (const c of definedIn(fs.readFileSync(path.join(compDir, f), 'utf8'))) globals.add(c)
+      }
+    }
+
+    for (const tsx of walk(pagesDir)) {
+      const scssPath = path.join(path.dirname(tsx), 'index.scss')
+      if (!fs.existsSync(scssPath)) continue
+      const code = fs.readFileSync(tsx, 'utf8')
+      const defined = definedWithImports(scssPath)
+      const used = new Set()
+      for (const m of code.matchAll(/className='([^'{}]+)'/g)) {
+        for (const cls of m[1].split(/\s+/)) if (cls) used.add(cls)
+      }
+      const missing = [...used].filter((c) => !defined.has(c) && !globals.has(c))
+      ok(
+        missing.length === 0,
+        `${path.relative(ROOT, tsx)} 用到了本页没有定义的样式类:${missing.slice(0, 8).join(', ')}`,
+      )
+    }
+  }
+
+  {
+    /*
+      ② 错题去重要看**题干 + 答案**。
+         只看题干时,测验里所有看图题的题干都是「What is it?」——
+         第一道存进来之后,后面所有看图错题都被当成重复静默丢掉。
+    */
+    reset()
+    const cidD = study.getCurrentChildId()
+    study.autoAddErrorCard(cidD, { front: 'What is it?', back: 'cat', subject: '测验' })
+    study.autoAddErrorCard(cidD, { front: 'What is it?', back: 'dog', subject: '测验' })
+    study.autoAddErrorCard(cidD, { front: 'What is it?', back: 'fish', subject: '测验' })
+    ok(
+      study.listErrorCards(cidD).length === 3,
+      `题干相同、答案不同的错题必须各存各的(实际 ${study.listErrorCards(cidD).length} 条)`,
+    )
+    // 同一道题反复错仍然只存一条 —— 这是要的
+    study.autoAddErrorCard(cidD, { front: 'What is it?', back: 'cat', subject: '测验' })
+    ok(study.listErrorCards(cidD).length === 3, '同一道题反复错只存一条')
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')
