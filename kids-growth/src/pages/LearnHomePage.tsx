@@ -8,6 +8,9 @@ import { useCurrentChild } from '../hooks/useCurrentChild'
 import { packsForStage, BUILTIN_PACKS } from '../lib/learningContent'
 import { getStageMeta, getAgeStage } from '../lib/ageStage'
 import { screenAdvice } from '../lib/screenTime'
+import { examDue } from '../lib/exam'
+import { spotDue, pickSpotCheck } from '../lib/spotCheck'
+import { adviseSyllabus } from '../lib/syllabus'
 import { dailyPointCap } from '../lib/pointCap'
 import {
   listVoices,
@@ -38,6 +41,11 @@ import {
   recordTodayScore,
   wrongDueToday,
   errorDueToday,
+  examCandidates,
+  lastExamAt,
+  spotCandidates,
+  lastSpotAt,
+  packProgress,
 } from '../db/study'
 import { rankDecks, diversify } from '../lib/recommend'
 import { buildPlan, planMinutes, type PlanDeck } from '../lib/dailyPlan'
@@ -246,6 +254,29 @@ export function LearnHomePage() {
     return { cap, left: Math.max(0, cap - earned) }
   }, [currentChildId])
 
+  /** 现在该练哪几包、什么时候开下一包(见 lib/syllabus) */
+  const syllabus = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    return adviseSyllabus(await packProgress(currentChildId))
+  }, [currentChildId, decks])
+
+  /** 到了周期没有:测验 / 线下抽查 */
+  const due = useLiveQuery(async () => {
+    if (!currentChildId) return null
+    const [exams, spots] = [
+      lastExamAt(currentChildId, 'week'),
+      lastSpotAt(currentChildId),
+    ]
+    const [cands, spotCands] = await Promise.all([
+      examCandidates(currentChildId),
+      spotCandidates(currentChildId),
+    ])
+    return {
+      exam: examDue(exams, 'week') && cands.length >= 8,
+      spot: spotDue(spots) && pickSpotCheck(spotCands).length > 0,
+    }
+  }, [currentChildId])
+
   /** 今天有几道错题该重做 —— 显示在错题本入口上 */
   const errDue = useLiveQuery(
     async () => (currentChildId ? errorDueToday(currentChildId) : 0),
@@ -400,6 +431,44 @@ export function LearnHomePage() {
             ? `今天还可得 ${pointRoom.left} 分`
             : '今天的积分已拿满,继续练照样有记录'}
         </div>
+      )}
+
+      {/*
+        阶段测验 / 线下抽查。
+
+        平时的练习都带着脚手架(有图、有选项、错了当场告诉他答案),
+        所以有两个问题永远看不清:撤掉脚手架他会多少?**合上屏幕**他会多少?
+        到了周期才提示,不到不打扰 —— 天天考就成了另一种刷题。
+      */}
+      {due?.spot && (
+        <button
+          onClick={() => navigate('/learn/spotcheck')}
+          className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-cyan-400 to-cyan-600 p-4 text-left text-white shadow-sm active:scale-[0.99]"
+        >
+          <span className="text-3xl">🔎</span>
+          <span className="flex-1">
+            <span className="block font-bold">该做一次线下抽查了</span>
+            <span className="text-xs text-white/85">
+              5 个词 · 合上手机问他 · 说不出的自动退回重学
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-white/80" />
+        </button>
+      )}
+      {due?.exam && (
+        <button
+          onClick={() => navigate('/learn/exam?period=week')}
+          className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-violet-400 to-violet-600 p-4 text-left text-white shadow-sm active:scale-[0.99]"
+        >
+          <span className="text-3xl">📝</span>
+          <span className="flex-1">
+            <span className="block font-bold">可以做一次周测了</span>
+            <span className="text-xs text-white/85">
+              10 题 · 跨内容包抽 · 做完给分,和上次比一比
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-white/80" />
+        </button>
       )}
 
       {/*
@@ -789,6 +858,28 @@ export function LearnHomePage() {
           </button>
           {showPacks && (
             <div className="mt-3 space-y-2">
+              {/*
+                推荐顺序。
+                原先难度递增只发生在**练法**上,内容是平摊的 —— 装了十个包,
+                六百个词从第一天起一起轮,结果每样都碰一点、每样都不熟。
+                先把最高频的一小批练到自动化,再开下一批,比同时铺开有效得多。
+              */}
+              {syllabus && (
+                <div className="rounded-2xl bg-brand-100/60 p-3">
+                  <div className="text-xs font-bold text-brand-600">📚 学习顺序</div>
+                  <div className="mt-1 text-[11px] leading-relaxed text-gray-500">
+                    {syllabus.note}
+                  </div>
+                  {syllabus.nextKey && (
+                    <div className="mt-2 text-[11px] text-gray-600">
+                      下一包建议:
+                      <b>{BUILTIN_PACKS.find((p) => p.key === syllabus.nextKey)?.name}</b>
+                      {' — '}
+                      {syllabus.nextWhy}
+                    </div>
+                  )}
+                </div>
+              )}
               {availablePacks.map((p) => (
                 <div key={p.key} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
                   <span className="text-xl">{p.icon}</span>

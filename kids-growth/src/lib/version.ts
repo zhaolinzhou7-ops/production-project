@@ -7,4 +7,4 @@
  *
  * 每次发新版本时把这里 +1。
  */
-export const BUILD_TAG = 'w58'
+export const BUILD_TAG = 'w61'

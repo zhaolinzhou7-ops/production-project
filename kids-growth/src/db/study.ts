@@ -18,6 +18,9 @@ import { dailyPointCap } from '../lib/pointCap'
 import { adjustFor, nextLevel, type Adjust } from '../lib/adaptive'
 import type { DeckSignal } from '../lib/recommend'
 import type { OriginCard } from '../lib/redo'
+import type { ExamCandidate, ExamPeriod } from '../lib/exam'
+import type { SpotCandidate } from '../lib/spotCheck'
+import type { PackProgress } from '../lib/syllabus'
 import type {
   CardItemType,
   LearnCard,
@@ -1237,4 +1240,245 @@ export async function errorDueToday(childId: string): Promise<number> {
   const today = todayISO()
   const states = await db.studyStates.where('[childId+deckId]').equals([childId, deckId]).toArray()
   return states.filter((s) => isDue(s, today)).length
+}
+
+// ============ 阶段测验 / 线下抽查 / 内容顺序 ============
+
+/** 组卷候选:**只取学过的**(reps ≥ 1)。考没教过的东西不是测验,是打击。 */
+export async function examCandidates(childId: string): Promise<ExamCandidate[]> {
+  const errDeck = await ensureErrorDeck(childId)
+  const decks = (await db.decks.where('childId').equals(childId).toArray()).filter(
+    (d) => d.id !== errDeck,
+  )
+  if (decks.length === 0) return []
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = new Map((await db.cards.toArray()).map((c) => [c.id, c]))
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+
+  const out: ExamCandidate[] = []
+  for (const st of states) {
+    if ((st.reps ?? 0) < 1) continue
+    const card = cards.get(st.cardId)
+    if (!card) continue
+    const deck = byId.get(card.deckId)
+    if (!deck) continue
+    const ext = (card.extra ?? {}) as { emoji?: string; en?: string }
+    out.push({
+      cardId: card.id,
+      deckId: deck.id,
+      deckName: deck.name,
+      itemType: deck.itemType,
+      front: card.front,
+      back: card.back,
+      emoji: ext.emoji,
+      en: ext.en,
+      reps: st.reps ?? 0,
+      lapses: st.lapses ?? 0,
+    })
+  }
+  return out
+}
+
+export interface ExamRow {
+  id: string
+  childId: string
+  period: ExamPeriod
+  date: string
+  total: number
+  correct: number
+  score: number
+  at: number
+}
+
+const EXAM_KEY = 'kids-growth-exams'
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? 'null')
+    return v == null ? fallback : (v as T)
+  } catch {
+    return fallback
+  }
+}
+
+function writeJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* 存不下也不该打断做题 */
+  }
+}
+
+export function listExams(childId: string): ExamRow[] {
+  return readJson<ExamRow[]>(EXAM_KEY, [])
+    .filter((r) => r && r.childId === childId)
+    .sort((a, b) => b.at - a.at)
+}
+
+export function lastExamAt(childId: string, period: ExamPeriod): number {
+  const hit = listExams(childId).find((r) => r.period === period)
+  return hit ? hit.at : 0
+}
+
+export function saveExam(
+  childId: string,
+  period: ExamPeriod,
+  total: number,
+  correct: number,
+): ExamRow {
+  const list = readJson<ExamRow[]>(EXAM_KEY, [])
+  /*
+    时间戳严格递增:同一天连着考两次很容易落在同一毫秒里,
+    那样「上一次」取到哪一条就成了随机的 —— 而整个测验的意义就是「和上一次比」。
+  */
+  const maxAt = list.reduce((n, r) => Math.max(n, r?.at ?? 0), 0)
+  const rec: ExamRow = {
+    id: newId(),
+    childId,
+    period,
+    date: todayISO(),
+    total,
+    correct,
+    score: total > 0 ? Math.round((correct / total) * 100) : 0,
+    at: Math.max(Date.now(), maxAt + 1),
+  }
+  writeJson(EXAM_KEY, [rec, ...list].slice(0, 40))
+  return rec
+}
+
+/** 抽查候选:**系统最有把握的那些卡** —— 抽查是为了检验系统自己的判断 */
+export async function spotCandidates(childId: string): Promise<SpotCandidate[]> {
+  const errDeck = await ensureErrorDeck(childId)
+  const decks = (await db.decks.where('childId').equals(childId).toArray()).filter(
+    (d) => d.id !== errDeck,
+  )
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = new Map((await db.cards.toArray()).map((c) => [c.id, c]))
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+
+  const out: SpotCandidate[] = []
+  for (const st of states) {
+    const card = cards.get(st.cardId)
+    if (!card) continue
+    const deck = byId.get(card.deckId)
+    if (!deck) continue
+    const ext = (card.extra ?? {}) as { emoji?: string; en?: string }
+    let ask = card.front
+    let expect = card.back
+    if (deck.itemType === 'pic') {
+      ask = `${ext.emoji ?? ''} ${card.front}`.trim()
+      expect = ext.en ?? card.back
+    } else if (deck.itemType === 'word') {
+      ask = card.back
+      expect = card.front
+    }
+    out.push({
+      cardId: card.id,
+      deckId: deck.id,
+      deckName: deck.name,
+      itemType: deck.itemType,
+      ask,
+      expect,
+      emoji: ext.emoji,
+      reps: st.reps ?? 0,
+      interval: st.interval ?? 0,
+    })
+  }
+  return out
+}
+
+export interface SpotRow {
+  id: string
+  childId: string
+  date: string
+  total: number
+  passed: number
+  rate: number
+  at: number
+}
+
+const SPOT_KEY = 'kids-growth-spotchecks'
+
+export function listSpotChecks(childId: string): SpotRow[] {
+  return readJson<SpotRow[]>(SPOT_KEY, [])
+    .filter((r) => r && r.childId === childId)
+    .sort((a, b) => b.at - a.at)
+}
+
+export function lastSpotAt(childId: string): number {
+  const hit = listSpotChecks(childId)[0]
+  return hit ? hit.at : 0
+}
+
+/**
+ * 记下抽查结果,并把**没说出来的退回重学**。
+ *
+ * 这一步是整个功能的意义所在:线下答不出的卡,不管屏幕上多熟,
+ * 记忆排期都要退回去 —— 否则抽查就只是一份报告,改变不了明天练什么。
+ */
+export async function saveSpotCheck(
+  childId: string,
+  results: Array<{ cardId: string; ok: boolean }>,
+): Promise<SpotRow> {
+  const failed = results.filter((r) => !r.ok).map((r) => r.cardId)
+  if (failed.length > 0) {
+    const states = await db.studyStates.where('childId').equals(childId).toArray()
+    const hit = states.filter((s) => failed.includes(s.cardId))
+    await db.transaction('rw', db.studyStates, async () => {
+      for (const st of hit) {
+        // 记 lapse 是为了让它排到下一组最前面(见 availableToday)
+        await db.studyStates.update(st.id, {
+          reps: 0,
+          interval: 1,
+          lapses: (st.lapses ?? 0) + 1,
+          status: 'learning',
+          due: todayISO(),
+        })
+      }
+    })
+  }
+
+  const list = readJson<SpotRow[]>(SPOT_KEY, [])
+  const maxAt = list.reduce((n, r) => Math.max(n, r?.at ?? 0), 0)
+  const passed = results.filter((r) => r.ok).length
+  const rec: SpotRow = {
+    id: newId(),
+    childId,
+    date: todayISO(),
+    total: results.length,
+    passed,
+    rate: results.length > 0 ? Math.round((passed / results.length) * 100) : 0,
+    at: Math.max(Date.now(), maxAt + 1),
+  }
+  writeJson(SPOT_KEY, [rec, ...list].slice(0, 40))
+  return rec
+}
+
+/**
+ * 每个内容包的掌握进度 —— 喂给 lib/syllabus 判断「什么时候开下一包」。
+ *
+ * 「掌握」按**间隔是否够长**算,而不是按「答对过」算:答对一次说明不了什么,
+ * 而间隔排到一周以上,说明它已经反复答对过好几轮了。
+ */
+export async function packProgress(childId: string): Promise<PackProgress[]> {
+  const decks = (await db.decks.where('childId').equals(childId).toArray()).filter(
+    (d) => !!d.builtinKey,
+  )
+  const byDeck = new Map(decks.map((d) => [d.id, d.builtinKey as string]))
+  const states = await db.studyStates.where('childId').equals(childId).toArray()
+
+  const total: Record<string, number> = {}
+  const mastered: Record<string, number> = {}
+  for (const st of states) {
+    const key = byDeck.get(st.deckId)
+    if (!key) continue
+    total[key] = (total[key] ?? 0) + 1
+    if ((st.interval ?? 0) >= 7) mastered[key] = (mastered[key] ?? 0) + 1
+  }
+  return [...new Set(byDeck.values())].map((key) => ({
+    key,
+    installed: true,
+    total: total[key] ?? 0,
+    mastered: mastered[key] ?? 0,
+  }))
 }

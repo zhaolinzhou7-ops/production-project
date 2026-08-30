@@ -115,7 +115,7 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🔢',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 3, // 内容与小程序对齐(原:批次25 起 en 字段改为真实英文,老卡组需刷新)
+    rev: 4, // 数字表达修正:1 用一个苹果、0 用 0️⃣、序数配名次
     load: () => import('../data/decks/enlight-numbers.json').then((m) => m.default as BuiltinPackData),
   },
   {

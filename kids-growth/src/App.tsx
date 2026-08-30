@@ -33,6 +33,8 @@ import { EnglishTalkPage } from './pages/EnglishTalkPage'
 import { ErrorBookPage } from './pages/ErrorBookPage'
 import { ParentLearningPage } from './pages/ParentLearningPage'
 import { ParentVoicePage } from './pages/ParentVoicePage'
+import { ExamPage } from './pages/ExamPage'
+import { SpotCheckPage } from './pages/SpotCheckPage'
 
 function AppRoutes() {
   const childCount = useLiveQuery(() => db.children.count(), [])
@@ -57,6 +59,10 @@ function AppRoutes() {
         <Route path="/learn/math" element={<MathDrillPage />} />
         <Route path="/learn/talk" element={<EnglishTalkPage />} />
         <Route path="/learn/errorbook" element={<ErrorBookPage />} />
+        {/* 阶段测验:撤掉脚手架,看看他到底会多少 */}
+        <Route path="/learn/exam" element={<ExamPage />} />
+        {/* 线下抽查:唯一一个不在屏幕上进行的功能 —— 用来戳破「虚假掌握」 */}
+        <Route path="/learn/spotcheck" element={<SpotCheckPage />} />
         <Route path="/learn/session/:deckId/:mode" element={<StudySessionPage />} />
         <Route
           path="/parent/learn"

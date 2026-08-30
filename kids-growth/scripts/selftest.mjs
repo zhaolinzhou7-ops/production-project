@@ -37,6 +37,10 @@ const MODULES = [
   'examples',
   'redo',
   'screenTime',
+  'exam',
+  'spotCheck',
+  'syllabus',
+  'playlist',
   'mathDrill',
   'adaptive',
   'scoreCard',
@@ -82,6 +86,10 @@ const srs = await load('srs')
 const examples = await load('examples')
 const redoM = await load('redo')
 const screenTime = await load('screenTime')
+const examM = await load('exam')
+const spot = await load('spotCheck')
+const syl = await load('syllabus')
+const playlist = await load('playlist')
 const mathDrill = await load('mathDrill')
 
 let checks = 0
@@ -499,6 +507,216 @@ eq(screenTime.screenAdvice(10, 'toddler', 0).hardAt, 25, '上限设成 0 视为�
     }
   }
   ok(checked > 500, `应抽查到足够多的带图算式(实际 ${checked})`)
+}
+
+// ---------------------------------------------------------------- 阶段测验
+
+{
+  const mkCand = (i, deck, type) => ({
+    cardId: `c${i}`,
+    deckId: deck,
+    deckName: deck,
+    itemType: type,
+    front: type === 'pic' ? `中文${i}` : `w${i}`,
+    back: type === 'pic' ? `en${i}` : `b${i}`,
+    emoji: type === 'pic' ? '🐱' : undefined,
+    en: type === 'pic' ? `en${i}` : undefined,
+    reps: 2,
+    lapses: i % 3,
+  })
+  const cands = [
+    ...Array.from({ length: 12 }, (_, i) => mkCand(i, 'deckA', 'pic')),
+    ...Array.from({ length: 12 }, (_, i) => mkCand(100 + i, 'deckB', 'word')),
+    ...Array.from({ length: 12 }, (_, i) => mkCand(200 + i, 'deckC', 'hanzi')),
+  ]
+  const paper = examM.buildExam(cands, 12)
+  eq(paper.length, 12, '应出够题数')
+  eq(new Set(paper.map((q) => q.cardId)).size, paper.length, '同一张卡不该出现两次')
+  // 每一包都要被考到:只从一包里抽,考的是那一包,不是他的水平
+  eq(new Set(paper.map((q) => q.deckId)).size, 3, '三个卡组都应该被考到')
+  for (const q of paper) {
+    ok(q.options.includes(q.answer), '正确答案必须在选项里')
+    eq(new Set(q.options).size, q.options.length, '选项不能重复')
+  }
+  // 英语题一律纯英文:平时练纯英文,考试突然冒出中文,考的就是另一件事
+  for (const q of paper.filter((x) => x.lang === 'en')) {
+    ok(q.options.every((o) => !/[一-龥]/.test(o)), '英语题的选项里不该出现中文')
+  }
+  // 只考学过的 —— 考没教过的东西不是测验,是打击
+  eq(examM.buildExam(cands.map((c) => ({ ...c, reps: 0 })), 10).length, 0, '没有学过的卡时不该出卷')
+
+  // 没有不及格 —— 一次考砸就再也不肯考的孩子,后面所有测验都白设
+  ok(examM.pickScoreBand(0, 10).stars >= 1, '全错也至少一颗星')
+  ok(examM.pickScoreBand(0, 10).title.includes('难'), '最低一档说的是「题难」,不是「你不行」')
+  eq(examM.pickScoreBand(10, 10).stars, 5, '全对给五颗星')
+  let prevStars = -1
+  for (let c = 0; c <= 10; c++) {
+    const st = examM.pickScoreBand(c, 10).stars
+    ok(st >= prevStars, `答对 ${c} 题的星级不该更低`)
+    prevStars = st
+  }
+  ok(examM.compareWithLast(80, -1).includes('第一次'), '第一次考试要说明这是第一次')
+  ok(examM.compareWithLast(90, 70).includes('进步'), '进步明显时要说出来')
+  ok(examM.compareWithLast(60, 80).includes('不用在意'), '退步时不该指责')
+
+  const day = 24 * 60 * 60 * 1000
+  ok(examM.examDue(0, 'week'), '从没考过时应该提示')
+  ok(!examM.examDue(Date.now() - 3 * day, 'week'), '才过三天不该提示周测')
+  ok(examM.examDue(Date.now() - 8 * day, 'week'), '过了一周应该提示')
+}
+
+// ---------------------------------------------------------------- 线下抽查
+
+{
+  const mk = (i, reps, interval) => ({
+    cardId: `s${i}`,
+    deckId: 'd1',
+    deckName: '认识动物',
+    itemType: 'pic',
+    ask: `🐱 中文${i}`,
+    expect: `en${i}`,
+    emoji: '🐱',
+    reps,
+    interval,
+  })
+  const cands = [
+    ...Array.from({ length: 10 }, (_, i) => mk(i, 4, 20 - i)),
+    ...Array.from({ length: 10 }, (_, i) => mk(100 + i, 1, 1)),
+  ]
+  const picked = spot.pickSpotCheck(cands)
+  eq(picked.length, spot.SPOT_SIZE, `一次抽查 ${spot.SPOT_SIZE} 个`)
+  /*
+    抽的必须是**系统最有把握的那些**:抽查的目的不是找出他不会的
+    (那些系统已经知道),而是检验系统自己的判断。
+  */
+  ok(
+    picked.every((p) => Number(p.cardId.replace('s', '')) < 100),
+    '抽的应该是间隔长、答对多的那些,不是刚学的',
+  )
+  ok(picked.every((p) => !!p.expect), '每一条都要有「期望他说出什么」')
+  eq(spot.pickSpotCheck(cands.filter((c) => c.reps < 2)).length, 0, '没有够格的卡时不该出题')
+
+  const bad = spot.scoreSpotCheck(1, 5)
+  eq(bad.rate, 20, '算得出真实掌握率')
+  ok(bad.note.includes('蒙'), '低分要解释原因,而不是只给评价')
+  ok(bad.note.includes('跟我读'), '低分要给出下一步做什么')
+  ok(spot.scoreSpotCheck(5, 5).note.includes('真的'), '高分要点明「屏幕上的成绩是真的」')
+
+  const day = 24 * 60 * 60 * 1000
+  ok(spot.spotDue(0), '从没抽查过时应该提示')
+  ok(!spot.spotDue(Date.now() - 3 * day), '才过三天不该提示')
+  ok(spot.spotDue(Date.now() - 8 * day), '过了一周应该提示')
+}
+
+// ---------------------------------------------------------------- 内容顺序
+
+{
+  const mkP = (key, total, mastered, installed = true) => ({ key, installed, total, mastered })
+  const none = syl.adviseSyllabus([])
+  eq(none.nextKey, syl.TODDLER_SYLLABUS[0].key, '什么都没装时推荐第一包')
+  ok(none.note.includes('一批一批'), '要说清楚「一批一批来」比一次全装有效')
+
+  /*
+    同时在学的包不超过 4 个 —— 超了就不再推荐新的,
+    否则又回到「六百个词平摊」那个老问题。
+  */
+  const many = syl.adviseSyllabus([
+    mkP('enlight-family', 30, 1),
+    mkP('enlight-animals', 30, 1),
+    mkP('enlight-food', 30, 1),
+    mkP('enlight-body', 30, 1),
+  ])
+  eq(many.nextKey, undefined, '同时在学四包时不该再推荐新的')
+  ok(many.note.includes('偏多'), '要提醒家长手上的包已经偏多')
+
+  const done = syl.adviseSyllabus([mkP('enlight-family', 30, 27)])
+  ok(done.nextKey && done.nextKey !== 'enlight-family', '练熟了就该推荐下一包')
+  ok(!!done.nextWhy, '推荐要带理由')
+
+  /*
+    字母和自然拼读排在最后。对 4–6 岁来说先积累口语词汇再学拼读效果好得多:
+    拼读的意义是「把听过的词拼出来」,脑子里没有那些词时,拼读只是背 26 个符号。
+  */
+  const abc = syl.TODDLER_SYLLABUS.find((x) => x.key === 'enlight-abc')
+  const family = syl.TODDLER_SYLLABUS.find((x) => x.key === 'enlight-family')
+  ok(abc.batch > family.batch, '字母应该排在生活词汇之后')
+  ok(syl.TODDLER_SYLLABUS.every((x) => !!x.why), '每一包都要写清楚为什么排在这里')
+  eq(
+    new Set(syl.TODDLER_SYLLABUS.map((x) => x.key)).size,
+    syl.TODDLER_SYLLABUS.length,
+    '顺序表里不该有重复的包',
+  )
+}
+
+// ---------------------------------------------------------------- 连贯对话
+
+{
+  const lines = [
+    { speaker: 'bot', text: 'Good morning' },
+    { speaker: 'kid', text: 'Good morning' },
+    { speaker: 'bot', text: 'How are you' },
+    { speaker: 'kid', text: 'I am fine' },
+  ]
+  const recorded = { 'I am fine': '/voice/fine.mp3' }
+  const items = playlist.buildPlaylist(lines, (t) => recorded[t] || '')
+  eq(items.length, 4, '四句都要排进去')
+  // 没录过的用机器音顶上,不能跳过 —— 跳过整段会缺一半
+  ok(items.every((i) => !!i.text), '每一句都要有文本')
+  eq(items[3].isOwnVoice, true, '录过的那句要认出是他自己的声音')
+  const st = playlist.ownVoiceCount(items)
+  ok(st.kid === 2 && st.own === 1, '要能统计「这段里有几句是你自己的声音」')
+  // 角色互换:提问和回答是两种能力,提问还更难
+  const swapped = playlist.swapRoles(lines)
+  eq(swapped[0].speaker, 'kid', '互换后第一句该由孩子说')
+  ok(swapped.every((l, i) => l.text === lines[i].text), '互换只换角色,不该动内容')
+}
+
+// ---------------------------------------------------------------- 英语口算
+
+{
+  const words = ['zero','one','two','three','four','five','six','seven','eight','nine','ten']
+  for (let i = 0; i < 200; i++) {
+    const c = mathDrill.generateProblem('enCount', 'toddler')
+    ok(/^How many /.test(c.text), 'How many 题面要是英文')
+    eq(c.visual.groups.reduce((n, g) => n + g.n, 0), c.answer, '图上的个数要等于答案')
+    ok(c.visual.groups.every((g) => g.n <= 5), '每行不超过五个')
+
+    const a = mathDrill.generateProblem('enAdd', 'toddler')
+    ok(!/[一-龥]/.test(a.text), '英语口算题面里不该出现中文')
+    const m = a.text.match(/^(\w+) \w+ plus (\w+) \w+ =$/)
+    ok(m, `加法题面格式应可解析:${a.text}`)
+    eq(words.indexOf(m[1]) + words.indexOf(m[2]), a.answer, '英文数字之和必须等于答案')
+
+    const sb = mathDrill.generateProblem('enSub', 'toddler')
+    const m2 = sb.text.match(/^(\w+) \w+ minus (\w+) \w+ =$/)
+    ok(m2, `减法题面格式应可解析:${sb.text}`)
+    eq(words.indexOf(m2[1]) - words.indexOf(m2[2]), sb.answer, '英文数字之差必须等于答案')
+    ok(sb.answer >= 1, '减法结果至少是 1')
+  }
+}
+
+// ---------------------------------------------------------------- 数字包表达
+
+{
+  const pack = JSON.parse(
+    readFileSync(path.join(ROOT, 'src', 'data', 'decks', 'enlight-numbers.json'), 'utf8'),
+  )
+  const byEn = new Map(pack.cards.map((c) => [c.en, c]))
+  /*
+    1–10 用「同一样东西重复 N 个」表示 —— 图上有几个就是几。
+    原先 one 用的是一个太阳 🌞,读不出「一个东西」,和 2–10 也不成序列。
+  */
+  const WORDS = ['one','two','three','four','five','six','seven','eight','nine','ten']
+  WORDS.forEach((w, i) => {
+    const card = byEn.get(w)
+    ok(card, `数字包应有 ${w}`)
+    const chars = [...card.emoji]
+    eq(chars.length, i + 1, `${w} 的图应该正好是 ${i + 1} 个`)
+    eq(new Set(chars).size, 1, `${w} 的图应该是同一样东西重复`)
+  })
+  // 零用数字 0️⃣ —— 空罐子表达不了「零」,孩子只会认成「罐子」
+  ok(byEn.get('zero').emoji.includes('0'), '零应该用数字 0 表示')
+  ok(byEn.get('first').front.includes('名'), '序数的卡面要写「第一名」,才对得上那块金牌')
 }
 
 rmSync(OUT, { recursive: true, force: true })

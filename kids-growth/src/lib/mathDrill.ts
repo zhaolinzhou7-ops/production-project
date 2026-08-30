@@ -1,7 +1,17 @@
 import type { AgeStage, MathVisual } from '../types'
 
 /** 口算题型 */
-export type MathKind = 'add' | 'sub' | 'mul' | 'div' | 'mulTable' | 'mixed'
+export type MathKind =
+  | 'add'
+  | 'sub'
+  | 'mul'
+  | 'div'
+  | 'mulTable'
+  | 'mixed'
+  // 英语口算:用英语做数学 —— 一次练两样,而且更接近真实使用
+  | 'enCount'
+  | 'enAdd'
+  | 'enSub'
 
 export interface MathProblem {
   /** 题干,如 "7 + 8 =" */
@@ -53,7 +63,91 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'mul', label: '乘法', icon: '⏫', desc: '含两位数乘一位数' },
   { kind: 'div', label: '除法', icon: '➗', desc: '整除,无余数' },
   { kind: 'mixed', label: '混合', icon: '🎲', desc: '四则混合随机' },
+  /*
+    英语口算。
+
+    口算和英语原先是两套互不相干的东西,而 4 岁半真正该练的是
+    **用英语做数学**("two apples plus three apples")——
+    这是国际学校低龄段的标准做法:一次练两样,而且比单独练任何一样
+    都更接近真实使用。数字是他已经会的部分,所以英语那一半的负担很小 ——
+    这正是「在会的东西上挂新东西」,语言习得里效率最高的一种。
+  */
+  { kind: 'enCount', label: 'How many?', icon: '🍎', desc: '听英文,数一数有几个' },
+  { kind: 'enAdd', label: 'Plus', icon: '➕', desc: 'Two plus three = ?' },
+  { kind: 'enSub', label: 'Minus', icon: '➖', desc: 'Five minus two = ?' },
 ]
+
+/**
+ * 数字的英文写法(0–20)。
+ * 只做到 20 —— 英语口算的取值范围本来就压在 20 以内,
+ * 超过这个数,他的负担就从「英语」变成了「算术」,两样都练不好。
+ */
+const EN_NUM = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+  'nineteen', 'twenty',
+]
+
+/** 英语口算里用的可数名词,单复数都写对 —— 教材里错一个 s,孩子就记错一个 */
+const EN_ITEMS: Array<[string, string, string]> = [
+  ['apple', 'apples', '🍎'],
+  ['star', 'stars', '⭐'],
+  ['fish', 'fish', '🐟'],
+  ['cat', 'cats', '🐱'],
+  ['ball', 'balls', '⚽'],
+  ['duck', 'ducks', '🦆'],
+]
+
+function enPlural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many
+}
+
+/** 把 n 个东西排成每行五个 —— 五个一组让孩子建立「五」这个基准量 */
+function rowsOfFive(emoji: string, n: number): MathVisual | undefined {
+  if (n <= 0 || n > 20) return undefined
+  const groups: Array<{ emoji: string; n: number }> = []
+  let left = n
+  while (left > 0) {
+    const take = Math.min(5, left)
+    groups.push({ emoji, n: take })
+    left -= take
+  }
+  // 行与行之间不放任何符号 —— 这是「同一堆东西的换行」,不是两堆相加
+  return { groups, ops: groups.slice(1).map(() => '') }
+}
+
+/** How many apples? —— 听英文数数,英语和数学最自然的交叉点 */
+function genEnCount(): MathProblem {
+  const [one, many, emoji] = pick(EN_ITEMS)
+  const n = randInt(1, 10)
+  return {
+    text: `How many ${enPlural(n, one, many)}?`,
+    answer: n,
+    visual: rowsOfFive(emoji, n),
+  }
+}
+
+/** Two apples plus three apples = ? */
+function genEnAdd(): MathProblem {
+  const [one, many] = pick(EN_ITEMS)
+  const a = randInt(1, 5)
+  const b = randInt(1, 5)
+  return {
+    text: `${EN_NUM[a]} ${enPlural(a, one, many)} plus ${EN_NUM[b]} ${enPlural(b, one, many)} =`,
+    answer: a + b,
+  }
+}
+
+/** Five apples minus two apples = ? */
+function genEnSub(): MathProblem {
+  const [one, many] = pick(EN_ITEMS)
+  const a = randInt(2, 10)
+  const b = randInt(1, a - 1)
+  return {
+    text: `${EN_NUM[a]} ${enPlural(a, one, many)} minus ${EN_NUM[b]} ${enPlural(b, one, many)} =`,
+    answer: a - b,
+  }
+}
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
   return MATH_KINDS.find((k) => k.kind === kind)
@@ -145,6 +239,12 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genAdd(stage)
     case 'sub':
       return genSub(stage)
+    case 'enCount':
+      return genEnCount()
+    case 'enAdd':
+      return genEnAdd()
+    case 'enSub':
+      return genEnSub()
     case 'mulTable':
       return genMulTable()
     case 'mul':
