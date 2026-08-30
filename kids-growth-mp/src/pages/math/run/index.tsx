@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, Input } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import {
@@ -15,6 +15,7 @@ import {
 } from '../../../store/study'
 import { awardSticker, feedPet, bumpChallenge } from '../../../store/fun'
 import CorrectBurst from '../../../components/CorrectBurst'
+import { playWordAudio } from '../../../lib/audio'
 import type { StickerDef } from '../../../core/stickers'
 import { withGuard } from '../../../components/Guard'
 import { flushNow } from '../../../store/db'
@@ -68,6 +69,19 @@ function MathRun() {
   const [challengeDone, setChallengeDone] = useState(false)
   /** 点过的那些实物(按「第几组-第几个」记),用来做「点着数」 */
   const [tapped, setTapped] = useState<string[]>([])
+
+  /** 这一组是不是英语口算 —— 决定题面要不要念出来 */
+  const isEnglish = kinds.some((k) => k === 'enCount' || k === 'enAdd' || k === 'enSub')
+
+  // 英语题进来自动读一遍:他不认英文字,不出声这道题就是空白
+  useEffect(() => {
+    if (!isEnglish) return
+    const cur = problems[idx]
+    if (!cur || feedback !== 'none') return
+    const t = setTimeout(() => void playWordAudio(cur.text), 350)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, isEnglish, feedback])
 
   const tapCount = (key: string, struck: boolean) => {
     // 划掉的不参与数数 —— 它们已经被拿走了
@@ -220,6 +234,16 @@ function MathRun() {
       {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
       <View className='q'>
         <Text className='q__t'>{p?.text}</Text>
+        {/*
+          英语口算的题面要**能听**。
+          他还不认字,更不认英文字 —— 题目摆在那儿不出声,这道题对他就是空白。
+          所以英语题一进来自动读一遍,并留一个按钮可以再听。
+        */}
+        {isEnglish ? (
+          <View className='audio audio--big' onClick={() => void playWordAudio(p.text)}>
+            <Text className='audio__t'>🔊</Text>
+          </View>
+        ) : null}
         {/*
           数形结合:算式下面把实物摆出来。
           他先数糖果得到答案,慢慢才把「5 + 5」这个符号和那堆糖对上 ——

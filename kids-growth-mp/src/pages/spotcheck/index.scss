@@ -1,0 +1,174 @@
+.spot {
+  min-height: 100vh;
+  padding: 32px;
+  box-sizing: border-box;
+
+  &--center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 100px;
+    text-align: center;
+  }
+
+  &__bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+
+  &__exit,
+  &__count {
+    font-size: 26px;
+    color: var(--ink-4);
+  }
+
+  /* 给家长读的说明:整个功能的前提是手机不对着孩子 */
+  &__guide {
+    padding: 22px;
+    border-radius: var(--r-md);
+    background: rgba(251, 191, 36, 0.16);
+    margin-bottom: 28px;
+  }
+
+  &__guidet {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: #b45309;
+  }
+
+  &__guides {
+    display: block;
+    margin-top: 8px;
+    font-size: 23px;
+    color: #92400e;
+    line-height: 1.5;
+  }
+
+  &__card {
+    padding: 40px 28px;
+    border-radius: var(--r-lg);
+    background: var(--card);
+    box-shadow: var(--sh-2);
+    text-align: center;
+  }
+
+  &__deck {
+    display: block;
+    font-size: 22px;
+    color: var(--ink-4);
+  }
+
+  &__ask {
+    display: block;
+    margin: 18px 0;
+    font-size: 60px;
+    font-weight: bold;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+
+  &__q {
+    display: block;
+    font-size: 26px;
+    color: var(--ink-3);
+  }
+
+  &__reveal {
+    display: block;
+    margin-top: 26px;
+    font-size: 24px;
+    color: #6366f1;
+    text-decoration: underline;
+  }
+
+  &__ans {
+    display: block;
+    margin-top: 26px;
+    font-size: 40px;
+    font-weight: 700;
+    color: #4f46e5;
+  }
+
+  &__emoji {
+    font-size: 96px;
+  }
+
+  &__big {
+    font-size: 42px;
+    font-weight: bold;
+    color: var(--ink);
+    margin: 14px 0 6px;
+  }
+
+  &__rate {
+    font-size: 32px;
+    color: var(--brand-500);
+  }
+
+  &__prev {
+    display: block;
+    margin-top: 10px;
+    font-size: 24px;
+    color: var(--ink-4);
+  }
+
+  &__note {
+    display: block;
+    margin: 24px 0;
+    padding: 22px;
+    border-radius: var(--r-md);
+    background: var(--card);
+    font-size: 25px;
+    color: var(--ink-3);
+    line-height: 1.7;
+    text-align: left;
+  }
+
+  &__hint {
+    display: block;
+    margin: 16px 0 34px;
+    font-size: 26px;
+    color: var(--ink-3);
+    line-height: 1.6;
+  }
+
+  &__list {
+    width: 100%;
+    margin-bottom: 24px;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    margin-bottom: 10px;
+    border-radius: var(--r-sm);
+    background: rgba(248, 113, 113, 0.1);
+
+    &--ok {
+      background: rgba(52, 211, 153, 0.12);
+    }
+  }
+
+  &__rowq {
+    font-size: 28px;
+    color: var(--ink-2);
+  }
+
+  &__rowm {
+    font-size: 22px;
+    color: var(--ink-4);
+  }
+
+  &__foot {
+    display: block;
+    margin-top: 30px;
+    font-size: 22px;
+    color: var(--ink-4);
+    line-height: 1.7;
+  }
+}

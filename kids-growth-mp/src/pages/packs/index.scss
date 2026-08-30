@@ -82,3 +82,54 @@
     }
   }
 }
+
+/* 学习顺序:先把一小批练熟,再开下一批 —— 比同时铺开六百个词有效得多 */
+.syl {
+  margin-bottom: 24px;
+  padding: 26px;
+  border-radius: var(--r-md);
+  background: rgba(99, 102, 241, 0.08);
+
+  &__t {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: #4f46e5;
+  }
+
+  &__n {
+    display: block;
+    margin-top: 10px;
+    font-size: 24px;
+    color: var(--ink-3);
+    line-height: 1.7;
+  }
+
+  &__next {
+    display: flex;
+    align-items: center;
+    margin-top: 18px;
+    padding: 20px;
+    border-radius: var(--r-sm);
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  &__nextt {
+    flex: 1;
+    min-width: 0;
+    font-size: 24px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+
+  &__nextb {
+    flex-shrink: 0;
+    margin-left: 14px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: #6366f1;
+    color: #fff;
+    font-size: 23px;
+    font-weight: 600;
+  }
+}

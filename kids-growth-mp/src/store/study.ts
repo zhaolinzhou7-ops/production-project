@@ -15,6 +15,8 @@ import { stageFromBirthdate, defaultDailyGoal } from '../core/ageStage'
 import { dailyPointCap, allowedAward } from '../core/pointCap'
 import type { OriginCard } from '../core/redo'
 import type { ExamCandidate, ExamPeriod } from '../core/exam'
+import type { SpotCandidate } from '../core/spotCheck'
+import type { PackProgress } from '../core/syllabus'
 import type { DeckSignal } from '../core/recommend'
 import { adjustFor, nextLevel, type Adjust } from '../core/adaptive'
 import { getProfile, saveProfile } from './records'
@@ -1563,4 +1565,160 @@ export function saveExam(
   // 只留最近 40 条 —— 再多家长也不会翻,白占存储
   writeObject(EXAM_KEY, [rec, ...list].slice(0, 40))
   return rec
+}
+
+// ============ 线下抽查 ============
+
+/**
+ * 抽查候选:**系统最有把握的那些卡**。
+ * 抽查的目的不是找出他不会的(那些系统已经知道),而是**检验系统自己的判断**。
+ */
+export function spotCandidates(childId: string): SpotCandidate[] {
+  const errDeck = getErrorDeckId(childId)
+  const decks = readTable<LearnDeck>(KEYS.decks).filter(
+    (d) => d.childId === childId && d.id !== errDeck,
+  )
+  const byId = new Map(decks.map((d) => [d.id, d]))
+  const cards = new Map(readTable<LearnCard>(KEYS.cards).map((c) => [c.id, c]))
+
+  const out: SpotCandidate[] = []
+  for (const st of readTable<StudyState>(KEYS.states)) {
+    if (st.childId !== childId) continue
+    const card = cards.get(st.cardId)
+    if (!card) continue
+    const deck = byId.get(card.deckId)
+    if (!deck) continue
+    const ext = (card.extra ?? {}) as { emoji?: string; en?: string }
+    /*
+      问什么、期望他说什么,按内容类型分开:
+      - 看图卡:给家长看图和中文名,让孩子说**英文**
+      - 单词卡:给家长中文,让孩子说英文
+      - 识字卡:给家长这个字,让孩子读出来
+      家长手上那份永远带着答案 —— 他要能一眼判断对不对,不能还得自己想。
+    */
+    let ask = card.front
+    let expect = card.back
+    if (deck.itemType === 'pic') {
+      ask = `${ext.emoji ?? ''} ${card.front}`.trim()
+      expect = ext.en ?? card.back
+    } else if (deck.itemType === 'word') {
+      ask = card.back
+      expect = card.front
+    }
+    out.push({
+      cardId: card.id,
+      deckId: deck.id,
+      deckName: deck.name,
+      itemType: deck.itemType,
+      ask,
+      expect,
+      emoji: ext.emoji,
+      reps: st.reps ?? 0,
+      interval: st.interval ?? 0,
+    })
+  }
+  return out
+}
+
+export interface SpotRecord {
+  id: string
+  childId: string
+  date: string
+  total: number
+  passed: number
+  /** 真实掌握率 0–100 */
+  rate: number
+  at: number
+}
+
+const SPOT_KEY = 'spotChecks'
+
+export function listSpotChecks(childId: string): SpotRecord[] {
+  return readObject<SpotRecord[]>(SPOT_KEY, [])
+    .filter((r) => r && r.childId === childId)
+    .sort((a, b) => b.at - a.at)
+}
+
+export function lastSpotAt(childId: string): number {
+  const hit = listSpotChecks(childId)[0]
+  return hit ? hit.at : 0
+}
+
+/**
+ * 记下抽查结果,并把**没说出来的退回重学**。
+ *
+ * 这一步是整个功能的意义所在:线下答不出的卡,不管屏幕上多熟,
+ * 记忆排期都要退回去 —— 否则抽查就只是一份报告,改变不了明天练什么。
+ */
+export function saveSpotCheck(childId: string, results: Array<{ cardId: string; ok: boolean }>): SpotRecord {
+  const failed = results.filter((r) => !r.ok).map((r) => r.cardId)
+  if (failed.length > 0) {
+    const ids = new Set(failed)
+    const states = readTable<StudyState>(KEYS.states)
+    let changed = false
+    for (const st of states) {
+      if (st.childId !== childId || !ids.has(st.cardId)) continue
+      /*
+        退回「明天再来」:reps 归零、间隔归 1、记一次 lapse。
+        记 lapse 是为了让它在下一组里**排到最前面**(见 availableToday) ——
+        线下答不出的那几个,正是最该被做到的。
+      */
+      st.reps = 0
+      st.interval = 1
+      st.lapses = (st.lapses ?? 0) + 1
+      st.status = 'learning'
+      st.due = todayISO()
+      changed = true
+    }
+    if (changed) writeTable(KEYS.states, states)
+  }
+
+  const all = readObject<SpotRecord[]>(SPOT_KEY, [])
+  const list = Array.isArray(all) ? all : []
+  let maxAt = 0
+  for (const r of list) if (r && r.at > maxAt) maxAt = r.at
+  const passed = results.filter((r) => r.ok).length
+  const rec: SpotRecord = {
+    id: newId(),
+    childId,
+    date: todayISO(),
+    total: results.length,
+    passed,
+    rate: results.length > 0 ? Math.round((passed / results.length) * 100) : 0,
+    at: Math.max(Date.now(), maxAt + 1),
+  }
+  writeObject(SPOT_KEY, [rec, ...list].slice(0, 40))
+  return rec
+}
+
+// ============ 内容顺序 ============
+
+/**
+ * 每个内容包的掌握进度 —— 喂给 core/syllabus 判断「什么时候开下一包」。
+ *
+ * 「掌握」按**间隔是否够长**算,而不是按「答对过」算:
+ * 答对一次说明不了什么,而间隔排到十几天之后,说明它已经反复答对过好几轮了。
+ */
+export function packProgress(childId: string): PackProgress[] {
+  const decks = readTable<LearnDeck>(KEYS.decks).filter((d) => d.childId === childId && d.builtinKey)
+  const installed = new Set(decks.map((d) => d.builtinKey as string))
+  const byDeck = new Map(decks.map((d) => [d.id, d.builtinKey as string]))
+
+  const total: Record<string, number> = {}
+  const mastered: Record<string, number> = {}
+  for (const st of readTable<StudyState>(KEYS.states)) {
+    if (st.childId !== childId) continue
+    const key = byDeck.get(st.deckId)
+    if (!key) continue
+    total[key] = (total[key] ?? 0) + 1
+    // 间隔到了一周以上就算进入长期记忆 —— 比 status==='mastered'(21 天)宽,
+    // 否则一个包要练两个月才「熟」,家长等不到那一天就自己乱装了
+    if ((st.interval ?? 0) >= 7) mastered[key] = (mastered[key] ?? 0) + 1
+  }
+
+  const out: PackProgress[] = []
+  for (const key of installed) {
+    out.push({ key, installed: true, total: total[key] ?? 0, mastered: mastered[key] ?? 0 })
+  }
+  return out
 }

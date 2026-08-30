@@ -48,6 +48,10 @@ export type MathKind =
   | 'chicken'
   | 'profitLoss'
   | 'average'
+  // 英语口算:用英语做数学 —— 一次练两样,而且更接近真实使用
+  | 'enCount'
+  | 'enAdd'
+  | 'enSub'
 
 /**
  * 实物图示。
@@ -128,7 +132,7 @@ export interface MathKindDef {
  * 分成五块之后,每块 3–5 个,而且每块可以**整组随机**:
  * 家长点「加法·随便来」就行,不必逐个题型去想今天练哪个。
  */
-export type MathGroup = 'count' | 'plus' | 'minus' | 'mixed' | 'think' | 'times' | 'olympic'
+export type MathGroup = 'count' | 'plus' | 'minus' | 'mixed' | 'think' | 'times' | 'olympic' | 'english'
 
 export interface MathGroupDef {
   group: MathGroup
@@ -145,6 +149,16 @@ export const MATH_GROUPS: MathGroupDef[] = [
   { group: 'times', label: '乘除', icon: '✖️', desc: '乘法口诀、乘法、除法、四则混合' },
   { group: 'think', label: '找规律·动脑', icon: '🧩', desc: '规律、方位、分类、推理、专注' },
   { group: 'olympic', label: '奥数专题', icon: '🏅', desc: '和差、年龄、植树、鸡兔同笼…' },
+  /*
+    英语口算。
+
+    口算和英语现在是两套互不相干的东西,而 4 岁半真正该练的是
+    **用英语做数学**("two apples plus three apples")——
+    这是国际学校低龄段的标准做法:一次练两样,而且比单独练任何一样
+    都更接近真实使用。数字是他已经会的部分,所以英语那一半的负担很小,
+    这正是「在会的东西上挂新东西」——语言习得里效率最高的一种。
+  */
+  { group: 'english', label: '英语口算', icon: '🔤', desc: '用英语数数、做加减(听英文、答数字)' },
 ]
 
 export function getMathGroupDef(group: MathGroup): MathGroupDef | undefined {
@@ -197,6 +211,9 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'chicken', label: '鸡兔同笼', icon: '🐔', desc: '数头又数脚' , group: 'olympic' },
   { kind: 'profitLoss', label: '盈亏问题', icon: '🍬', desc: '多了几个、少了几个' , group: 'olympic' },
   { kind: 'average', label: '平均数', icon: '📊', desc: '匀一匀,每份是多少' , group: 'olympic' },
+  { kind: 'enCount', label: 'How many?', icon: '🍎', desc: '听英文,数一数有几个' , group: 'english' },
+  { kind: 'enAdd', label: 'Plus', icon: '➕', desc: 'Two plus three = ?' , group: 'english' },
+  { kind: 'enSub', label: 'Minus', icon: '➖', desc: 'Five minus two = ?' , group: 'english' },
 ]
 
 export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
@@ -205,6 +222,8 @@ export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
 
 const TODDLER_KINDS: MathKind[] = [
   'count10', 'add10', 'sub10', 'makeTen', 'compare',
+  // 英语口算:数字是他已经会的部分,所以英语那一半的负担很小
+  'enCount', 'enAdd', 'enSub',
   'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern', 'countShape',
   // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」,
   // 是完全不同的两件事,而一年级立刻就考后者
@@ -419,6 +438,69 @@ function genChain(): MathProblem {
   const mid = a + b
   const c = randInt(1, mid)
   return { text: `${a} + ${b} - ${c} =`, answer: mid - c }
+}
+
+/**
+ * 数字的英文写法(0–20)。
+ * 只做到 20 —— 英语口算的取值范围本来就压在 20 以内,
+ * 超过这个数,他的负担就从「英语」变成了「算术」,两样都练不好。
+ */
+const EN_NUM = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+  'nineteen', 'twenty',
+]
+
+/** 英语口算里用的可数名词,单复数都写对 —— 教材里错一个 s,孩子就记错一个 */
+const EN_ITEMS: Array<[string, string, string]> = [
+  ['apple', 'apples', '🍎'],
+  ['star', 'stars', '⭐'],
+  ['fish', 'fish', '🐟'],
+  ['cat', 'cats', '🐱'],
+  ['ball', 'balls', '⚽'],
+  ['duck', 'ducks', '🦆'],
+]
+
+function enPlural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many
+}
+
+/**
+ * How many apples? —— 听英文数数。
+ *
+ * 这是英语和数学的交叉点,也是最自然的一个:数数本来就是他每天在做的事,
+ * 换成英语说一遍,不增加任何认知负担。
+ */
+function genEnCount(): MathProblem {
+  const [one, many, emoji] = pick(EN_ITEMS)
+  const n = randInt(1, 10)
+  return {
+    text: `How many ${enPlural(n, one, many)}?`,
+    answer: n,
+    visual: rowsOfFive(emoji, n),
+  }
+}
+
+/** Two apples plus three apples = ? */
+function genEnAdd(): MathProblem {
+  const [one, many] = pick(EN_ITEMS)
+  const a = randInt(1, 5)
+  const b = randInt(1, 5)
+  return {
+    text: `${EN_NUM[a]} ${enPlural(a, one, many)} plus ${EN_NUM[b]} ${enPlural(b, one, many)} =`,
+    answer: a + b,
+  }
+}
+
+/** Five apples minus two apples = ? */
+function genEnSub(): MathProblem {
+  const [one, many] = pick(EN_ITEMS)
+  const a = randInt(2, 10)
+  const b = randInt(1, a - 1)
+  return {
+    text: `${EN_NUM[a]} ${enPlural(a, one, many)} minus ${EN_NUM[b]} ${enPlural(b, one, many)} =`,
+    answer: a - b,
+  }
 }
 
 /** 排第几:序数概念。孩子常把「第 3 个」和「3 个」混起来,值得单独练 */
@@ -918,6 +1000,12 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genChicken()
     case 'profitLoss':
       return genProfitLoss()
+    case 'enCount':
+      return genEnCount()
+    case 'enAdd':
+      return genEnAdd()
+    case 'enSub':
+      return genEnSub()
     case 'average':
       return genAverage()
     case 'add':

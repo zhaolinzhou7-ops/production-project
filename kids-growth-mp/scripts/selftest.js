@@ -2702,6 +2702,180 @@ function run() {
     ok(byEn.get('first').front.indexOf('名') >= 0, '序数的卡面要写「第一名」,才对得上那块金牌')
   }
 
+  // ---- 线下抽查:唯一能戳破「虚假掌握」的机制 ----
+  {
+    const sc = L('core/spotCheck.js')
+    const mk = (i, reps, interval) => ({
+      cardId: `s${i}`,
+      deckId: 'd1',
+      deckName: '认识动物',
+      itemType: 'pic',
+      ask: `🐱 中文${i}`,
+      expect: `en${i}`,
+      emoji: '🐱',
+      reps,
+      interval,
+    })
+    const cands = [
+      ...Array.from({ length: 10 }, (_, i) => mk(i, 4, 20 - i)), // 系统很有把握的
+      ...Array.from({ length: 10 }, (_, i) => mk(100 + i, 1, 1)), // 刚学的
+    ]
+    const picked = sc.pickSpotCheck(cands)
+    ok(picked.length === sc.SPOT_SIZE, `一次抽查 ${sc.SPOT_SIZE} 个`)
+    ok(new Set(picked.map((p) => p.cardId)).size === picked.length, '同一张卡不该抽到两次')
+    /*
+      抽的必须是**系统最有把握的那些**。
+      抽查的目的不是找出他不会的(那些系统已经知道),而是检验系统自己的判断 ——
+      如果连它最有把握的都问不出来,整个掌握量都要打折扣。
+    */
+    ok(
+      picked.every((p) => Number(p.cardId.replace('s', '')) < 100),
+      '抽的应该是间隔长、答对多的那些,不是刚学的',
+    )
+    ok(picked.every((p) => !!p.expect), '每一条都要有「期望他说出什么」——家长得能判断对错')
+    // 刚开始学、还没有进入复习期时不该硬凑
+    ok(sc.pickSpotCheck(cands.filter((c) => c.reps < 2)).length === 0, '没有够格的卡时不该出题')
+
+    // 结论要说实话,但每一档都得说清楚接下来做什么
+    const good = sc.scoreSpotCheck(5, 5)
+    ok(good.rate === 100, '全说出来是 100%')
+    ok(good.note.indexOf('真的') >= 0, '高分要点明「屏幕上的成绩是真的」')
+    const bad = sc.scoreSpotCheck(1, 5)
+    ok(bad.rate === 20, '算得出真实掌握率')
+    ok(bad.note.indexOf('蒙') >= 0, '低分要解释原因(四选一本来就能蒙),而不是只给评价')
+    ok(bad.note.indexOf('跟我读') >= 0, '低分要给出下一步做什么')
+    ok(sc.scoreSpotCheck(0, 0).total === 0, '没有题目时不该崩')
+
+    // 每周一次:再密家长会烦,再疏就失去了及时纠偏的意义
+    const day = 24 * 60 * 60 * 1000
+    ok(sc.spotDue(0), '从没抽查过时应该提示')
+    ok(!sc.spotDue(Date.now() - 3 * day), '才过三天不该提示')
+    ok(sc.spotDue(Date.now() - 8 * day), '过了一周应该提示')
+  }
+
+  // ---- 抽查结果必须**回写**记忆排期 ----
+  {
+    reset()
+    const cidS = study.getCurrentChildId()
+    const deckS = study.ensureBuiltinDeck(cidS, 'enlight-colors')
+    const stAll = db.readTable('states').filter((x) => x.deckId === deckS)
+    // 先把两张卡练到「系统认为掌握了」
+    const a = stAll[0]
+    const b = stAll[1]
+    for (let i = 0; i < 4; i++) {
+      study.applyGrade(a.id, 'good')
+      study.applyGrade(b.id, 'good')
+    }
+    const beforeA = db.readTable('states').find((x) => x.id === a.id)
+    ok(beforeA.interval > 1, '练过几轮之后间隔应该拉长了')
+
+    // 线下:a 说出来了,b 没说出来
+    study.saveSpotCheck(cidS, [
+      { cardId: a.cardId, ok: true },
+      { cardId: b.cardId, ok: false },
+    ])
+    const afterA = db.readTable('states').find((x) => x.id === a.id)
+    const afterB = db.readTable('states').find((x) => x.id === b.id)
+    ok(afterA.interval === beforeA.interval, '说出来的那张不该被动')
+    /*
+      这一步是整个功能的意义所在:线下答不出的卡,不管屏幕上多熟,
+      都要退回重学 —— 否则抽查就只是一份报告,改变不了明天练什么。
+    */
+    ok(afterB.interval === 1, '没说出来的那张要退回「明天再来」')
+    ok(afterB.reps === 0, '没说出来的要重新开始算次数')
+    ok(afterB.lapses >= 1, '要记一次 lapse —— 它靠这个排到下一组的最前面')
+    ok(afterB.due === afterA.due || afterB.status === 'learning', '没说出来的应回到学习中')
+
+    const recs = study.listSpotChecks(cidS)
+    ok(recs.length === 1 && recs[0].rate === 50, '要记下这次的真实掌握率')
+    ok(study.lastSpotAt(cidS) > 0, '要记下抽查时间,下次才知道隔了多久')
+  }
+
+  // ---- 内容顺序:先把一小批练熟,再开下一批 ----
+  {
+    const sy = L('core/syllabus.js')
+    const mkP = (key, total, mastered, installed = true) => ({ key, installed, total, mastered })
+
+    // 什么都没装
+    const none = sy.adviseSyllabus([])
+    ok(none.nextKey === sy.TODDLER_SYLLABUS[0].key, '什么都没装时,推荐顺序里的第一包')
+    ok(none.note.indexOf('一批一批') >= 0, '要说清楚「一批一批来」比一次全装有效')
+
+    // 装了一包、还没练熟 → 不该推荐新的太多
+    const oneUnfinished = sy.adviseSyllabus([mkP('enlight-family', 30, 3)])
+    ok(oneUnfinished.focus.indexOf('enlight-family') >= 0, '没练熟的包就是「现在该练的」')
+    ok(oneUnfinished.batchPct < 70, '掌握度应算得出来')
+
+    /*
+      **同时在学的包不超过 4 个。** 超了就不再推荐新的 ——
+      再装下去又回到「六百个词平摊」那个老问题。
+    */
+    const many = sy.adviseSyllabus([
+      mkP('enlight-family', 30, 1),
+      mkP('enlight-animals', 30, 1),
+      mkP('enlight-food', 30, 1),
+      mkP('enlight-body', 30, 1),
+    ])
+    ok(many.nextKey === undefined, '同时在学四包时不该再推荐新的')
+    ok(many.note.indexOf('偏多') >= 0, '要提醒家长手上的包已经偏多了')
+
+    // 练熟了 → 推荐下一包
+    const done = sy.adviseSyllabus([mkP('enlight-family', 30, 27)])
+    ok(done.nextKey && done.nextKey !== 'enlight-family', '练熟了就该推荐下一包')
+    ok(!!done.nextWhy, '推荐要带理由 —— 家长看得懂才会照着走')
+
+    /*
+      **字母和自然拼读排在最后。**
+      这一条和很多家长的直觉相反,但对 4–6 岁来说,先积累口语词汇再学拼读
+      效果好得多:拼读的意义是「把听过的词拼出来」,脑子里没有那些词的时候,
+      拼读就只是背 26 个符号。
+    */
+    const abc = sy.TODDLER_SYLLABUS.find((x) => x.key === 'enlight-abc')
+    const family = sy.TODDLER_SYLLABUS.find((x) => x.key === 'enlight-family')
+    ok(abc.batch > family.batch, '字母应该排在生活词汇之后')
+    const phonics = sy.TODDLER_SYLLABUS.find((x) => x.key === 'phonics-cvc')
+    ok(phonics.batch >= abc.batch, '自然拼读不该早于字母')
+    // 每一条都要有理由,而且顺序里不能有重复
+    ok(sy.TODDLER_SYLLABUS.every((x) => !!x.why), '每一包都要写清楚为什么排在这里')
+    ok(
+      new Set(sy.TODDLER_SYLLABUS.map((x) => x.key)).size === sy.TODDLER_SYLLABUS.length,
+      '顺序表里不该有重复的包',
+    )
+  }
+
+  // ---- 英语口算:用英语做数学 ----
+  {
+    const md3 = L('core/mathDrill.js')
+    for (let i = 0; i < 200; i++) {
+      const c = md3.generateProblem('enCount', 'toddler')
+      ok(/^How many /.test(c.text), 'How many 题面要是英文')
+      ok(c.visual && c.visual.groups.reduce((n, g) => n + g.n, 0) === c.answer, '图上的个数要等于答案')
+      // 单复数必须写对 —— 教材里错一个 s,孩子就记错一个
+      if (c.answer === 1) ok(!/s\?$/.test(c.text) || /fish/.test(c.text), '一个的时候不该用复数')
+
+      const a = md3.generateProblem('enAdd', 'toddler')
+      ok(/ plus /.test(a.text), '加法题面要用 plus')
+      ok(!/[一-龥]/.test(a.text), '英语口算题面里不该出现中文')
+      // 用题面里的英文数字反推,核对答案
+      const words = ['zero','one','two','three','four','five','six','seven','eight','nine','ten']
+      const m = a.text.match(/^(\w+) \w+ plus (\w+) \w+ =$/)
+      ok(m, `加法题面格式应可解析:${a.text}`)
+      ok(words.indexOf(m[1]) + words.indexOf(m[2]) === a.answer, '英文数字之和必须等于答案')
+
+      const sMinus = md3.generateProblem('enSub', 'toddler')
+      ok(/ minus /.test(sMinus.text), '减法题面要用 minus')
+      const m2 = sMinus.text.match(/^(\w+) \w+ minus (\w+) \w+ =$/)
+      ok(m2, `减法题面格式应可解析:${sMinus.text}`)
+      ok(words.indexOf(m2[1]) - words.indexOf(m2[2]) === sMinus.answer, '英文数字之差必须等于答案')
+      ok(sMinus.answer >= 1, '减法结果至少是 1 —— 剩 0 个对幼儿没有意义')
+    }
+    // 英语口算要出现在幼儿档里 —— 数字是他已经会的部分,英语那一半负担很小
+    const toddlerKinds = md3.mathKindsForTier('toddler').map((k) => k.kind)
+    ok(toddlerKinds.indexOf('enAdd') >= 0, '幼儿档应该有英语口算')
+    const enGroup = md3.mathGroupsForTier('toddler').find((g) => g.def.group === 'english')
+    ok(enGroup && enGroup.kinds.length === 3, '英语口算应单独成一组')
+  }
+
   // ---- 做题页必须是独立一页 ----
   {
     /*

@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import { packsForStage, BUILTIN_PACKS } from '../../core/learningContent'
+import { adviseSyllabus } from '../../core/syllabus'
 import {
   getCurrentChildId,
   getStage,
   addedPackKeys,
+  packProgress,
   ensureBuiltinDeck,
   removeBuiltinDeck,
 } from '../../store/study'
@@ -71,6 +73,14 @@ function Packs() {
   // 第一次进来落在孩子当前的学段上,之后由家长自己切
   useDidShow(() => refresh(stage))
 
+  /** 现在该练哪几包、什么时候开下一包(见 core/syllabus) */
+  const advice = useMemo(
+    () => adviseSyllabus(packProgress(getCurrentChildId())),
+    // rows 变了说明装/卸过包,要重算
+    [rows],
+  )
+  const nameOf = (key: string) => BUILTIN_PACKS.find((p) => p.key === key)?.name ?? key
+
   const switchStage = (s: Browse) => {
     // 只换看的,不动孩子的学段
     refresh(s)
@@ -123,6 +133,34 @@ function Packs() {
           </View>
         ))}
       </View>
+      {/*
+        推荐顺序。
+
+        现在的难度递增只发生在**练法**上,内容是平摊的 —— 装了十个包,
+        六百个词从第一天起一起轮,结果每样都碰一点、每样都不熟。
+        先把最高频的一小批练到自动化,再开下一批,比同时铺开有效得多。
+      */}
+      {advice ? (
+        <View className='syl'>
+          <Text className='syl__t'>📚 学习顺序</Text>
+          <Text className='syl__n'>{advice.note}</Text>
+          {advice.nextKey ? (
+            <View
+              className='syl__next'
+              onClick={() => {
+                const row = rows.find((r) => r.key === advice.nextKey)
+                if (row) void toggle(row)
+              }}
+            >
+              <Text className='syl__nextt'>
+                下一包建议:{nameOf(advice.nextKey)} —— {advice.nextWhy}
+              </Text>
+              <Text className='syl__nextb'>+ 加进来</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       <Text className='packs__tip'>
         点一下加进首页,再点一下移除。加进来的内容会按遗忘曲线安排复习。
         切换上面的标签只是换着看,不会改变孩子的学段设置 ——

@@ -656,3 +656,31 @@
     color: rgba(255, 255, 255, 0.7);
   }
 }
+
+/* 线下抽查入口:唯一一个把手机合上的功能 */
+.spotcard {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 22px;
+  padding: 28px 26px;
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, #22d3ee, #0891b2);
+  box-shadow: var(--sh-2);
+
+  &__e { font-size: 52px; }
+  &__meta { flex: 1; min-width: 0; }
+  &__t {
+    display: block;
+    font-size: 32px;
+    font-weight: bold;
+    color: #fff;
+  }
+  &__s {
+    display: block;
+    margin-top: 6px;
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.88);
+  }
+  &__go { font-size: 38px; color: rgba(255, 255, 255, 0.7); }
+}

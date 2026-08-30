@@ -29,6 +29,8 @@ import {
   pointsRoomToday,
   examCandidates,
   lastExamAt,
+  spotCandidates,
+  lastSpotAt,
 } from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
@@ -48,6 +50,7 @@ import { rankDecks } from '../../core/recommend'
 import { getInterests, INTEREST_TAGS } from '../../store/notes'
 import { screenAdvice } from '../../core/screenTime'
 import { examDue } from '../../core/exam'
+import { spotDue, pickSpotCheck } from '../../core/spotCheck'
 import { buildDailyCard, type DailyCard } from '../../core/scoreCard'
 import { getPlan, savePlan } from '../../store/plan'
 import { useParentGate } from '../../components/ParentGate'
@@ -119,6 +122,8 @@ function Index() {
   const [room, setRoom] = useState(0)
   /** 距离上次周测够不够一周 —— 到点才提示,不到不打扰 */
   const [examReady, setExamReady] = useState(false)
+  /** 距离上次线下抽查够不够一周 */
+  const [spotReady, setSpotReady] = useState(false)
   /** 展开的是哪个卡组(空串=都收着)—— 列表默认只占一行 */
   const [openDeck, setOpenDeck] = useState('')
   const [petEmoji, setPetEmoji] = useState('🥚')
@@ -309,6 +314,9 @@ function Index() {
       // 有学过的内容 + 到了周期,才提示可以考
       setExamReady(
         examDue(lastExamAt(childId, 'week'), 'week') && examCandidates(childId).length >= 8,
+      )
+      setSpotReady(
+        spotDue(lastSpotAt(childId)) && pickSpotCheck(spotCandidates(childId)).length > 0,
       )
       setCanSpend(spendable())
       setPending(pendingCount())
@@ -717,6 +725,25 @@ function Index() {
         所以有一个问题永远看不清:**撤掉脚手架之后他到底会多少?**
         到了周期才提示,不到不打扰 —— 天天考就成了另一种刷题。
       */}
+      {/*
+        线下抽查。
+
+        所有「掌握了多少词」的数字都来自他在屏幕上点对了 —— 而屏幕上有图、
+        有选项、有排除法。这一条是唯一能戳破「虚假掌握」的机制:
+        把手机合上,家长照着问,他用嘴答。
+        每周提示一次:再密家长会烦,再疏就失去了及时纠偏的意义。
+      */}
+      {spotReady ? (
+        <View className='spotcard' onClick={() => openPage('/pages/spotcheck/index')}>
+          <Text className='spotcard__e'>🔎</Text>
+          <View className='spotcard__meta'>
+            <Text className='spotcard__t'>该做一次线下抽查了</Text>
+            <Text className='spotcard__s'>5 个词 · 合上手机问他 · 说不出的自动退回重学</Text>
+          </View>
+          <Text className='spotcard__go'>›</Text>
+        </View>
+      ) : null}
+
       {examReady ? (
         <View className='examcard' onClick={() => openPage('/pages/exam/index?period=week')}>
           <Text className='examcard__e'>📝</Text>
