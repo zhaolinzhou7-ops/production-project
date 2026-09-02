@@ -162,8 +162,31 @@ export function buildExam(cands: ExamCandidate[], size: number): ExamQuestion[] 
     round += 1
   }
 
+  /*
+    **同一张图可能有好几个正确答案。**
+
+    emoji 就那么多,而英语的词比 emoji 多得多,于是同一张图在不同内容包里
+    会指向不同的词:🏃 在动作包里是 run、在运动包里是 running、
+    在家人职业包里是 athlete。这不是错误,是这个载体的天花板 ——
+    硬给它们换一张「勉强像」的图,只会造出第二个「金牌代表第一名」。
+
+    但测验是**跨卡组**抽题的,家长看到 🏃 拿着标准答案 running,
+    孩子说了 run —— 他没错,却会被判错。
+    所以把「这张图还能叫什么」一并算出来,写进给家长的那句说明里。
+    只统计**他装了的卡组**:没装的包不会出现在他面前,提了反而添乱。
+  */
+  const alias = new Map<string, Set<string>>()
+  for (const c of learned) {
+    const key = c.emoji
+    if (!key) continue
+    const word = (c.en ?? c.back ?? '').trim()
+    if (!word) continue
+    if (!alias.has(key)) alias.set(key, new Set())
+    alias.get(key)!.add(word)
+  }
+
   return shuffle(picked)
-    .map((c) => toQuestion(c))
+    .map((c) => toQuestion(c, alias))
     .filter((q): q is ExamQuestion => !!q)
 }
 
@@ -175,10 +198,15 @@ export function buildExam(cands: ExamCandidate[], size: number): ExamQuestion[] 
  * 这是开放式产出和四选一最大的区别 —— 一旦答案在屏幕上,
  * 测的就又变回「认得出来吗」了。
  */
-function toQuestion(c: ExamCandidate): ExamQuestion | undefined {
+function toQuestion(
+  c: ExamCandidate,
+  alias: Map<string, Set<string>> = new Map(),
+): ExamQuestion | undefined {
   if (c.itemType === 'pic') {
     const en = c.en ?? c.back
     if (!en) return undefined
+    // 这张图在他装的其它卡组里还叫什么 —— 说了这些也算对
+    const others = [...(alias.get(c.emoji ?? '') ?? [])].filter((w) => w !== en)
     /*
       看图说词:图在上面,底下什么都没有。
       他看着山羊说 "goat" —— 这是这套系统里最接近「真的会了」的一件事。
@@ -191,7 +219,9 @@ function toQuestion(c: ExamCandidate): ExamQuestion | undefined {
       answer: en,
       lang: 'en',
       audio: en,
-      note: `中文是「${c.front}」;发音差不多就算对,不用卡口音`,
+      note:
+        `中文是「${c.front}」;发音差不多就算对,不用卡口音` +
+        (others.length > 0 ? `。说成 ${others.join(' / ')} 也算对 —— 这张图两样都指得通` : ''),
     }
   }
 

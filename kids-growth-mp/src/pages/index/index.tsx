@@ -35,7 +35,7 @@ import {
 } from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
-import { diagnoseAudio, playText, type DiagLine } from '../../lib/audio'
+import { playText } from '../../lib/audio'
 import { BUILD_TAG } from '../../lib/version'
 import { getChallenge, ownedStickers, getPet } from '../../store/fun'
 import { ensureHabits, todayProgress } from '../../store/habits'

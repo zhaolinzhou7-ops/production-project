@@ -130,9 +130,34 @@ export function buildPlan(
     // 1) 第一步用**当前难度**的主练法 —— 状态最好的时候做最该做的
     const d1 = pics[0]
     push(d1, modeOf(d1, 'listenPicEn'), `${d1?.name ?? ''}`, sizeOf(d1))
-    // 2) 换一个卡组,同样按它自己的难度档
+    /*
+      2) 换一个卡组 —— 而且**要换一种练法**。
+
+      原先第二步也是「按这个卡组自己的档位取练法」。听起来对,
+      可两个卡组多半停在同一档上,于是第一步和第二步出来的是
+      **一模一样的题型**:读一遍动物、再读一遍颜色。
+      难度阶梯当初做出来就是为了「变化他一眼能感觉到」,
+      连着两步同一个样子,那个感觉就没了。
+
+      所以第二步先按自己的档位取;撞车了就在它自己的阶梯上挪一格 ——
+      **优先往下挪**(简单一点、他更愿意接着做),下不去了才往上。
+      挪的是这个卡组自己的阶梯,不会跳到别的类型上去。
+    */
     const d2 = pics[1] ?? pics[0]
-    push(d2, modeOf(d2, 'picChooseEn'), `${d2?.name ?? ''}`, sizeOf(d2))
+    const used = steps[0]?.mode
+    let m2 = modeOf(d2, 'picChooseEn')
+    if (d2 && m2 === used) {
+      const lv = d2.level ?? 2
+      for (const alt of [lv - 1, lv + 1, lv - 2, lv + 2]) {
+        if (alt < 0 || alt > 4) continue
+        const cand = modeLadder(d2.itemType, alt) as PracticeMode | undefined
+        if (cand && cand !== used) {
+          m2 = cand
+          break
+        }
+      }
+    }
+    push(d2, m2, `${d2?.name ?? ''}`, sizeOf(d2))
     // 3) 认字有就练,没有就跳过,不硬凑
     const d3 = hanzi[0]
     push(d3, modeOf(d3, 'recognize'), `认字 · ${d3?.name ?? ''}`, sizeOf(d3))

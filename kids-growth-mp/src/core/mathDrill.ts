@@ -220,20 +220,39 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' , group: 'plus' },
   { kind: 'sub20', label: '20 以内退位减', icon: '🔻', desc: '13-5 这类,和进位加配套' , group: 'minus' },
   { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' , group: 'mixed' },
-  { kind: 'ordinal', label: '排第几', icon: '🥇', desc: '从前数第几个' , group: 'count' },
-  { kind: 'half', label: '分一分', icon: '🍰', desc: '平均分,除法的地基' , group: 'mixed' },
+  /*
+    ⚠️ ordinal(排第几)v66 从题型表里去掉了 —— 它被 position 完全覆盖,
+    而且是更差的那一个:题面用中文说「小鸡排第几个」(他得先认字)、
+    只能从左数、还要打字。生成函数留着不删,免得有人的旧设置里存着它。
+  */
+  { kind: 'half', label: '平均分', icon: '🍕', desc: '几个人分,每人分到几个' , group: 'mixed' },
   { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' , group: 'think' },
   { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' , group: 'count' },
   { kind: 'picAdd', label: '看图·合起来', icon: '🧺', desc: '两堆合在一起有几个' , group: 'plus' },
   { kind: 'picSub', label: '看图·拿走了', icon: '✋', desc: '走掉一些,还剩几个' , group: 'minus' },
   { kind: 'picDiff', label: '看图·多几个', icon: '⚖️', desc: '哪边多,多几个' , group: 'minus' },
-  { kind: 'position', label: '认方位', icon: '🧭', desc: '从左数、从右数,排第几' , group: 'count' },
+  { kind: 'position', label: '排第几', icon: '📍', desc: '从左数、从右数,排第几' , group: 'count' },
   { kind: 'oddOne', label: '找不同类', icon: '🧩', desc: '哪个不是一伙的' , group: 'think' },
   { kind: 'sizeCmp', label: '比长短', icon: '📏', desc: '哪个长、哪个高' , group: 'count' },
   { kind: 'logic3', label: '想一想', icon: '💭', desc: '谁最高、谁最快' , group: 'think' },
   { kind: 'spotDiff', label: '找不同', icon: '👀', desc: '两排里哪个不一样' , group: 'think' },
-  { kind: 'add', label: '加法', icon: '➕', desc: '两数相加' , group: 'plus' },
-  { kind: 'sub', label: '减法', icon: '➖', desc: '两数相减(不为负)' , group: 'minus' },
+  /*
+    ---- v66 新增 ----
+    方位、分与合、认识时间。三个都是幼小衔接里绕不过去、
+    而这套系统之前完全没有的东西。
+
+    ⚠️ 加新题型必须**同时**改四个地方:MathKind 类型、这张表、
+    TODDLER_KINDS、generateProblem 的 switch。
+    漏了这张表的话题型能生成、自测也过,但界面上一个都看不到 ——
+    v66 就是这么漏的(替换的锚点写错了,静默没生效)。
+    现在自测有关卡钉着这四处的一致性。
+  */
+  { kind: 'where', label: '在哪里', icon: '🧭', desc: '里面、上面、下面、旁边' , group: 'think' },
+  { kind: 'split', label: '分一分', icon: '🍰', desc: '5 可以分成 2 和几' , group: 'count' },
+  { kind: 'makeSum', label: '合起来', icon: '🤝', desc: '几和几合起来是 10' , group: 'count' },
+  { kind: 'clock', label: '看钟表', icon: '🕒', desc: '现在是几点(整点和半点)' , group: 'think' },
+  { kind: 'add', label: '加法', icon: '🧾', desc: '两数相加' , group: 'plus' },
+  { kind: 'sub', label: '减法', icon: '📄', desc: '两数相减(不为负)' , group: 'minus' },
   { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' , group: 'times' },
   { kind: 'mul', label: '乘法', icon: '⏫', desc: '含两位数乘一位数' , group: 'times' },
   { kind: 'div', label: '除法', icon: '➗', desc: '整除,无余数' , group: 'times' },
@@ -277,7 +296,16 @@ const TODDLER_KINDS: MathKind[] = [
   'add10', 'sub10', 'makeTen', 'compare',
   // 英语口算:数字是他已经会的部分,所以英语那一半的负担很小
   'enCount', 'enAdd', 'enSub',
-  'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern',
+  /*
+    ⚠️ ordinal(排第几)v66 从幼儿档拿掉了 —— 它和 position 是**同一道题**,
+    而且是更差的那一个:
+    · 题面用中文说「小鸡排第几个」,他得先认出「小鸡」两个字;
+      position 直接把那个 emoji 摆在问句里,不识字也看得懂。
+    · ordinal 只能从左数,position 左右都问,是它的超集。
+    · position 现在给数字按钮点,ordinal 还要打字。
+    重复的合在一起 —— 这是用户提过的规矩。
+  */
+  'add20', 'sub20', 'chain', 'half', 'pattern',
   // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」
   'picAdd', 'picSub', 'picDiff',
   /*

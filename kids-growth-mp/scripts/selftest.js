@@ -785,6 +785,33 @@ function run() {
   eq(dp.buildPlan([], 'toddler').length, 0, '一个卡组都没有时应给出空计划')
 
   /*
+    ---- 今天这条路上,前两步不能是同一种练法(v66)----
+
+    原先第二步也是「按这个卡组自己的档位取练法」。听起来对,
+    可两个卡组多半停在同一档上,于是第一步和第二步出来的是
+    **一模一样的题型**:读一遍动物、再读一遍颜色。
+    难度阶梯当初做出来就是为了「变化他一眼能感觉到」,
+    连着两步一个样,那个感觉就没了。
+  */
+  for (const lv of [0, 1, 2, 3, 4]) {
+    const two = [
+      { id: 'a', itemType: 'pic', name: '动物', due: 10, level: lv },
+      { id: 'b', itemType: 'pic', name: '颜色', due: 10, level: lv },
+    ]
+    const st = dp.buildPlan(two, 'toddler')
+    ok(st.length >= 2, `档位 ${lv} 应该排得出至少两步`)
+    ok(st[0].mode !== st[1].mode, `档位 ${lv}:前两步不该是同一种练法(都是 ${st[0].mode})`)
+    // 挪练法不能挪到别的类型上去 —— 还得是看图包自己的阶梯
+    const ladder2 = [0, 1, 2, 3, 4].map((l) => adMod.modeLadder('pic', l))
+    ok(ladder2.indexOf(st[1].mode) >= 0, `档位 ${lv}:第二步的练法要来自看图包自己的阶梯`)
+  }
+  // 只有一个卡组时不强求换练法(那会变成同一包连做两种,反而乱)
+  ok(
+    dp.buildPlan([{ id: 'a', itemType: 'pic', name: '动物', due: 10, level: 2 }], 'toddler').length > 0,
+    '只有一个卡组时照样要排得出路',
+  )
+
+  /*
     ---- 教学大纲接进每日计划(v64)----
 
     大纲之前只在内容库页面给家长看一句建议,而每天真正练什么由 buildPlan 决定 ——
@@ -3189,6 +3216,65 @@ function run() {
     }
   }
 
+  /*
+    ---- 题型登记的四处一致性(v66)----
+
+    加一个新题型要同时改四个地方:MathKind 类型、MATH_KINDS 这张表、
+    某个难度档的名单、generateProblem 的 switch。
+
+    v66 加「在哪里 / 分一分 / 合起来 / 看钟表」时**漏了 MATH_KINDS** ——
+    题型能生成、自测也全过(因为自测直接调 generateProblem),
+    但 mathKindsForTier 会把它们滤掉,**界面上一个都看不到**。
+    这种漏法没有任何报错,只有打开 app 才发现。所以在这里钉死。
+  */
+  {
+    const md2 = L('core/mathDrill.js')
+    const listed = new Set(md2.MATH_KINDS.map((k) => k.kind))
+    const tiers = ['toddler', 'school', 'olympic', 'advanced']
+    const inTiers = new Set()
+    for (const t of tiers) for (const k of md2.mathKindsForTier(t)) inTiers.add(k.kind)
+
+    for (const k of listed) {
+      ok(inTiers.has(k), `${k} 在题型表里,却不属于任何难度档 —— 界面上永远看不到`)
+      const def = md2.getMathKindDef(k)
+      ok(!!def.label && !!def.icon && !!def.desc, `${k} 要有名字、图标和一句说明`)
+      ok(!!def.group, `${k} 要归到一个分组里,否则列表上会孤零零挂在最后`)
+      // 每一种都要真的出得了题
+      const q = md2.generateProblem(k, 'primary')
+      ok(!!q && !!q.text, `${k} 要能生成题目`)
+      ok(typeof q.answer === 'number' && !Number.isNaN(q.answer), `${k} 的答案要是个数`)
+    }
+
+    // 名字不能重复 —— 列表上两个「分一分」,家长根本分不清点哪个
+    const labels = md2.MATH_KINDS.map((k) => k.label)
+    const dupLabel = labels.filter((l, i) => labels.indexOf(l) !== i)
+    ok(dupLabel.length === 0, `题型名字不能重复(重复的:${[...new Set(dupLabel)].join('、')})`)
+
+    /*
+      **同一组里图标不能重复。**
+      孩子不识字,列表上他认的就是那个图标 —— 一组里两个 🧭,
+      他点哪个全凭运气,而且会以为是同一个东西点了两次。
+      跨组允许重复(➕ 在「加法」和「英语 Plus」里都合理,分组标题分得开)。
+    */
+    {
+      const byGroup = new Map()
+      for (const k of md2.MATH_KINDS) {
+        if (!byGroup.has(k.group)) byGroup.set(k.group, [])
+        byGroup.get(k.group).push(k)
+      }
+      for (const [g, list] of byGroup) {
+        const icons = list.map((k) => k.icon)
+        const dup = icons.filter((x, i) => icons.indexOf(x) !== i)
+        ok(dup.length === 0, `「${g}」组里图标重复了:${[...new Set(dup)].join(' ')}`)
+      }
+    }
+
+    // 幼儿档里的每一种都必须登记过,否则孩子那边直接少一块内容
+    for (const k of md2.mathKindsForTier('toddler')) {
+      ok(listed.has(k.kind), `幼儿档的 ${k.kind} 必须在 MATH_KINDS 里登记`)
+    }
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')
@@ -3235,6 +3321,36 @@ function run() {
     // 看图题:图要在,而且**不给字** —— 给了就成了照着念
     for (const q of paper.filter((x) => x.emoji)) {
       ok(!q.show, '看图题不该同时把答案的字摆出来')
+    }
+
+    /*
+      **同一张图可能有好几个正确答案,得告诉家长。**
+
+      emoji 就那么多,而英语的词比 emoji 多:🏃 在动作包里是 run、
+      在运动包里是 running、在家人职业包里是 athlete。这不是错误,
+      是这个载体的天花板 —— 硬换一张「勉强像」的图,只会造出
+      第二个「金牌代表第一名」。
+
+      但测验是跨卡组抽题的:家长拿着标准答案 running,孩子说了 run,
+      他没错却会被判错。所以别名要写进给家长的那句说明里。
+    */
+    {
+      const dup = [
+        { cardId: 'x1', deckId: 'dA', deckName: 'A', itemType: 'pic', front: '跑', back: 'run', en: 'run', emoji: '🏃', reps: 2, lapses: 0 },
+        { cardId: 'x2', deckId: 'dB', deckName: 'B', itemType: 'pic', front: '跑步', back: 'running', en: 'running', emoji: '🏃', reps: 2, lapses: 0 },
+      ]
+      const qs = ex2.buildExam(dup, 2)
+      ok(qs.length === 2, '两张同图的卡都该能出题')
+      for (const q of qs) {
+        const other = q.answer === 'run' ? 'running' : 'run'
+        ok(
+          q.note.indexOf(other) >= 0,
+          `同一张图的另一个答案要写进家长说明里(答案 ${q.answer},说明「${q.note}」)`,
+        )
+      }
+      // 没有同图的卡时不该硬塞一句「也算对」
+      const solo = ex2.buildExam([dup[0]], 1)
+      ok(solo[0].note.indexOf('也算对') < 0, '没有重名时不该提「也算对」')
     }
     // 识字题必须把字摆出来,不然没得认
     for (const q of paper.filter((x) => x.lang === 'zh' && x.prompt.indexOf('这个字') >= 0)) {
@@ -3337,34 +3453,91 @@ function run() {
       孩子不用先认识数字也能对上。原先 one 用的是一个太阳 🌞,
       读不出「一个东西」,和 2–10 也不成序列。
     */
-    const WORDS = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+    /*
+      ---- v66:数字卡一律用**数字本身** ----
+
+      原来每个数字配一样实物(1=🍎、2=👟👟、3=🍓🍓🍓……),
+      而英语练法里孩子**只看得到 emoji**。三个问题叠在一起:
+
+      ① 直接撞车:🍎 在食物包里是 apple,👟 在衣物包里是 shoes ——
+         同一张图两个答案,他学到的是「这个东西的对错没有道理」;
+      ② 每个数字换一种东西,「数量」这个共同点被淹没了 ——
+         他记住的是「苹果那张是 one」,不是「一个东西叫 one」;
+      ③ 序数 🥇 是「第一」的象征物不是「第一」本身,他学到的是 gold medal。
+
+      数字符号是唯一不和别的词撞车的画法。数量交给口算 ——
+      数一数、分与合、看图列式本来就是拿真东西数的地方。
+    */
+    const DIGITS = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+    const WORDS = [
+      'zero', 'one', 'two', 'three', 'four', 'five',
+      'six', 'seven', 'eight', 'nine', 'ten',
+    ]
     WORDS.forEach((w, i) => {
       const card = byEn.get(w)
       ok(card, `数字包应有 ${w}`)
-      const chars = [...card.emoji]
-      ok(chars.length === i + 1, `${w} 的图应该正好是 ${i + 1} 个(实际 ${chars.length} 个)`)
-      ok(new Set(chars).size === 1, `${w} 的图应该是同一样东西重复,不能混着摆`)
+      ok(card.front === String(i), `${w} 的卡面应该是数字 ${i}(实际 ${card.front})`)
+      ok(card.emoji === DIGITS[i], `${w} 的图应该是数字 ${DIGITS[i]}(实际 ${card.emoji})`)
+      ok(!!card.say, `${w} 要有中文读音`)
     })
-    /*
-      零。
 
-      整组卡的规矩是「front 是数字、emoji 是数量」。零画不出个数 ——
-      1–10 靠「重复几个同样的东西」看得出来,零没有东西可重复。
-      空罐子 🫙 会被认成「罐子」;0️⃣ 更糟,它让图也变成了数字,
-      破坏了「图=数量」这条规矩。
-      现在的做法:卡面照旧是数字 0,图给一个他见过的「一个也没有」的场面
-      (空盘子),读出来的话里点明「一个也没有」。
+    /*
+      **整包不许出现实物图。**
+
+      这是这一条真正要钉死的东西:只要有一张卡拿实物当数字,
+      它就会和别的包撞车 —— 而撞车是静默的,谁都不会报错,
+      表现只是「孩子选对了却被判错」。
     */
-    const zero = byEn.get('zero')
-    ok(zero.front === '0', '零的卡面要和 1–10 一样是数字本身')
-    ok([...zero.emoji].length <= 2, '零的图不该是一串东西 —— 那读出来就成了「几个」')
-    ok(zero.emoji.indexOf('0') < 0, '零的图不能又是一个数字 0,否则这张卡只剩符号')
-    ok(
-      (zero.say || '').indexOf('没有') >= 0,
-      '零读出来要点明「一个也没有」—— 光念一个「零」他对不上任何东西',
-    )
-    // 序数配名次:奖牌本身没错,错在卡面只写「第一」,和金牌对不上
-    ok(byEn.get('first').front.indexOf('名') >= 0, '序数的卡面要写「第一名」,才对得上那块金牌')
+    for (const c of numPack.cards) {
+      ok(
+        DIGITS.indexOf(c.emoji) >= 0,
+        `数字包里的「${c.front}」用了实物图 ${c.emoji} —— 会和别的内容包撞车`,
+      )
+    }
+
+    /*
+      序数(第一/第二/第三)和「一双」**不该在这一包里**。
+      一张静态图教不了序数:🥇 是象征物,不是「第一」本身。
+      序数已经在口算的 ordinal / position 题型里 ——
+      那里是一排东西问「第几个」,那才是序数正确的教法。
+    */
+    for (const bad of ['first', 'second', 'third', 'a pair']) {
+      ok(!byEn.get(bad), `「${bad}」不该在看图数字包里 —— 一张静态图教不了它`)
+    }
+    /*
+      ---- 看图卡的图不许宽到出屏(v66)----
+
+      用户报过「五个星星之类的已经超出屏幕外面去了」。
+      根子在数字包:⭐⭐⭐⭐⭐、🐟×10 这种横排,在 160px 的字号下
+      一行放不下,后面几个直接被切掉 —— 而这道题问的正是「有几个」,
+      切掉一半等于题目本身是错的。
+
+      数字包改成数字之后这个问题没了,但**别的包以后可能再犯**,
+      所以在这里钉一道通用的:一张卡的图最多两个字形。
+
+      ⚠️ 数的是**字形**不是码点:👨‍👩‍👧 是三个人加两个连接符共五个码点,
+      但屏幕上只占一格。按码点数会把这一堆正常的卡全判成超宽。
+    */
+    {
+      const seg = new Intl.Segmenter('zh', { granularity: 'grapheme' })
+      const width = (t) => [...seg.segment(String(t ?? ''))].length
+      const wide = []
+      for (const meta of content.BUILTIN_PACKS) {
+        if (meta.itemType !== 'pic') continue
+        for (const card of meta.load().cards) {
+          if (!card.emoji) continue
+          const w = width(card.emoji)
+          if (w > 2) wide.push(`${meta.key}/${card.front}: ${card.emoji}(${w} 格)`)
+        }
+      }
+      ok(
+        wide.length === 0,
+        `看图卡的图最多两格,再宽一行放不下会被切掉:${wide.slice(0, 4).join(' / ')}`,
+      )
+    }
+
+    // 零读出来要点明「一个也没有」—— 光念一个「零」他对不上任何东西
+    ok((byEn.get('zero').say || '').indexOf('没有') >= 0, '零读出来要点明「一个也没有」')
   }
 
   // ---- 线下抽查:唯一能戳破「虚假掌握」的机制 ----
