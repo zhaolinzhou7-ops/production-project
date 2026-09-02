@@ -144,6 +144,20 @@ function Packs() {
         <View className='syl'>
           <Text className='syl__t'>📚 学习顺序</Text>
           <Text className='syl__n'>{advice.note}</Text>
+          {/*
+            **说到就要做到。**
+
+            v64 之前这一块只是给家长看的一段建议,而「今天就做这个」
+            那条路根本不看它 —— 这边劝你专注第 1 批,那边照旧十个包平摊。
+            现在计划已经接上了(见 core/dailyPlan 的 focus),
+            所以这里要把这件事说出来:家长看得见连线,才会相信这段话不是摆设。
+          */}
+          {advice.focus.length > 0 ? (
+            <Text className='syl__f'>
+              今天的「就做这个」已经优先从这几包里排:
+              {advice.focus.map((k) => nameOf(k)).join('、')}
+            </Text>
+          ) : null}
           {advice.nextKey ? (
             <View
               className='syl__next'

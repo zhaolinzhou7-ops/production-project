@@ -688,6 +688,47 @@ function run() {
   // 没题可做时不能端上来一组空题
   eq(dp.buildPlan([{ id: 'x', itemType: 'pic', name: '空', due: 0 }], 'toddler').length, 0, '没到期的卡组不该进今天这条路')
   eq(dp.buildPlan([], 'toddler').length, 0, '一个卡组都没有时应给出空计划')
+
+  /*
+    ---- 教学大纲接进每日计划(v64)----
+
+    大纲之前只在内容库页面给家长看一句建议,而每天真正练什么由 buildPlan 决定 ——
+    两边不通气,于是内容库劝家长「先专注第 1 批」,每天的路照旧在十个包之间平摊。
+    说一套做一套,大纲等于白写。现在把 focus 传进来。
+  */
+  {
+    const mk = (id, key, due = 10) => ({ id, itemType: 'pic', name: id, due, packKey: key })
+    const decks = [mk('d1', 'enlight-sea'), mk('d2', 'enlight-family'), mk('d3', 'enlight-animals')]
+
+    // 排序:焦点包提前
+    const ordered = dp.orderByFocus(decks, ['enlight-family', 'enlight-animals'])
+    eq(ordered[0].id, 'd2', '焦点包要排到最前')
+    eq(ordered[1].id, 'd3', '第二个焦点包排第二')
+    eq(ordered[2].id, 'd1', '不在焦点里的排后面')
+    eq(ordered.length, decks.length, '排序不能丢卡组')
+
+    // **稳定排序**:焦点内部要保留进来时的顺序(那是「错得多的优先」的结论)
+    const stable = dp.orderByFocus(
+      [mk('a', 'enlight-family'), mk('b', 'enlight-animals'), mk('c', 'enlight-family')],
+      ['enlight-family', 'enlight-animals'],
+    )
+    eq(stable.map((d) => d.id).join(''), 'abc', '焦点内部要保持原有顺序,不能被打乱')
+
+    // **是排序不是过滤**:焦点包今天没题可做时,不能端上一条空路
+    const noneDue = [mk('d1', 'enlight-sea', 10), mk('d2', 'enlight-family', 0)]
+    ok(
+      dp.buildPlan(noneDue, 'toddler', ['enlight-family']).length > 0,
+      '焦点包今天没题时要照常用别的包排路,不能给空计划',
+    )
+    // 焦点生效:第一步该落在焦点包上
+    const planned = dp.buildPlan(decks, 'toddler', ['enlight-animals'])
+    eq(planned[0].deckId, 'd3', '第一步应该落在大纲当前该练的那一包上')
+    // 不给 focus 时行为不变 —— 这条连线不能改掉原有的排序结论
+    eq(dp.buildPlan(decks, 'toddler')[0].deckId, 'd1', '不传 focus 时保持原来的顺序')
+    // 没有 packKey 的卡组(自定义词本、错题本)不该被误当成焦点
+    const custom = [{ id: 'x', itemType: 'pic', name: '自定义', due: 5 }]
+    eq(dp.orderByFocus(custom, ['enlight-family'])[0].id, 'x', '没有 packKey 的卡组照常参与')
+  }
   // 同一步不该重复出现
   const planKeys = tPlan.map((s) => s.deckId + '|' + s.mode)
   eq(planKeys.length, new Set(planKeys).size, '同一个卡组+练法不该在一天里排两次')
@@ -2152,6 +2193,116 @@ function run() {
   ok(ex.examplesFor('cat', 'no-such-pack').length === 0, '不认识的内容包不出例句')
   ok(ex.examplesFor('', 'enlight-animals').length === 0, '空词不出例句')
 
+  /*
+    ---- v64 地道性审查钉下来的十一条 ----
+
+    这些不是「读起来别扭」,是**真的错**或**母语者不会那么说**。
+    全量清单过了一遍才发现 —— 每一条都在孩子每天会看到的卡上。
+  */
+
+  // ① 数字:1 必须走单数。数字包本来就是教「几个」的,在这里错单复数等于教反
+  ok(ex.examplesFor('one', 'enlight-numbers')[0] === 'one apple', 'one 后面是单数 apple')
+  ok(
+    ex.examplesFor('one', 'enlight-numbers').every((l) => l.indexOf('one apples') < 0),
+    '绝不能出现 "one apples"',
+  )
+  ok(ex.examplesFor('two', 'enlight-numbers')[0] === 'two apples', '2 以上才是复数')
+  // 零不出例句:"zero apples" 语法对但没人说,正确说法超出这套句型
+  ok(ex.examplesFor('zero', 'enlight-numbers').length === 0, '零不出例句')
+
+  // ② police 不是可数的职业单数 —— "a police" 是最典型的一条中式英语
+  {
+    const p = ex.examplesFor('police', 'enlight-family')
+    ok(p.length > 0, 'police 要出例句')
+    ok(
+      p.every((l) => !/\ba police\b(?! officer)/.test(l)),
+      '不能出现 "a police",正确说法是 a police officer',
+    )
+    ok(p.indexOf('I want to be a police officer.') >= 0, 'police 的例句要说 police officer')
+  }
+
+  // ③ 运动的三种搭配:play 只配球类棋类,-ing 项目用 go,武术体操用 do
+  ok(ex.examplesFor('soccer', 'enlight-sports').indexOf("Let's play soccer.") >= 0, '球类用 play')
+  ok(
+    ex.examplesFor('swimming', 'enlight-sports').indexOf("Let's go swimming.") >= 0,
+    'swimming 用 go,不是 play —— "play swimming" 是「玩游泳」直译',
+  )
+  ok(ex.examplesFor('karate', 'enlight-sports').indexOf("Let's do karate.") >= 0, '武术用 do')
+  {
+    // 全内容包扫一遍:任何地方都不许再出现 play + -ing 项目
+    const bad = []
+    for (const meta of content.BUILTIN_PACKS) {
+      if (meta.itemType !== 'pic') continue
+      for (const c of meta.load().cards) {
+        const word = meta.key === 'enlight-abc' ? c.front : c.en
+        if (!word) continue
+        for (const l of ex.examplesFor(word, meta.key, c.en)) {
+          if (/play (swimming|running|cycling|skating|skiing|climbing|surfing|rowing|fishing|bowling|dancing|diving|boxing|gymnastics|weightlifting|archery|karate)/.test(l)) {
+            bad.push(`${word}: ${l}`)
+          }
+        }
+      }
+    }
+    ok(bad.length === 0, `不能有 play + 非球类项目(发现:${bad.slice(0, 3).join(' / ')})`)
+  }
+
+  // ④ 只有复数形式的词不能被当成可数单数
+  ok(ex.examplesFor('noodles', 'enlight-food')[0] === 'some noodles', 'noodles 是复数形,不是 a noodles')
+  ok(ex.pluralPhrase('noodles', 'enlight-food') === undefined, 'noodles 不该再给一次复数组词')
+  ok(ex.examplesFor('stairs', 'enlight-home').length === 0, 'stairs 拿不准就不出')
+
+  // ⑤ 世上只有一个的东西:不给 a,也不给复数 —— "two suns" 是明确的错
+  ok(ex.examplesFor('sun', 'enlight-nature')[0] === 'the sun', 'sun 用 the,不用 a')
+  ok(ex.pluralPhrase('sun', 'enlight-nature') === undefined, '不能出现 two suns')
+  ok(ex.pluralPhrase('moon', 'enlight-nature') === undefined, '不能出现 two moons')
+
+  // ⑥ 季节不说 a spring
+  ok(ex.examplesFor('spring', 'enlight-weather')[0] === 'in spring', '季节用 in,不用 a')
+
+  // ⑦ 摸不到的部位不给「Touch your …」
+  {
+    const h = ex.examplesFor('heart', 'enlight-body')
+    ok(h.length > 0, 'heart 要出例句')
+    ok(h.every((l) => l.indexOf('Touch') < 0), '不能让他去摸自己的心脏')
+    ok(ex.examplesFor('bone', 'enlight-body').every((l) => l.indexOf('Touch') < 0), '骨头也摸不到')
+  }
+
+  // ⑧ 牙和指甲用复数形,而且要说 These are 不是 This is
+  {
+    const t = ex.examplesFor('tooth', 'enlight-body')
+    ok(t[0] === 'my teeth', '牙用复数形')
+    ok(t.indexOf('These are my teeth.') >= 0, '复数要配 These are')
+    ok(t.every((l) => l.indexOf('This is my teeth') < 0), '不能出现 "This is my teeth"')
+  }
+
+  // ⑨ 名词不能套进「It is …」的形容词句型
+  ok(ex.examplesFor('storm', 'enlight-weather').length === 0, 'storm 是名词,不能出 "It is storm."')
+  ok(ex.examplesFor('drizzle', 'enlight-weather').length === 0, 'drizzle 同理')
+
+  // ⑩ 复数规则里几处被规则误伤的
+  ok(ex.pluralOf('rhino') === 'rhinos', '外来缩略词只加 s,不是 rhinoes')
+  ok(ex.pluralOf('hippo') === 'hippos', 'hippo → hippos')
+  ok(ex.pluralOf('yo-yo') === 'yo-yos', 'yo-yo → yo-yos')
+  ok(ex.pluralOf('scarf') === 'scarves', 'scarf → scarves')
+  ok(ex.pluralOf('bookshelf') === 'bookshelves', 'bookshelf → bookshelves')
+  ok(ex.pluralOf('jellyfish') === 'jellyfish', 'jellyfish 单复数同形')
+  ok(ex.pluralOf('starfish') === 'starfish', 'starfish 单复数同形')
+  ok(ex.pluralOf('maple leaf') === 'maple leaves', '多词短语只变最后一个词')
+
+  // ⑪ 缩写词在例句里不能被小写掉 —— "a tv" 看着就是个错字
+  {
+    const t = ex.examplesFor('TV', 'enlight-home')
+    ok(t[0] === 'a TV', 'TV 在例句里保持大写')
+    ok(ex.pluralPhrase('TV', 'enlight-home') === 'two TVs', 'TV 的复数是 TVs')
+  }
+
+  // 顺带:第三条例句换成了祈使句,三条例句要给三种不同句式
+  {
+    const c = ex.examplesFor('cat', 'enlight-animals')
+    ok(c.indexOf('Look at the cat!') >= 0, '可数名词第三句是祈使句,和 "I see …" 换一种句式')
+    ok(c.every((l) => l.indexOf('The cat is here.') < 0), '"The cat is here." 太呆板,已换掉')
+  }
+
   // 全量扫一遍所有看图包:凡是出了例句的,冠词不能错、不能有双空格
   {
     let scanned = 0
@@ -2772,14 +2923,30 @@ function run() {
     ok(new Set(paper.map((q) => q.cardId)).size === paper.length, '同一张卡不该在一份卷子里出现两次')
     // 每一包都要被考到:只从一包里抽,考的是那一包,不是他的水平
     ok(new Set(paper.map((q) => q.deckId)).size === 3, '三个卡组都应该被考到')
+    /*
+      v64:测验改成**开放式产出** —— 看图说出来,家长判对错。
+
+      四选一有 25% 蒙对率,而且它测的是「认得出 goat 长什么样」,
+      不是「见到山羊能说出 goat」。后者才是我们想知道的。
+
+      改完之后这份卷子必须满足两条硬规则,下面逐条钉死。
+    */
     for (const q of paper) {
-      ok(q.options.indexOf(q.answer) >= 0, '正确答案必须在选项里')
-      ok(new Set(q.options).size === q.options.length, '选项不能重复')
-      ok(q.options.length >= 2, '至少要有两个选项')
+      // ① 没有选项 —— 有选项就有得蒙
+      ok(q.options === undefined, '开放式产出的题不该带选项')
+      ok(!!q.answer, '每道题都要有一个标准答案给家长核对')
+      // ② **题面上不能出现答案**,不然测的又变回「认得出来吗」
+      ok(q.prompt.indexOf(q.answer) < 0, `题面里不能带答案(${q.prompt})`)
+      ok(!q.show || q.show.indexOf(q.answer) < 0 || q.show === q.answer, '题面显示的字不该泄题')
+      ok(!!q.note, '每道题都要给家长一句判分说明 —— 家长未必知道标准答案松到哪')
     }
-    // **英语题一律纯英文**:平时练纯英文,考试突然冒出中文,考的就是另一件事
-    for (const q of paper.filter((x) => x.lang === 'en')) {
-      ok(q.options.every((o) => !/[一-龥]/.test(o)), '英语题的选项里不该出现中文')
+    // 看图题:图要在,而且**不给字** —— 给了就成了照着念
+    for (const q of paper.filter((x) => x.emoji)) {
+      ok(!q.show, '看图题不该同时把答案的字摆出来')
+    }
+    // 识字题必须把字摆出来,不然没得认
+    for (const q of paper.filter((x) => x.lang === 'zh' && x.prompt.indexOf('这个字') >= 0)) {
+      ok(!!q.show, '识字题要把字显示出来')
     }
 
     // **只考学过的。** 考没教过的东西不是测验,是打击。
@@ -2995,6 +3162,52 @@ function run() {
     const recs = study.listSpotChecks(cidS)
     ok(recs.length === 1 && recs[0].rate === 50, '要记下这次的真实掌握率')
     ok(study.lastSpotAt(cidS) > 0, '要记下抽查时间,下次才知道隔了多久')
+  }
+
+  /*
+    ---- 测验结果也必须回写记忆排期(v64 补)----
+
+    原先测验只做两件事:存分数、把错题塞进错题本。于是有个说不通的局面:
+    他在测验里明明没说出 goat,那张卡的复习排期却纹丝不动,
+    可能还排在两周之后 —— **一次测出来的「不会」,改变不了明天练什么。**
+    抽查早就这么做了,测验漏了。测验现在是开放式产出,
+    「说不出来」这个信号比选择题时代可信得多,更该拿来改排期。
+  */
+  {
+    reset()
+    const cidE = study.getCurrentChildId()
+    const deckE = study.ensureBuiltinDeck(cidE, 'enlight-colors')
+    const stE = db.readTable('states').filter((x) => x.deckId === deckE)
+    const p = stE[0]
+    const q = stE[1]
+    for (let i = 0; i < 4; i++) {
+      study.applyGrade(p.id, 'good')
+      study.applyGrade(q.id, 'good')
+    }
+    const beforeP = db.readTable('states').find((x) => x.id === p.id)
+    ok(beforeP.interval > 1, '练过几轮之后间隔应该拉长了')
+
+    // 测验:p 说出来了,q 没说出来
+    study.saveExam(cidE, 'week', 2, 1, [q.cardId])
+    const afterP = db.readTable('states').find((x) => x.id === p.id)
+    const afterQ = db.readTable('states').find((x) => x.id === q.id)
+    ok(afterP.interval === beforeP.interval, '说出来的那张不该被动')
+    ok(afterQ.interval === 1, '测验里没说出来的要退回「明天再来」')
+    ok(afterQ.reps === 0, '要重新开始算次数')
+    ok(afterQ.lapses >= 1, '要记一次 lapse —— 它靠这个排到下一组的最前面')
+    ok(afterQ.status === 'learning', '要回到学习中')
+    // 退回规则要和抽查**完全一致**,两个功能对排期的影响不能有两套说法
+    ok(afterQ.due === study.todayISO?.() || afterQ.status === 'learning', '要排到今天')
+
+    const exams = study.listExams(cidE)
+    ok(exams.length === 1 && exams[0].score === 50, '成绩要存下来,测验的价值在于和上次比')
+    // 不传 missed 时只存分数,不动任何排期(留给不需要回写的调用方)
+    const beforeCount = db.readTable('states').filter((x) => x.lapses >= 1).length
+    study.saveExam(cidE, 'week', 2, 2)
+    ok(
+      db.readTable('states').filter((x) => x.lapses >= 1).length === beforeCount,
+      '不传 missed 时不该动任何卡的排期',
+    )
   }
 
   // ---- 内容顺序:先把一小批练熟,再开下一批 ----

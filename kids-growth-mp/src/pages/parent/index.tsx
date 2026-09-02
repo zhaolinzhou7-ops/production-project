@@ -13,7 +13,9 @@ import {
   addWordsToDeck,
   yesterdayScore,
   recordTodayScore,
+  packProgress,
 } from '../../store/study'
+import { adviseSyllabus, type SyllabusAdvice } from '../../core/syllabus'
 import type { LearnDeck } from '../../types'
 import { getStats, weakCards, earnedAchievements, type LearningStats } from '../../store/progress'
 import { ACHIEVEMENTS } from '../../core/achievements'
@@ -225,6 +227,8 @@ function Parent() {
    * 「切了但本来就像」,不用怀疑自己的耳朵。
    */
   const [heardFrom, setHeardFrom] = useState('')
+  /** 学习顺序的一句话状态 —— 内容库里那段建议,搬一行到家长会来的地方 */
+  const [syl, setSyl] = useState<SyllabusAdvice | null>(null)
 
   const loadExtras = () => {
     const cid = getCurrentChildId()
@@ -232,6 +236,11 @@ function Parent() {
     setDoneToday(todayAnswered(cid))
     setMyDecks(listCustomDecks(cid))
     setErrs(errorHistory())
+    try {
+      setSyl(adviseSyllabus(packProgress(cid)))
+    } catch {
+      // 算不出来不该挡住整页 —— 这一行只是提示
+    }
   }
 
   const bumpGoal = (delta: number) => {
@@ -464,11 +473,38 @@ function Parent() {
         中间隔一道密码。首页仍然看得见「家长中心」这个入口 ——
         藏起来和锁起来是两回事,前者让家长找不到,后者只挡住孩子。
       */}
+      {/*
+        学习顺序的一句话状态。
+
+        大纲那套东西写在内容库页面里,而**家长几乎不会主动点进内容库** ——
+        建议放在没人看的地方等于没写。这一页是家长真正会来的地方,
+        所以把「现在该练哪几包 / 练熟了没有」摆一行在这儿,
+        点一下才进内容库。
+
+        只出一行,不展开细节:这一页已经有七个入口了,再堆就没人看了。
+      */}
+      {syl ? (
+        <View className='psyl' onClick={() => Taro.navigateTo({ url: '/pages/packs/index' })}>
+          <Text className='psyl__t'>📚 学习顺序 · 这一批练到 {syl.batchPct}%</Text>
+          <Text className='psyl__n'>{syl.note}</Text>
+        </View>
+      ) : null}
+
       <Text className='pa__h'>家长工具</Text>
       <View className='ptiles'>
         <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/packs/index' })}>
           <Text className='ptile__i'>📚</Text>
           <Text className='ptile__t'>内容库</Text>
+        </View>
+        {/*
+          测验和抽查都是**家长在场才做得成**的事,所以并排放在这里。
+          两个不重复:
+          · 抽查 5 题、不看屏幕、抽系统最有把握的 —— 专治「虚假掌握」
+          · 测验整卷、看图说、按周期考、有成绩曲线 —— 看的是长期趋势
+        */}
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/exam/index?period=week' })}>
+          <Text className='ptile__i'>📝</Text>
+          <Text className='ptile__t'>阶段测验</Text>
         </View>
         <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/spotcheck/index' })}>
           <Text className='ptile__i'>🔎</Text>

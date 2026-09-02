@@ -186,58 +186,88 @@
  * 而且单词那块没有尺寸,点击区只有文字本身那么大 —— 所以「读出来之后点不中」。
  * 这一类「跨页面复用 class」的错在小程序里不会报任何错,只会静默塌掉。
  */
-.eopts {
-  margin-top: 20px;
+/*
+ * v64:测验从四选一改成开放式产出,选项整块拿掉了。
+ * 现在屏幕上只有一张图、一句问话、一个给家长看的答案、两个判分按钮。
+ */
+
+/* 识字题要把字摆出来 —— 不摆就没得认了 */
+.exam__show {
+  display: block;
+  margin: 20px auto 8px;
+  text-align: center;
+  font-size: 130px;
+  line-height: 1.15;
+  color: var(--ink);
 }
 
-.eopt {
-  display: flex;
-  align-items: center;
-  min-height: 112px;
-  margin-bottom: 18px;
-  padding: 10px 20px;
-  box-sizing: border-box;
-  border-radius: var(--r-md);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--sh-1);
+/*
+ * 答案条:给家长核对用,默认收着。
+ * 做得小而灰,是为了不去抢孩子的注意力 —— 他该看的是那张图。
+ */
+.eans {
+  margin: 26px auto 0;
+  padding: 16px 22px;
+  max-width: 560px;
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.04);
+  text-align: center;
 
-  /* 试听按钮:单独一块,和「选中」分开 —— 想听的时候不会误选 */
-  &__spk {
-    flex-shrink: 0;
-    width: 84px;
-    height: 84px;
-    line-height: 84px;
-    text-align: center;
-    border-radius: 42px;
-    background: rgba(99, 102, 241, 0.12);
-    font-size: 36px;
-  }
-
-  &__k {
-    flex-shrink: 0;
-    width: 56px;
-    height: 56px;
-    line-height: 56px;
-    margin: 0 18px;
-    text-align: center;
-    border-radius: 28px;
-    background: rgba(0, 0, 0, 0.06);
-    color: var(--ink-3);
-    font-size: 26px;
-    font-weight: 700;
-  }
-
-  /* 单词本身就是「选中」的点击区,要占满剩下的宽度、够高 */
   &__t {
-    flex: 1;
-    min-width: 0;
-    padding: 26px 0;
-    font-size: 34px;
-    color: var(--ink);
+    font-size: 24px;
+    color: var(--ink-4);
+
+    &--on {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--ink-2);
+    }
   }
 
-  &--picked {
-    background: rgba(99, 102, 241, 0.14);
+  &__note {
+    display: block;
+    margin: 10px auto 0;
+    max-width: 560px;
+    text-align: center;
+    font-size: 22px;
+    line-height: 1.5;
+    color: var(--ink-4);
+  }
+}
+
+/*
+ * 家长判分。
+ *
+ * 两个按钮做得一样大、颜色不做强对比 —— 这不是「奖励对、惩罚错」的地方,
+ * 是家长在如实记录。做成一个绿一个红,家长会不自觉地往绿的那边点。
+ */
+.ejudge {
+  display: flex;
+  gap: 24px;
+  margin-top: 36px;
+
+  &__b {
+    flex: 1;
+    min-height: 128px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-md);
+    box-shadow: var(--sh-1);
+  }
+
+  &__b--no {
+    background: #f0f0f2;
+  }
+
+  &__b--yes {
+    background: rgba(52, 211, 153, 0.22);
+  }
+
+  &__t {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--ink-2);
   }
 }
 

@@ -19,22 +19,25 @@ import {
   autoAddErrorCard,
 } from '../../store/study'
 import { playWordAudio, playText, stopAudio } from '../../lib/audio'
-import { OPTION_LETTERS } from '../../core/redo'
 import { withGuard } from '../../components/Guard'
 import { flushNow } from '../../store/db'
 import './index.scss'
 
 /**
- * 阶段测验。
+ * 阶段测验 —— **看图说出来,家长判对错**。
  *
- * 平时的练习都带着脚手架:有图、有选项、错了当场告诉他答案、同一批卡反复出现。
- * 这些在**学的时候**是对的,但它们让一个问题永远看不清:
- * **撤掉脚手架之后,他到底会多少?**
+ * v64 把这一页从四选一整个改掉了。理由见 core/exam 顶部:
+ * 四选一有 25% 蒙对率,而且它测的是**再认**(认得出 goat 长什么样),
+ * 不是**产出**(见到山羊能说出 goat)—— 后者才是我们想知道的。
  *
- * 所以这一页故意和练习不一样:
- * - 跨卡组抽题,不提前说考哪一包
- * - **做完不当场纠正** —— 当场纠正就变成了边考边学,测出来的是短时记忆
- * - 交卷后一次性给分、逐题回顾、错的自动进错题本
+ * 这一页因此和练习页彻底不一样:
+ * - 屏幕上**没有选项**,只有一张图和一句问话
+ * - 他开口说,旁边的家长点「说对了 / 还不会」
+ * - 出题时**不播答案**、**不显示答案**(家长要核对时可以单独展开)
+ * - 交卷后一次性给分、逐题回顾、错的自动进错题本(还是开口说的形式)
+ *
+ * 家长必须在场 —— 这不是缺点,是这件事的前提:
+ * 家长坐着听一遍孩子说,比看十份正确率报表更知道他到了哪一步。
  *
  * 对孩子的意义不是「被考」,是**看见自己的进步**:同一类卷子上个月 60 分、
  * 这个月 90 分 —— 这是日常练习给不了的反馈。所以分数永远和**自己的上一次**比,
@@ -50,12 +53,22 @@ function ExamPage() {
     buildExam(examCandidates(getCurrentChildId()), examPeriodDef(period).size),
   )
   const [idx, setIdx] = useState(0)
-  /** 每道题他选了什么(按题序);没答的是空串 */
+  /** 每道题家长判了什么(按题序):'y' 说对了 / 'n' 还不会 / 空串没答 */
   const [answers, setAnswers] = useState<string[]>([])
   const [done, setDone] = useState(false)
   const [reviewing, setReviewing] = useState(false)
-  /** 刚试听过哪个选项 —— 只做高亮,不代表选中 */
-  const [picked, setPicked] = useState('')
+  /*
+    答案给不给家长看。
+
+    这是这一页唯一一处两难:家长要判对错,就得知道标准答案 ——
+    可 goat、hedgehog 这些词家长未必都记得。
+    但答案摆在屏幕上,孩子一眼就看见了,这道题也就白出了。
+
+    折中:默认藏起来,家长要核对时点一下展开,而且**只出字不出声** ——
+    孩子不识字,看见了也读不出来;念出来他就直接学会了。
+    每翻一题自动收回去,免得一直开着。
+  */
+  const [showAnswer, setShowAnswer] = useState(false)
 
   const q = questions[idx]
 
@@ -65,34 +78,39 @@ function ExamPage() {
     else void playText(text, 'zh_CN')
   }
 
-  const choose = (opt: string) => {
+  /** 家长判这一题:right=说对了 */
+  const judge = (right: boolean) => {
     if (!q) return
     const next = [...answers]
-    next[idx] = opt
+    next[idx] = right ? 'y' : 'n'
     setAnswers(next)
     /*
-      **不当场告诉他对错。**
-      当场纠正会让后面的题变成「刚才那个是这样,那这道大概也……」——
-      测出来的是短时记忆,不是他真正掌握的东西。
-      所以这里只是往下走一题。
+      **不把正确答案念出来。**
+
+      念出来这道题就变成了教学:他刚才没说上来,听一遍就记住了,
+      下一题遇到类似的会顺着刚学的往下猜 —— 测出来的是短时记忆。
+      要教在交卷之后的「逐题回顾」里教,那时候整份卷子已经定分了。
     */
-    setPicked('')
-    setTimeout(() => {
-      if (idx + 1 >= questions.length) finish(next)
-      else setIdx(idx + 1)
-    }, 260)
+    stopAudio()
+    setShowAnswer(false)
+    if (idx + 1 >= questions.length) finish(next)
+    else setIdx(idx + 1)
   }
 
   const finish = (finalAnswers: string[]) => {
     stopAudio()
-    const correct = questions.reduce(
-      (n, x, i) => n + (finalAnswers[i] === x.answer ? 1 : 0),
-      0,
-    )
-    saveExam(childId, period, questions.length, correct)
+    const correct = questions.reduce((n, _x, i) => n + (finalAnswers[i] === 'y' ? 1 : 0), 0)
+    /*
+      没说出来的那几张要**退回重学**,不能只存个分数。
+      原先测验只把错的塞进错题本,而那张卡在正常复习里的排期纹丝不动 ——
+      可能还排在两周之后。一次测出来的「不会」,总得改变明天练什么。
+      (线下抽查一直是这么做的,测验这边纯粹是漏了。)
+    */
+    const missed = questions.filter((_x, i) => finalAnswers[i] !== 'y').map((x) => x.cardId)
+    saveExam(childId, period, questions.length, correct, missed)
     // 错的自动进错题本,重做时形式和考试时一样(选择题)
     questions.forEach((x, i) => {
-      if (finalAnswers[i] === x.answer) return
+      if (finalAnswers[i] === 'y') return
       try {
         /*
           题干要能**认出是哪道题**。
@@ -102,17 +120,20 @@ function ExamPage() {
           是哪个词错了。带上那张图之后,一眼就认得出来。
         */
         autoAddErrorCard(childId, {
-          front: x.emoji ? `${x.emoji} ${x.prompt}` : x.prompt,
+          front: x.emoji ? `${x.emoji} ${x.prompt}` : x.show ? `${x.show} ${x.prompt}` : x.prompt,
           back: x.answer,
           subject: '测验',
+          /*
+            重做时的形式要和考试时**一模一样**:开口说、家长判。
+            这是用户定过的规矩 ——「错了什么类型的题就归入什么错题,不要换类型」。
+            以前测验是选择题,错题也进的是选择题;现在测验是产出题,
+            错题自然也该是产出题。
+          */
           redo: {
-            type: 'choice',
-            options: x.options,
+            type: 'speak',
             answer: x.answer,
-            optionKind: x.optionKind,
-            emoji: x.emoji,
+            emoji: x.emoji ?? x.show,
             audio: x.audio,
-            lang: x.lang,
           },
         })
       } catch {
@@ -142,7 +163,7 @@ function ExamPage() {
 
   // ---------------- 交卷 ----------------
   if (done) {
-    const correct = questions.reduce((n, x, i) => n + (answers[i] === x.answer ? 1 : 0), 0)
+    const correct = questions.reduce((n, _x, i) => n + (answers[i] === 'y' ? 1 : 0), 0)
     const band = pickScoreBand(correct, questions.length)
     const score = Math.round((correct / questions.length) * 100)
     // listExams 里第一条就是刚存的这次,所以「上一次」要取第二条
@@ -153,25 +174,28 @@ function ExamPage() {
       return (
         <View className='exam'>
           <Text className='exam__h'>逐题回顾</Text>
+          {/*
+            回顾是**交卷之后**才来的,这里才该把答案念出来 ——
+            考的时候念等于边考边教,考完念才是真的在补。
+          */}
+          <Text className='exam__tip'>
+            这里可以放心点 🔊 听:成绩已经定了,现在念是补给他听的
+          </Text>
           {questions.map((x, i) => {
-            const mine = answers[i]
-            const right = mine === x.answer
+            const right = answers[i] === 'y'
             return (
               <View key={x.cardId} className={right ? 'rev rev--ok' : 'rev'}>
                 <View className='rev__hd'>
                   <Text className='rev__n'>{i + 1}</Text>
                   {x.emoji ? <Text className='rev__e'>{x.emoji}</Text> : null}
-                  <Text className='rev__q'>{x.prompt}</Text>
-                  <Text
-                    className='rev__spk'
-                    onClick={() => play(x.audio, x.lang)}
-                  >
+                  <Text className='rev__q'>{x.show ? `${x.show} · ${x.prompt}` : x.prompt}</Text>
+                  <Text className='rev__spk' onClick={() => play(x.audio, x.lang)}>
                     🔊
                   </Text>
                 </View>
                 <Text className='rev__a'>
-                  正确:{x.answer}
-                  {right ? ' ✅' : ` · 他选了:${mine || '(没选)'}`}
+                  答案:{x.answer}
+                  {right ? ' ✅ 说出来了' : ' · 这次没说上来'}
                 </Text>
               </View>
             )
@@ -224,46 +248,36 @@ function ExamPage() {
         />
       </View>
 
+      {/*
+        图 / 字摆出来,**底下什么都没有** —— 没有选项就没有蒙的余地。
+        也不给 🔊:一放就是把答案念给他听,这道题就白出了。
+      */}
       {q?.emoji ? <Text className='exam__pic'>{q.emoji}</Text> : null}
+      {q?.show ? <Text className='exam__show'>{q.show}</Text> : null}
       <Text className='exam__q'>{q?.prompt}</Text>
-      {q?.audio ? (
-        <View className='ebigplay' onClick={() => play(q.audio, q.lang)}>
-          <Text>🔊</Text>
-        </View>
-      ) : null}
-
-      <View className='eopts'>
-        {(q?.options ?? []).map((opt, oi) => (
-          <View key={opt} className={picked === opt ? 'eopt eopt--picked' : 'eopt'}>
-            {/*
-              试听和「选中」是**两块独立的点击区**:
-              🔊 只负责放音,单词那一块才是选中。
-              合在一起的话,他想听一下就把答案交了 —— 而这道题本来就是让他
-              逐个听过再选的。
-            */}
-            {q.lang === 'en' ? (
-              <Text
-                className='eopt__spk'
-                onClick={() => {
-                  setPicked(opt)
-                  void playWordAudio(opt)
-                }}
-              >
-                🔊
-              </Text>
-            ) : null}
-            <Text className='eopt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
-            <Text className='eopt__t' onClick={() => choose(opt)}>
-              {opt}
-            </Text>
-          </View>
-        ))}
-      </View>
 
       {/*
-        考试期间**不显示对错**,所以这里给一句说明 ——
-        否则孩子点完没有任何反馈,会以为是没点上。
+        答案只给家长。默认藏着,点一下才出;**只出字不出声** ——
+        孩子不识字,看见了也读不出来,念出来他就直接学会了。
+        ⚠️ 两个分支必须都是带 onClick 的同一个节点,否则 Taro 会报 _num。
       */}
+      <View className='eans' onClick={() => setShowAnswer(!showAnswer)}>
+        <Text className={showAnswer ? 'eans__t eans__t--on' : 'eans__t'}>
+          {showAnswer ? `答案:${q?.answer}` : '答案(家长核对用)'}
+        </Text>
+      </View>
+      {showAnswer && q?.note ? <Text className='eans__note'>{q.note}</Text> : null}
+
+      {/* 家长判分 */}
+      <View className='ejudge'>
+        <View className='ejudge__b ejudge__b--no' onClick={() => judge(false)}>
+          <Text className='ejudge__t'>还不会</Text>
+        </View>
+        <View className='ejudge__b ejudge__b--yes' onClick={() => judge(true)}>
+          <Text className='ejudge__t'>说对了</Text>
+        </View>
+      </View>
+
       <Text className='exam__tip'>做完全部题目才公布成绩,所以现在不告诉你对不对哦</Text>
     </View>
   )

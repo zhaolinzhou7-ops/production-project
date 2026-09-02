@@ -31,6 +31,7 @@ import {
   lastExamAt,
   spotCandidates,
   lastSpotAt,
+  packProgress,
 } from '../../store/study'
 import { readObject, clearAll } from '../../store/db'
 import { currentError, clearErrors, formatWhen, type ErrEntry } from '../../lib/errlog'
@@ -46,6 +47,7 @@ import type { AgeStage, LearnDeck } from '../../types'
 import { todayISO } from '../../core/dateUtils'
 import { defaultDailyMinutes, defaultBedtime, isBedtime } from '../../core/ageStage'
 import { buildPlan, planMinutes, type PlanStep } from '../../core/dailyPlan'
+import { adviseSyllabus } from '../../core/syllabus'
 import { rankDecks } from '../../core/recommend'
 import { getInterests, INTEREST_TAGS } from '../../store/notes'
 import { screenAdvice } from '../../core/screenTime'
@@ -244,6 +246,19 @@ function Index() {
             (a, b) =>
               (order.get(a.deck.id) ?? 999) - (order.get(b.deck.id) ?? 999),
           )
+          /*
+            **把教学大纲接进来。**
+
+            大纲(core/syllabus)之前只在内容库页面上给家长看一句建议:
+            「先把手上这一批练熟,再开下一批」。可每天真正练什么是这里决定的,
+            而这里从来不知道大纲的存在 —— 内容库劝家长专注第 1 批,
+            每天的路却照旧在十个包之间平摊。说一套做一套,大纲等于白写。
+
+            现在把「当前该练的那几包」传给 buildPlan,让它优先从这几包里排。
+            是排序不是过滤:焦点包今天可能一张到期的卡都没有,
+            硬过滤会端上一条空路 —— 复习节奏还得由 SRS 说了算。
+          */
+          const focus = adviseSyllabus(packProgress(childId)).focus
           const built = buildPlan(
             sorted.map((r) => ({
               id: r.deck.id,
@@ -253,8 +268,11 @@ function Index() {
               reason: reasonOf.get(r.deck.id),
               // 难度档决定这一步用哪个练法、出几题
               level: deckLevel(r.deck.id),
+              // 内容包 key —— 拿来和大纲对上
+              packKey: r.deck.builtinKey,
             })),
             getStage(),
+            focus,
           )
           savePlan(built)
           setPlan(built)
@@ -727,12 +745,19 @@ function Index() {
         </View>
       ) : null}
 
+      {/*
+        测验提示。
+
+        v64 起测验是**开放式产出**:看图说出来、家长判对错 ——
+        孩子一个人点进去做不了(他会自己点「说对了」,那份成绩就没意义)。
+        所以这张卡不再直接进测验页,而是引到家长中心,和抽查一样。
+      */}
       {examReady ? (
-        <View className='examcard' onClick={() => openPage('/pages/exam/index?period=week')}>
+        <View className='examcard' onClick={() => openPage('/pages/parent/index')}>
           <Text className='examcard__e'>📝</Text>
           <View className='examcard__meta'>
             <Text className='examcard__t'>可以做一次周测了</Text>
-            <Text className='examcard__s'>10 题 · 跨内容包抽 · 做完给分,和上次比一比</Text>
+            <Text className='examcard__s'>看图说出来 · 家长判 · 在家长中心里开始</Text>
           </View>
           <Text className='examcard__go'>›</Text>
         </View>

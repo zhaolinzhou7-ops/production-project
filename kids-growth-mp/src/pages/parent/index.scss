@@ -472,3 +472,31 @@
   padding: 18px;
   line-height: 1.8;
 }
+
+/*
+ * 学习顺序的一句话状态。
+ *
+ * 大纲那段建议原先只写在内容库页面里,而家长几乎不会主动点进内容库 ——
+ * 写在没人看的地方等于没写。这一行摆在家长真正会来的地方,点一下才进去细看。
+ */
+.psyl {
+  margin: 0 0 24px;
+  padding: 24px;
+  border-radius: var(--r-md);
+  background: rgba(99, 102, 241, 0.08);
+
+  &__t {
+    display: block;
+    font-size: 27px;
+    font-weight: 700;
+    color: #4f46e5;
+  }
+
+  &__n {
+    display: block;
+    margin-top: 8px;
+    font-size: 23px;
+    line-height: 1.6;
+    color: var(--ink-3);
+  }
+}

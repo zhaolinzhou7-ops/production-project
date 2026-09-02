@@ -1549,12 +1549,49 @@ export function lastExamAt(childId: string, period: ExamPeriod): number {
   return hit ? hit.at : 0
 }
 
+/**
+ * 记下测验结果,并把**没说出来的那几张退回重学**。
+ *
+ * ⚠️ v64 补上的:原先测验只做两件事 —— 存分数、把错题塞进错题本。
+ * 于是出现了一个说不通的局面:他在测验里明明没说出 goat,
+ * 那张卡的复习排期却纹丝不动,可能还排在两周之后 ——
+ * **一次测出来的「不会」,改变不了明天练什么。**
+ *
+ * 线下抽查早就这么做了(见 saveSpotCheck),测验没有,纯粹是漏了。
+ * 而测验现在是开放式产出,「说不出来」这个信号比选择题时代可信得多,
+ * 更该拿来改排期。
+ *
+ * `missed` 传没答对的 cardId;不传就只存分数(留给不需要回写的调用方)。
+ */
 export function saveExam(
   childId: string,
   period: ExamPeriod,
   total: number,
   correct: number,
+  missed: string[] = [],
 ): ExamRecord {
+  if (missed.length > 0) {
+    const ids = new Set(missed)
+    const states = readTable<StudyState>(KEYS.states)
+    let changed = false
+    for (const st of states) {
+      if (st.childId !== childId || !ids.has(st.cardId)) continue
+      /*
+        退回「明天再来」:reps 归零、间隔归 1、记一次 lapse。
+        记 lapse 是为了让它在下一组里**排到最前面**(见 availableToday)——
+        测验里说不出来的那几个,正是最该被做到的。
+        和 saveSpotCheck 用的是同一套退回规则,两个功能对排期的影响一致。
+      */
+      st.reps = 0
+      st.interval = 1
+      st.lapses = (st.lapses ?? 0) + 1
+      st.status = 'learning'
+      st.due = todayISO()
+      changed = true
+    }
+    if (changed) writeTable(KEYS.states, states)
+  }
+
   const all = readObject<ExamRecord[]>(EXAM_KEY, [])
   const list = Array.isArray(all) ? all : []
   /*
