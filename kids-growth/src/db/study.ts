@@ -1027,6 +1027,8 @@ export async function deckSignals(childId: string): Promise<DeckSignal[]> {
       lapses: mine.reduce((n, s) => n + (s.lapses || 0), 0),
       daysSince,
       total: mine.length,
+      // 每日计划拿它去对教学大纲(见 lib/dailyPlan 的 orderByFocus)
+      builtinKey: d.builtinKey,
     })
   }
   return out
@@ -1320,12 +1322,40 @@ export function lastExamAt(childId: string, period: ExamPeriod): number {
   return hit ? hit.at : 0
 }
 
-export function saveExam(
+/**
+ * 记下测验结果,并把**没说出来的那几张退回重学**。
+ *
+ * ⚠️ w64 补上的:原先测验只做两件事 —— 存分数、把错题塞进错题本。
+ * 于是有个说不通的局面:他在测验里明明没说出 goat,
+ * 那张卡的复习排期却纹丝不动,可能还排在两周之后 ——
+ * **一次测出来的「不会」,改变不了明天练什么。**
+ * 线下抽查早就这么做了(见 saveSpotCheck),测验漏了。
+ * 而测验现在是开放式产出,「说不出来」这个信号比选择题时代可信得多。
+ */
+export async function saveExam(
   childId: string,
   period: ExamPeriod,
   total: number,
   correct: number,
-): ExamRow {
+  missed: string[] = [],
+): Promise<ExamRow> {
+  if (missed.length > 0) {
+    const states = await db.studyStates.where('childId').equals(childId).toArray()
+    const hit = states.filter((s) => missed.includes(s.cardId))
+    await db.transaction('rw', db.studyStates, async () => {
+      for (const st of hit) {
+        // 和 saveSpotCheck 用同一套退回规则,两个功能对排期的影响要一致
+        await db.studyStates.update(st.id, {
+          reps: 0,
+          interval: 1,
+          lapses: (st.lapses ?? 0) + 1,
+          status: 'learning',
+          due: todayISO(),
+        })
+      }
+    })
+  }
+
   const list = readJson<ExamRow[]>(EXAM_KEY, [])
   /*
     时间戳严格递增:同一天连着考两次很容易落在同一毫秒里,

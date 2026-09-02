@@ -175,10 +175,25 @@ export function LearnHomePage() {
           due: sig.due,
           reason: r.reason,
           level: deckLevel(sig.id),
+          // 内容包 key —— 拿来和教学大纲对上
+          packKey: sig.builtinKey,
         }
       })
       .filter(Boolean) as PlanDeck[]
-    const steps = buildPlan(planDecks, stage)
+    /*
+      **把教学大纲接进来。**
+
+      大纲(lib/syllabus)之前只在内容库页面上给家长看一句建议:
+      「先把手上这一批练熟,再开下一批」。可每天真正练什么是这里决定的,
+      而这里从来不知道大纲的存在 —— 内容库劝家长专注第 1 批,
+      每天的路却照旧在十个包之间平摊。说一套做一套,大纲等于白写。
+
+      现在把「当前该练的那几包」传给 buildPlan,让它优先从这几包里排。
+      是排序不是过滤:焦点包今天可能一张到期的卡都没有,
+      硬过滤会端上一条空路 —— 复习节奏还得由 SRS 说了算。
+    */
+    const focus = adviseSyllabus(await packProgress(currentChildId)).focus
+    const steps = buildPlan(planDecks, stage, focus)
     // 今天已经做到第几步:按「这个卡组+这种练法今天练过没有」算
     const today = todayISO()
     const sessions = await db.studySessions
@@ -455,6 +470,13 @@ export function LearnHomePage() {
           <ChevronRight size={18} className="text-white/80" />
         </button>
       )}
+      {/*
+        测验提示。
+
+        w64 起测验是**开放式产出**:看图说出来、家长判对错 ——
+        孩子一个人点进去做不了(他会自己点「说对了」,那份成绩就没意义)。
+        所以副标题要把「家长判」写在最显眼的地方。
+      */}
       {due?.exam && (
         <button
           onClick={() => navigate('/learn/exam?period=week')}
@@ -462,9 +484,9 @@ export function LearnHomePage() {
         >
           <span className="text-3xl">📝</span>
           <span className="flex-1">
-            <span className="block font-bold">可以做一次周测了</span>
+            <span className="block font-bold">可以做一次周测了(要家长陪)</span>
             <span className="text-xs text-white/85">
-              10 题 · 跨内容包抽 · 做完给分,和上次比一比
+              看图说出来 · 家长判对错 · 做完给分,和上次比一比
             </span>
           </span>
           <ChevronRight size={18} className="text-white/80" />
@@ -870,6 +892,22 @@ export function LearnHomePage() {
                   <div className="mt-1 text-[11px] leading-relaxed text-gray-500">
                     {syllabus.note}
                   </div>
+                  {/*
+                    **说到就要做到。**
+
+                    w64 之前这一块只是给家长看的一段建议,而「今天就做这个」
+                    那条路根本不看它 —— 这边劝你专注第 1 批,那边照旧十个包平摊。
+                    现在计划已经接上了(见 lib/dailyPlan 的 focus),
+                    所以这里要把这件事说出来:家长看得见连线,才会相信这段话不是摆设。
+                  */}
+                  {syllabus.focus.length > 0 && (
+                    <div className="mt-2 rounded-xl bg-mint-400/20 px-2.5 py-1.5 text-[11px] leading-relaxed text-mint-700">
+                      今天的「就做这个」已经优先从这几包里排:
+                      {syllabus.focus
+                        .map((k) => BUILTIN_PACKS.find((x) => x.key === k)?.name ?? k)
+                        .join('、')}
+                    </div>
+                  )}
                   {syllabus.nextKey && (
                     <div className="mt-2 text-[11px] text-gray-600">
                       下一包建议:

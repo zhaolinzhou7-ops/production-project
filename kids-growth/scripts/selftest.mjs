@@ -214,6 +214,36 @@ eq(steps[steps.length - 1].mode, 'earTrain', '最后一步是磨耳朵,不用操
 ok(steps.some((s) => s.reason), '推荐理由要一路传到计划里')
 // 没题可做时不能端上来一组空题
 eq(dailyPlan.buildPlan([{ id: 'x', itemType: 'pic', name: '空', due: 0 }], 'toddler').length, 0, '没有可练的卡组时返回空计划')
+
+/*
+  ---- 教学大纲接进每日计划(w64)----
+
+  大纲之前只在内容库页面给家长看一句建议,而每天真正练什么由 buildPlan 决定 ——
+  两边不通气:内容库劝家长「先专注第 1 批」,每天的路照旧在十个包之间平摊。
+  说一套做一套,大纲等于白写。
+*/
+{
+  const mkD = (id, key, due = 10) => ({ id, itemType: 'pic', name: id, due, packKey: key })
+  const ds = [mkD('d1', 'enlight-sea'), mkD('d2', 'enlight-family'), mkD('d3', 'enlight-animals')]
+  const ordered = dailyPlan.orderByFocus(ds, ['enlight-family', 'enlight-animals'])
+  eq(ordered[0].id, 'd2', '焦点包要排到最前')
+  eq(ordered.length, ds.length, '排序不能丢卡组')
+  // 稳定排序:焦点内部保留进来时的顺序(那是「错得多的优先」的结论)
+  const stable = dailyPlan.orderByFocus(
+    [mkD('a', 'enlight-family'), mkD('b', 'enlight-animals'), mkD('c', 'enlight-family')],
+    ['enlight-family', 'enlight-animals'],
+  )
+  eq(stable.map((d) => d.id).join(''), 'abc', '焦点内部要保持原有顺序')
+  // 是排序不是过滤:焦点包今天没题时不能端上一条空路
+  ok(
+    dailyPlan.buildPlan([mkD('d1', 'enlight-sea', 10), mkD('d2', 'enlight-family', 0)], 'toddler', [
+      'enlight-family',
+    ]).length > 0,
+    '焦点包今天没题时要照常用别的包排路',
+  )
+  eq(dailyPlan.buildPlan(ds, 'toddler', ['enlight-animals'])[0].deckId, 'd3', '第一步落在焦点包上')
+  eq(dailyPlan.buildPlan(ds, 'toddler')[0].deckId, 'd1', '不传 focus 时保持原来的顺序')
+}
 ok(dailyPlan.planMinutes(steps) > 0, '要能估出用时,家长要能预估、孩子要能看到终点')
 
 // ---------------------------------------------------------------- 积分上限
@@ -316,6 +346,54 @@ eq(examples.examplesFor('A a', 'enlight-abc', 'Apple')[0], 'A is for Apple.', '�
 eq(examples.examplesFor('sky blue', 'enlight-colors').length, 0, '说不清的词组不出例句')
 eq(examples.examplesFor('cat', 'no-such-pack').length, 0, '不认识的内容包不出例句')
 eq(examples.examplesFor('', 'enlight-animals').length, 0, '空词不出例句')
+
+/*
+  ---- w64 地道性审查钉下来的十一条 ----
+  这些不是「读起来别扭」,是真的错或母语者不会那么说。
+  全量清单过了一遍才发现,每一条都在孩子每天会看到的卡上。
+*/
+eq(examples.examplesFor('one', 'enlight-numbers')[0], 'one apple', 'one 后面是单数')
+ok(
+  examples.examplesFor('one', 'enlight-numbers').every((l) => !l.includes('one apples')),
+  '绝不能出现 "one apples" —— 数字包本来就是教「几个」的',
+)
+eq(examples.examplesFor('zero', 'enlight-numbers').length, 0, '零不出例句')
+ok(
+  examples.examplesFor('police', 'enlight-family').every((l) => !/\ba police\b(?! officer)/.test(l)),
+  '不能出现 "a police",正确说法是 a police officer',
+)
+ok(examples.examplesFor('soccer', 'enlight-sports').includes("Let's play soccer."), '球类用 play')
+ok(
+  examples.examplesFor('swimming', 'enlight-sports').includes("Let's go swimming."),
+  'swimming 用 go 不用 play —— "play swimming" 是「玩游泳」直译',
+)
+ok(examples.examplesFor('karate', 'enlight-sports').includes("Let's do karate."), '武术用 do')
+eq(examples.examplesFor('noodles', 'enlight-food')[0], 'some noodles', 'noodles 是复数形不是 a noodles')
+eq(examples.examplesFor('stairs', 'enlight-home').length, 0, 'stairs 拿不准就不出')
+eq(examples.examplesFor('sun', 'enlight-nature')[0], 'the sun', 'sun 用 the 不用 a')
+eq(examples.pluralPhrase('sun', 'enlight-nature'), undefined, '不能出现 two suns')
+eq(examples.examplesFor('spring', 'enlight-weather')[0], 'in spring', '季节用 in 不用 a')
+ok(
+  examples.examplesFor('heart', 'enlight-body').every((l) => !l.includes('Touch')),
+  '不能让他去摸自己的心脏',
+)
+eq(examples.examplesFor('tooth', 'enlight-body')[0], 'my teeth', '牙用复数形')
+ok(
+  examples.examplesFor('tooth', 'enlight-body').includes('These are my teeth.'),
+  '复数要配 These are,不是 This is',
+)
+eq(examples.examplesFor('storm', 'enlight-weather').length, 0, 'storm 是名词,不能出 "It is storm."')
+eq(examples.pluralOf('rhino'), 'rhinos', '外来缩略词只加 s')
+eq(examples.pluralOf('scarf'), 'scarves', 'scarf → scarves')
+eq(examples.pluralOf('bookshelf'), 'bookshelves', 'bookshelf → bookshelves')
+eq(examples.pluralOf('jellyfish'), 'jellyfish', 'jellyfish 单复数同形')
+eq(examples.pluralOf('maple leaf'), 'maple leaves', '多词短语只变最后一个词')
+eq(examples.examplesFor('TV', 'enlight-home')[0], 'a TV', '缩写词在例句里保持大写')
+eq(examples.pluralPhrase('TV', 'enlight-home'), 'two TVs', 'TV 的复数是 TVs')
+ok(
+  examples.examplesFor('cat', 'enlight-animals').includes('Look at the cat!'),
+  '第三句换成祈使句 —— 三条例句要给三种句式',
+)
 
 // 全量扫一遍所有看图内容包:凡是出了例句的,冠词不能错、句子必须有句号
 {
@@ -534,13 +612,19 @@ eq(screenTime.screenAdvice(10, 'toddler', 0).hardAt, 25, '上限设成 0 视为�
   eq(new Set(paper.map((q) => q.cardId)).size, paper.length, '同一张卡不该出现两次')
   // 每一包都要被考到:只从一包里抽,考的是那一包,不是他的水平
   eq(new Set(paper.map((q) => q.deckId)).size, 3, '三个卡组都应该被考到')
+  /*
+    w64:测验改成**开放式产出** —— 看图说出来,家长判对错。
+    四选一有 25% 蒙对率,而且它测的是「认得出 goat 长什么样」,
+    不是「见到山羊能说出 goat」。后者才是我们想知道的。
+  */
   for (const q of paper) {
-    ok(q.options.includes(q.answer), '正确答案必须在选项里')
-    eq(new Set(q.options).size, q.options.length, '选项不能重复')
+    eq(q.options, undefined, '开放式产出的题不该带选项')
+    ok(!!q.answer, '每道题都要有标准答案给家长核对')
+    ok(!q.prompt.includes(q.answer), `题面里不能带答案(${q.prompt})`)
+    ok(!!q.note, '每道题都要给家长一句判分说明')
   }
-  // 英语题一律纯英文:平时练纯英文,考试突然冒出中文,考的就是另一件事
-  for (const q of paper.filter((x) => x.lang === 'en')) {
-    ok(q.options.every((o) => !/[一-龥]/.test(o)), '英语题的选项里不该出现中文')
+  for (const q of paper.filter((x) => x.emoji)) {
+    ok(!q.show, '看图题不该同时把答案的字摆出来')
   }
   // 只考学过的 —— 考没教过的东西不是测验,是打击
   eq(examM.buildExam(cands.map((c) => ({ ...c, reps: 0 })), 10).length, 0, '没有学过的卡时不该出卷')

@@ -23,6 +23,13 @@ export interface DeckSignal {
   daysSince: number
   /** 这一组一共有多少张卡 */
   total: number
+  /**
+   * 内置内容包的 key(自定义词本、错题本没有)。
+   *
+   * 推荐本身用不到它 —— 放在这里是因为每日计划要拿它对上教学大纲
+   * (见 lib/dailyPlan 的 orderByFocus),而计划的输入正是从这份信号里来的。
+   */
+  builtinKey?: string
 }
 
 export interface Reco {

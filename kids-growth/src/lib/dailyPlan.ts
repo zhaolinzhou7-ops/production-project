@@ -32,14 +32,55 @@ export interface PlanDeck {
   name: string
   /** 今天有多少张能练 */
   due: number
-  /** 为什么推荐它(来自 core/recommend);没有就不显示 */
+  /** 为什么推荐它(来自 lib/recommend);没有就不显示 */
   reason?: string
-  /** 这个卡组当前的难度档 0–4(见 core/adaptive) */
+  /** 这个卡组当前的难度档 0–4(见 lib/adaptive) */
   level?: number
+  /** 内置内容包的 key —— 用来对上教学大纲(见 lib/syllabus) */
+  packKey?: string
 }
+
+/**
+ * 教学大纲给出的「现在该练的那几包」(lib/syllabus 的 advice.focus)。
+ *
+ * ⚠️ 这是 v64 补上的一条**连线**,不是新功能。
+ *
+ * 大纲这套东西之前只在内容库页面上给家长看一句建议 ——
+ * 「先把手上这批练熟再开新的」。可**每天真正练什么是这里决定的**,
+ * 而这里根本不知道大纲的存在。于是出现了很难看的一幕:
+ * 内容库劝家长「先专注第 1 批」,而每天的路照旧在十个包之间平摊。
+ * 说一套做一套,大纲等于没有。
+ *
+ * 现在把 focus 传进来:**今天的路优先从这几包里排**。
+ * 排不满才往外扩(见 orderByFocus)—— 大纲是排序依据,不是过滤器,
+ * 硬过滤会在焦点包今天没题可做时端上一条空路。
+ */
+export type SyllabusFocus = string[]
+
 
 /** 幼儿段一步几题 —— 4 岁半的专注力撑不了 12 题一组 */
 const TODDLER_LIMIT = 6
+
+/**
+ * 把大纲当前该练的那几包排到前面。
+ *
+ * **稳定排序,不过滤。** 两点都很重要:
+ * · 不过滤 —— 焦点包今天可能一张到期的卡都没有,硬过滤就端上一条空路;
+ *   而「今天没题就休息」不是我们想要的,复习节奏该由 SRS 说了算。
+ * · 稳定 —— 进来之前已经按「错得多的、久没练的」排过一轮(lib/recommend),
+ *   那一轮的结论在焦点包内部要保留下来,不能被这一步打乱。
+ */
+export function orderByFocus(decks: PlanDeck[], focus: SyllabusFocus): PlanDeck[] {
+  if (focus.length === 0) return decks
+  const inFocus = new Set(focus)
+  const hit: PlanDeck[] = []
+  const rest: PlanDeck[] = []
+  for (const d of decks) {
+    if (d.packKey && inFocus.has(d.packKey)) hit.push(d)
+    else rest.push(d)
+  }
+  return [...hit, ...rest]
+}
 
 /**
  * 排出今天的路。
@@ -47,8 +88,15 @@ const TODDLER_LIMIT = 6
  * 只用**今天真的有题可做**的卡组(due > 0);一个都没有就返回空,
  * 由界面去说「今天的都做完啦」,而不是端上来一组空题。
  */
-export function buildPlan(decks: PlanDeck[], stage: AgeStage): PlanStep[] {
-  const usable = decks.filter((d) => d.due > 0)
+export function buildPlan(
+  decks: PlanDeck[],
+  stage: AgeStage,
+  focus: SyllabusFocus = [],
+): PlanStep[] {
+  const usable = orderByFocus(
+    decks.filter((d) => d.due > 0),
+    focus,
+  )
   if (usable.length === 0) return []
 
   const pics = usable.filter((d) => d.itemType === 'pic')

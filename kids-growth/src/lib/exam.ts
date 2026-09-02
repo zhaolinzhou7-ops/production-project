@@ -1,16 +1,28 @@
 import type { CardItemType } from '../types'
 
 /**
- * 阶段性测验。
+ * 阶段性测验 —— **开放式产出,家长判对错**。
  *
  * 为什么需要它:平时的练习都带着「脚手架」—— 有图、有四个选项、错了当场
  * 就告诉他答案、而且同一批卡反复出现。这些在**学的时候**是对的,
  * 但它们让一个问题永远看不清:**去掉脚手架之后,他到底会多少?**
  *
- * 测验就是把脚手架撤掉:
- * - 跨卡组抽题,不提前告诉他考哪一包
- * - 每题只做一次,做完不当场纠正(避免边考边学,那样测出来的是短时记忆)
- * - 交卷后一次性给分和逐题回顾
+ * ⚠️ v64 的一次重做:原先测验是四选一。
+ *
+ * 那样做有一个绕不过去的问题 —— **四选一有 25% 的蒙对率**。
+ * 一个 10 题的卷子,闭着眼睛点也有两三题是对的;更麻烦的是,
+ * 他真正的状态(见到图能不能把词说出来)在选项里是看不见的:
+ * 认得出 goat 这个词长什么样,和见到山羊能说出 goat,差着一整个台阶。
+ * 换句话说,原来那份卷子测的是**再认**,而我们想知道的是**产出**。
+ *
+ * 所以现在:**看图,说出来,家长点对/不对。**
+ * 没有选项就没有蒙的余地,而且家长在旁边坐一次,
+ * 比看十份正确率报表更知道孩子到了哪一步。
+ *
+ * 那它和线下抽查(lib/spotCheck)有什么不同?
+ * · 抽查:5 题,**不在屏幕上**,随口问,抽系统最有把握的 —— 专治「虚假掌握」
+ * · 测验:整卷,在屏幕上,跨卡组按周期考,**有成绩曲线** —— 看的是长期趋势
+ * 两个都是开放式产出,但一个是抽样体检,一个是阶段考试,不重复。
  *
  * 对孩子的意义不是「被考」,是**看见自己的进步**:同样一份卷子,
  * 上个月 6 分,这个月 9 分 —— 这是所有日常练习都给不了的反馈。
@@ -32,14 +44,17 @@ export interface ExamPeriodDef {
 /**
  * 三档周期。
  *
- * 周测短(10 题)、月测中(16 题)、季测长(24 题)——
  * 长度按「一次坐得住多久」定,不是按「考得全不全」定:
  * 一个 4 岁半的孩子做到第 25 题就已经在乱点了,那之后的题测不出任何东西。
+ *
+ * 改成开放式产出之后**每题变慢了** —— 他要想、要开口,家长要听、要判。
+ * 原来 10/16/24 是按「点四个选项」的节奏定的,照搬过来会拖成一场酷刑,
+ * 而拖长的后果不是测得更准,是他下次不肯考。所以整体收短一档。
  */
 export const EXAM_PERIODS: ExamPeriodDef[] = [
-  { period: 'week', label: '周测', days: 7, size: 10 },
-  { period: 'month', label: '月测', days: 30, size: 16 },
-  { period: 'quarter', label: '季测', days: 90, size: 24 },
+  { period: 'week', label: '周测', days: 7, size: 8 },
+  { period: 'month', label: '月测', days: 30, size: 12 },
+  { period: 'quarter', label: '季测', days: 90, size: 16 },
 ]
 
 export function examPeriodDef(period: ExamPeriod): ExamPeriodDef {
@@ -69,13 +84,26 @@ export interface ExamQuestion {
   prompt: string
   /** 大图(看图题) */
   emoji?: string
-  /** 点「再听一遍」读什么 */
-  audio?: string
-  lang: 'zh' | 'en'
-  options: string[]
+  /**
+   * 题面上要显示的字。
+   *
+   * 只有「看字读出来」这类题才有(识字卡)——
+   * 看图题**故意不给字**:给了就成了照着念,不是产出。
+   */
+  show?: string
+  /** 他该说出来的那句话 —— 也是家长核对的标准答案 */
   answer: string
-  /** 选项是图还是文字 */
-  optionKind: 'text' | 'emoji'
+  /** 答案的语言:决定「听答案」用哪个音源,以及家长提示里写什么 */
+  lang: 'zh' | 'en'
+  /**
+   * 出题时**不能播**的音频。
+   *
+   * 存在这里只给「公布答案 / 逐题回顾」用 ——
+   * 出题时放出来就等于把答案念给他听了。
+   */
+  audio?: string
+  /** 给家长的一句判分说明(比如「说成 sheep 也算对」) */
+  note?: string
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -87,22 +115,6 @@ function shuffle<T>(arr: T[]): T[] {
     a[j] = t
   }
   return a
-}
-
-/** 出题时每题几个选项 —— 和平时一样 4 个,不额外加难度 */
-const OPTIONS = 4
-
-function optionsFrom(answer: string, pool: string[]): string[] {
-  const seen = new Set([answer])
-  const out: string[] = []
-  for (const v of shuffle(pool)) {
-    const t = String(v ?? '').trim()
-    if (!t || seen.has(t)) continue
-    seen.add(t)
-    out.push(t)
-    if (out.length >= OPTIONS - 1) break
-  }
-  return shuffle([answer, ...out])
 }
 
 /**
@@ -151,93 +163,85 @@ export function buildExam(cands: ExamCandidate[], size: number): ExamQuestion[] 
   }
 
   return shuffle(picked)
-    .map((c) => toQuestion(c, learned))
+    .map((c) => toQuestion(c))
     .filter((q): q is ExamQuestion => !!q)
 }
 
 /**
- * 把一张卡变成一道题。
+ * 把一张卡变成一道题 —— **一道要他开口说出来的题**。
  *
- * 题型跟着内容类型走,而且**英语内容一律纯英文** ——
- * 平时练的是纯英文,考的时候突然冒出中文选项,那考的就是另一件事了。
+ * 每种内容问法不同,但只有一条共同规则:
+ * **题面上绝不能出现答案**(不显示、不朗读)。
+ * 这是开放式产出和四选一最大的区别 —— 一旦答案在屏幕上,
+ * 测的就又变回「认得出来吗」了。
  */
-function toQuestion(c: ExamCandidate, pool: ExamCandidate[]): ExamQuestion | undefined {
-  const sameType = pool.filter((x) => x.itemType === c.itemType && x.cardId !== c.cardId)
-
+function toQuestion(c: ExamCandidate): ExamQuestion | undefined {
   if (c.itemType === 'pic') {
     const en = c.en ?? c.back
     if (!en) return undefined
-    // 看图选英文:图在上面,四个英文词在下面(每个都能点着听)
-    const options = optionsFrom(
-      en,
-      sameType.map((x) => x.en ?? x.back),
-    )
-    if (options.length < 2) return undefined
+    /*
+      看图说词:图在上面,底下什么都没有。
+      他看着山羊说 "goat" —— 这是这套系统里最接近「真的会了」的一件事。
+    */
     return {
       cardId: c.cardId,
       deckId: c.deckId,
-      prompt: 'What is it?',
+      prompt: 'What is it? 这是什么?用英语说出来',
       emoji: c.emoji,
-      audio: en,
-      lang: 'en',
-      options,
       answer: en,
-      optionKind: 'text',
+      lang: 'en',
+      audio: en,
+      note: `中文是「${c.front}」;发音差不多就算对,不用卡口音`,
     }
   }
 
   if (c.itemType === 'word') {
-    const options = optionsFrom(
-      c.front,
-      sameType.map((x) => x.front),
-    )
-    if (options.length < 2) return undefined
-    // 听音选词:纯英文,和平时的练法一致
+    /*
+      单词卡没有图,front 是英文、back 是中文。
+      问法是**中译英**:说出「苹果」的英语 —— 同样是产出,不是再认。
+      反过来(给英文说中文)测不出什么:他天天说中文。
+    */
+    if (!c.back || !c.front) return undefined
     return {
       cardId: c.cardId,
       deckId: c.deckId,
-      prompt: '听一听,选出你听到的词',
-      audio: c.front,
-      lang: 'en',
-      options,
+      prompt: `「${c.back}」用英语怎么说?`,
       answer: c.front,
-      optionKind: 'text',
+      lang: 'en',
+      audio: c.front,
+      note: '说对了就算,不用拼出来',
     }
   }
 
   if (c.itemType === 'hanzi') {
-    const options = optionsFrom(
-      c.front,
-      sameType.map((x) => x.front),
-    )
-    if (options.length < 2) return undefined
+    /*
+      识字:把字摆出来,他读出来。
+      这一类**必须显示题面**——不显示就没得认了。
+      但答案(读音)照旧不播。
+    */
+    if (!c.front) return undefined
     return {
       cardId: c.cardId,
       deckId: c.deckId,
-      prompt: '听读音,选出正确的字',
-      audio: c.front,
+      prompt: '这个字念什么?',
+      show: c.front,
+      answer: c.back || c.front,
       lang: 'zh',
-      options,
-      answer: c.front,
-      optionKind: 'text',
+      audio: c.front,
+      note: '念对读音就算对',
     }
   }
 
-  // 常识问答等:看题选答案
-  const options = optionsFrom(
-    c.back,
-    sameType.map((x) => x.back),
-  )
-  if (options.length < 2) return undefined
+  // 常识问答等:念题目,他说答案
+  if (!c.front || !c.back) return undefined
   return {
     cardId: c.cardId,
     deckId: c.deckId,
     prompt: c.front,
-    audio: c.front,
-    lang: 'zh',
-    options,
     answer: c.back,
-    optionKind: 'text',
+    lang: 'zh',
+    audio: c.back,
+    note: '意思对就算对,不用一字不差',
   }
 }
 
@@ -252,7 +256,7 @@ export interface ExamBand {
 /**
  * 分数分档。
  *
- * 和日常评分同一套原则(见 core/scoreCard):**没有不及格**。
+ * 和日常评分同一套原则(见 lib/scoreCard):**没有不及格**。
  * 最低一档说的是「这次有点难」,不是「你不行」——
  * 一次考砸就再也不肯考的孩子,后面所有的测验都白设。
  */
