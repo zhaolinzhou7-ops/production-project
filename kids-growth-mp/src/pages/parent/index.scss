@@ -373,3 +373,102 @@
   &__t { font-size: 24px; color: #374151; }
   &--on .tag__t { color: #f9497a; font-weight: 500; }
 }
+
+/* 家长工具:全部在密码后面 —— 孩子点不到,家长一眼找得到 */
+.ptiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.ptile {
+  width: calc((100% - 28px) / 3);
+  box-sizing: border-box;
+  padding: 24px 8px 20px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  text-align: center;
+
+  &__i {
+    display: block;
+    font-size: 46px;
+    line-height: 1.1;
+  }
+
+  &__t {
+    display: block;
+    margin-top: 8px;
+    font-size: 24px;
+    font-weight: 600;
+    color: #374151;
+  }
+}
+
+.pa__sound {
+  display: block;
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: #6b7280;
+}
+
+
+/* 声音自检的结果面板 —— 从首页搬过来的:这是家长排查问题用的东西 */
+.diag {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 24px;
+
+  &__t {
+    display: block;
+    font-size: 26px;
+    font-weight: bold;
+    color: #374151;
+    margin-bottom: 14px;
+  }
+
+  &__l {
+    display: block;
+    font-size: 24px;
+    color: #9ca3af;
+    line-height: 1.8;
+
+    &--ok {
+      color: #059669;
+      font-weight: 500;
+    }
+  }
+
+  &__hint {
+    display: block;
+    margin-top: 14px;
+    font-size: 22px;
+    color: #b45309;
+    background: rgba(251, 191, 36, 0.15);
+    border-radius: 16px;
+    padding: 16px;
+    line-height: 1.6;
+  }
+
+  &__close {
+    display: inline-block;
+    margin-top: 18px;
+    font-size: 24px;
+    color: #6b7280;
+    background: rgba(107, 114, 128, 0.1);
+    padding: 10px 24px;
+    border-radius: 999px;
+  }
+}
+.diag__hint {
+  display: block;
+  margin-top: 16px;
+  font-size: 22px;
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.16);
+  border-radius: 16px;
+  padding: 18px;
+  line-height: 1.8;
+}

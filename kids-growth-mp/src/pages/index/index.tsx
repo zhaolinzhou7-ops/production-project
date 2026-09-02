@@ -111,9 +111,6 @@ function Index() {
   /** 当前版本记下的报错(带时间和出错页面);旧版本的不显示 */
   const [errEntry, setErrEntry] = useState<ErrEntry | null>(null)
   const [loading, setLoading] = useState(true)
-  const [checking, setChecking] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [diag, setDiag] = useState<DiagLine[]>([])
   const [challenge, setChallenge] = useState({ done: 0, goal: 3 })
   const [stickerCount, setStickerCount] = useState(0)
   /** 今天有几道错题该重做 —— 显示在错题本入口上 */
@@ -369,25 +366,6 @@ function Index() {
   }
 
   /** 声音自检:把中英文各个音源挨个试一遍,如实报告哪家能用 */
-  const checkSound = async () => {
-    let lines: DiagLine[] = []
-    try {
-      setChecking(true)
-      lines = await diagnoseAudio((done, total) => setProgress(Math.round((done / total) * 100)))
-    } catch (e) {
-      setChecking(false)
-      // 自检本身出错时,把原因显示在页面红框里(用户不用去翻调试器)
-      setErr('声音自检出错:' + msgOf(e))
-      return
-    }
-    setChecking(false)
-    setDiag(lines)
-    // 结果直接画在页面上(比弹窗更好读、也不会被弹窗长度截断)
-    if (lines.some((l) => l.ok)) {
-      void playText('小朋友你好', 'zh_CN')
-    }
-  }
-
   /** 本地数据坏掉/存满时的自救按钮 */
   const resetLocal = () => {
     // 这个按钮会把孩子所有的进度清光 —— 必须确认是家长在点
@@ -733,12 +711,17 @@ function Index() {
         把手机合上,家长照着问,他用嘴答。
         每周提示一次:再密家长会烦,再疏就失去了及时纠偏的意义。
       */}
+      {/*
+        抽查提示留在首页,但**点进去的是家长中心** ——
+        抽查本来就要家长拿着手机问,让孩子自己点进去毫无意义;
+        而完全不提示的话,家长又会忘。
+      */}
       {spotReady ? (
-        <View className='spotcard' onClick={() => openPage('/pages/spotcheck/index')}>
+        <View className='spotcard' onClick={() => openPage('/pages/parent/index')}>
           <Text className='spotcard__e'>🔎</Text>
           <View className='spotcard__meta'>
             <Text className='spotcard__t'>该做一次线下抽查了</Text>
-            <Text className='spotcard__s'>5 个词 · 合上手机问他 · 说不出的自动退回重学</Text>
+            <Text className='spotcard__s'>爸爸妈妈进「家长中心」·合上手机问他 5 个词</Text>
           </View>
           <Text className='spotcard__go'>›</Text>
         </View>
@@ -785,56 +768,25 @@ function Index() {
         <View className='sect__line' />
       </View>
 
+      {/*
+        家长那一侧**只留一个入口**,里面的东西全在密码后面。
+
+        原先内容库、成长档案、声音自检和孩子的学习入口并排摆在首页,
+        孩子随手一点就进了「声音自检」—— 他不知道那是什么,
+        只知道「我点了一下,程序开始自己响」。而那些页面里还有清空数据、
+        改学段这类一点就回不去的操作。
+
+        规则现在很清楚:**孩子能点的都在首页,家长要操作的都在家长中心**。
+        入口仍然看得见 —— 藏起来和锁起来是两回事,
+        前者让家长找不到,后者只挡住孩子。
+      */}
       <View className='tiles'>
-        <View className='tile tile--parent' onClick={() => openPage('/pages/parent/index')}>
+        <View className='tile tile--parent tile--wide' onClick={() => openPage('/pages/parent/index')}>
           <Text className='tile__i'>👨‍👩‍👧</Text>
-          <Text className='tile__t'>家长中心</Text>
-        </View>
-        <View className='tile tile--packs' onClick={() => openPage('/pages/packs/index')}>
-          <Text className='tile__i'>📚</Text>
-          <Text className='tile__t'>内容库</Text>
-        </View>
-        <View className='tile tile--archive' onClick={() => openPage('/pages/archive/index')}>
-          <Text className='tile__i'>🌱</Text>
-          <Text className='tile__t'>成长档案</Text>
-        </View>
-        <View className='tile tile--sound' onClick={() => void checkSound()}>
-          <Text className='tile__i'>🔎</Text>
-          <Text className='tile__t'>声音自检</Text>
+          <Text className='tile__t'>家长中心 🔒</Text>
+          <Text className='tile__s'>内容库 · 成长档案 · 线下抽查 · 声音自检 · 设置</Text>
         </View>
       </View>
-
-      {diag.length > 0 ? (
-        <View className='diag'>
-          <Text className='diag__t'>
-            可用音源 {diag.filter((l) => l.ok).length}/{diag.length}
-            {diag.some((l) => l.ok) ? '(打勾的会自动优先使用)' : ''}
-          </Text>
-          {/* 失败要说清原因 —— 只报一个 ❌ 等于什么都没说 */}
-          {diag.map((l) => (
-            <Text key={l.label} className={l.ok ? 'diag__l diag__l--ok' : 'diag__l'}>
-              {l.ok ? '✅' : '❌'} {l.label}
-              {l.reason ? ` —— ${l.reason}` : ''}
-            </Text>
-          ))}
-          {diag.some((l) => l.reason && l.reason.indexOf('域名') >= 0) ? (
-            <Text className='diag__hint'>
-              有音源因为「域名没加白名单」失败。这个只能在微信公众平台改:
-              登录 mp.weixin.qq.com → 开发管理 → 开发设置 → 服务器域名,
-              把 tts.baidu.com、dict.youdao.com、fanyi.baidu.com、fanyi.sogou.com
-              四个都加进「downloadFile 合法域名」。加完等几分钟再试。
-            </Text>
-          ) : null}
-          {diag.every((l) => !l.ok) ? (
-            <Text className='diag__hint'>
-              全部取不到:开发者工具请勾选「详情 → 本地设置 → 不校验合法域名」;真机需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。
-            </Text>
-          ) : null}
-          <Text className='diag__close' onClick={() => setDiag([])}>
-            收起
-          </Text>
-        </View>
-      ) : null}
 
       {loading ? <Text className='home__tip'>正在准备内容包…</Text> : null}
       {!loading && !err && rows.length === 0 ? (

@@ -41,6 +41,21 @@ export interface DialogLine {
   text: string
 }
 
+export interface PlaylistOpts {
+  /**
+   * 「自问自答」:两边的句子都优先用他自己的录音。
+   *
+   * 为什么单独做一档:平时回放是「机器一句、他一句」,他听到的是
+   * **一半自己**。而他在角色互换里把问句也录过之后,整段其实两边都有他的声音 ——
+   * 这时候连起来放,他听到的是自己在跟自己一问一答。
+   * 对 4 岁半的孩子来说这件事本身就足够好玩,好玩就会多听几遍,
+   * 多听几遍就是多输入几遍 —— 趣味在这里不是包装,是复读机。
+   *
+   * 没录过的那句照样用机器音顶上,不跳过(理由同 PlayItem.voice)。
+   */
+  ownAll?: boolean
+}
+
 /**
  * 排出播放顺序。
  *
@@ -49,19 +64,21 @@ export interface DialogLine {
 export function buildPlaylist(
   lines: DialogLine[],
   voiceOf: (text: string) => string,
+  opts: PlaylistOpts = {},
 ): PlayItem[] {
   const out: PlayItem[] = []
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
     const text = String(l?.text ?? '').trim()
     if (!text) continue
-    const voice = l.speaker === 'kid' ? String(voiceOf(text) ?? '') : ''
+    const useOwn = l.speaker === 'kid' || !!opts.ownAll
+    const voice = useOwn ? String(voiceOf(text) ?? '') : ''
     const next = lines[i + 1]
     out.push({
       speaker: l.speaker,
       text,
       voice,
-      isOwnVoice: l.speaker === 'kid' && !!voice,
+      isOwnVoice: !!voice,
       gapMs: next && next.speaker !== l.speaker ? GAP_TURN : GAP_SAME,
     })
   }
@@ -75,6 +92,29 @@ export function buildPlaylist(
 export function ownVoiceCount(items: PlayItem[]): { own: number; kid: number } {
   const kid = items.filter((i) => i.speaker === 'kid')
   return { own: kid.filter((i) => i.isOwnVoice).length, kid: kid.length }
+}
+
+/**
+ * 自问自答能不能放得起来。
+ *
+ * 判据不是「录满了」而是**两边各有至少一句** ——
+ * 全录满才给听会把这个功能推到很远的以后,而他需要的是尽快听到一次
+ * 「咦这两个都是我」。差的那几句用机器音顶着,不影响那个瞬间。
+ */
+export function selfTalkReady(
+  lines: DialogLine[],
+  voiceOf: (text: string) => string,
+): { ok: boolean; own: number; total: number; askOwn: boolean; answerOwn: boolean } {
+  const items = buildPlaylist(lines, voiceOf, { ownAll: true })
+  const askOwn = items.some((i) => i.speaker === 'bot' && i.isOwnVoice)
+  const answerOwn = items.some((i) => i.speaker === 'kid' && i.isOwnVoice)
+  return {
+    ok: askOwn && answerOwn,
+    own: items.filter((i) => i.isOwnVoice).length,
+    total: items.length,
+    askOwn,
+    answerOwn,
+  }
 }
 
 /**

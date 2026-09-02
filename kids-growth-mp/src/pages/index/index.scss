@@ -182,53 +182,7 @@
   color: #9ca3af;
 }
 
-.diag {
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 24px;
-  padding: 24px;
-  margin-bottom: 24px;
 
-  &__t {
-    display: block;
-    font-size: 26px;
-    font-weight: bold;
-    color: #374151;
-    margin-bottom: 14px;
-  }
-
-  &__l {
-    display: block;
-    font-size: 24px;
-    color: #9ca3af;
-    line-height: 1.8;
-
-    &--ok {
-      color: #059669;
-      font-weight: 500;
-    }
-  }
-
-  &__hint {
-    display: block;
-    margin-top: 14px;
-    font-size: 22px;
-    color: #b45309;
-    background: rgba(251, 191, 36, 0.15);
-    border-radius: 16px;
-    padding: 16px;
-    line-height: 1.6;
-  }
-
-  &__close {
-    display: inline-block;
-    margin-top: 18px;
-    font-size: 24px;
-    color: #6b7280;
-    background: rgba(107, 114, 128, 0.1);
-    padding: 10px 24px;
-    border-radius: 999px;
-  }
-}
 
 .home__tip {
   display: block;
@@ -264,16 +218,7 @@
 }
 
 /* 自检里「域名白名单」这类必须由用户去后台改的问题,单独醒目提示 */
-.diag__hint {
-  display: block;
-  margin-top: 16px;
-  font-size: 22px;
-  color: #b45309;
-  background: rgba(251, 191, 36, 0.16);
-  border-radius: 16px;
-  padding: 18px;
-  line-height: 1.8;
-}
+
 
 /* 「再练一遍」:随时能练,不受「今天已清空」限制 */
 .again {
@@ -683,4 +628,16 @@
     color: rgba(255, 255, 255, 0.88);
   }
   &__go { font-size: 38px; color: rgba(255, 255, 255, 0.7); }
+}
+
+/* 家长中心:整行一块,和上面孩子那些小方块区分开 */
+.tile--wide {
+  width: 100%;
+}
+
+.tile__s {
+  display: block;
+  margin-top: 8px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.85);
 }

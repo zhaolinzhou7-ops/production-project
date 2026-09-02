@@ -178,8 +178,32 @@ function Session() {
    */
   const packKey = deck?.builtinKey ?? ''
 
+  /**
+   * 这一档是不是**英语练法**。
+   *
+   * 语言以**练法**为准,不以卡组类型为准 —— 这是之前一连串
+   * 「怎么又念中文了」的总根源:看图卡的 itemType 是 pic,
+   * 于是 `isWord === false`,所有朗读都退回中文;
+   * 而「跟我读」「拼出来」「听写」走的正是看图卡,它们是纯英文的练法。
+   */
+  const enMode =
+    isWord ||
+    mode === 'speakEn' ||
+    mode === 'spell' ||
+    mode === 'dictation' ||
+    mode === 'picChooseEn' ||
+    mode === 'listenPicEn' ||
+    mode === 'earTrain'
+
+  /** 这一档要读的那个词:英语练法读英文,其余读卡面 */
+  const speakText = (card: LearnCard): string => {
+    if (!enMode) return card.audioText ?? card.front
+    if (itemType === 'pic') return (card.extra as { en?: string } | undefined)?.en ?? card.back
+    return card.audioText ?? card.front
+  }
+
   const playPrompt = (text: string) => {
-    if (isWord) playWordAudio(text)
+    if (enMode) playWordAudio(text)
     else void playText(text, 'zh_CN')
   }
 
@@ -410,8 +434,6 @@ function Session() {
       所以:英语练法交给下面那段 speakEn 的自动播(或者本来就有的听力自动播),
       这里直接让开;剩下的中文练法才念中文。
     */
-    const enOf = (c: LearnCard) =>
-      itemType === 'pic' ? ((c.extra as { en?: string } | undefined)?.en ?? c.back) : c.front
 
     /*
       「跟我读」和「拼出来」要**自动念英文**:
@@ -419,7 +441,7 @@ function Session() {
       - 拼出来是听音拼词,不出声这道题根本没法做。
     */
     if (mode === 'speakEn' || mode === 'spell') {
-      const t = setTimeout(() => void playWordAudio(enOf(card)), 420)
+      const t = setTimeout(() => void playWordAudio(speakText(card)), 420)
       return () => clearTimeout(t)
     }
 
@@ -474,7 +496,15 @@ function Session() {
 
   /** 离开页面就把声音停掉,免得返回首页还在响 */
   useEffect(() => {
-    return () => stopAudio()
+    return () => {
+      stopAudio()
+      clearChars()
+      if (abTimer.current) clearTimeout(abTimer.current)
+      // 还没停的录音也要停 —— 不停的话互斥闸一直锁着,
+      // 回到别的页面就变成「哪儿都没声音」,而且看不出原因
+      stopRecord()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /*
@@ -600,11 +630,7 @@ function Session() {
       本来就是英语练法 —— 读中文等于把答案念给他听之外还念错了语言。
     */
     if (mode === 'spell' || mode === 'dictation') {
-      const en =
-        itemType === 'pic'
-          ? ((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
-          : current.card.front
-      void playWordAudio(en)
+      void playWordAudio(speakText(current.card))
       return
     }
     if (isPic) playPic(current.card)
@@ -616,25 +642,41 @@ function Session() {
    * 中文整句没有可用音源,只有单字有 —— 所以这是个**明确标注**的功能,
    * 而不是伪装成连贯朗读。孩子知道它是逐字的,就不会觉得「读得很怪」。
    */
+  /*
+    定时器要存下来。撒出去不管的话:①离开这一页它们照样一个字一个字往外蹦;
+    ②中途去点录音,声音虽然被互斥闸挡住了,定时器却还在空转,
+    松开录音的一瞬间又冒出半句诗。
+  */
+  const charTimers = useRef<Array<ReturnType<typeof setTimeout>>>([])
+  const clearChars = () => {
+    for (const t of charTimers.current) clearTimeout(t)
+    charTimers.current = []
+  }
   const readLineByChar = (line: string) => {
+    if (blocked()) return
+    clearChars()
     const chars = line.split('').filter((c) => /[\u4e00-\u9fa5]/.test(c))
     chars.forEach((ch, i) => {
-      setTimeout(() => void playText(ch, 'zh_CN'), i * 1100)
+      charTimers.current.push(setTimeout(() => void playText(ch, 'zh_CN'), i * 1100))
     })
   }
 
   /** 慢速范读:英语听不清时最有效的一招,比反复原速重放强 */
   const playSlow = () => {
     if (!current) return
-    if (isWord) playEnglishSlow(current.card.audioText ?? current.card.front)
+    // 同样以练法为准:英语练法慢速念英文,不是把中文放慢
+    if (enMode) playEnglishSlow(speakText(current.card))
     else void playText(current.card.audioText ?? current.card.front, 'zh_CN')
   }
 
   /** A/B 对比:先放范读,再放孩子自己的录音,差别一听就出来 */
+  const abTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const compareAB = () => {
     if (!current) return
+    if (abTimer.current) clearTimeout(abTimer.current)
     playCurrent()
-    setTimeout(() => {
+    abTimer.current = setTimeout(() => {
+      abTimer.current = null
       if (recPath) playFile(recPath)
     }, 2400)
   }
@@ -800,6 +842,8 @@ function Session() {
 
   const toggleSpeak = () => {
     if (!current) return
+    // 识别也要占麦克风,和录音撞车
+    if (!listening && blocked()) return
     if (!listening) {
       setListening(true)
       setSpeakMsg('聆听中…读完点「读完了」')
@@ -822,6 +866,25 @@ function Session() {
       setSpeakMsg('识别中…')
     }
   }
+
+  /*
+    录音期间不许放声音。
+
+    麦克风和喇叭在同一台手机上是一件事:一边录、一边点范读,
+    两个声音会同时往外放,而且喇叭里的范读会被麦克风一起录进去 ——
+    回放时听到的是自己念一半、机器念一半糊在一起。
+
+    真正的闸门在 lib/audioLock(录音一开始所有声音立刻停,期间不响应播放),
+    这里再挡一层是因为:按钮能点、点了没反应,看起来就是「坏了」。
+    **静默失败比出错更难查。**
+  */
+  const blocked = (): boolean => {
+    if (!recording) return false
+    Taro.showToast({ title: '正在录音,先点 ⏹ 停', icon: 'none' })
+    return true
+  }
+  /* 灰在原处而不是拿掉 —— 拿掉会让整排按钮跳位置,手指已经伸过去了 */
+  const chipCls = (extra = '') => `chip${extra}${recording ? ' chip--off' : ''}`
 
   const toggleRecord = () => {
     if (!recording) {
@@ -1199,14 +1262,26 @@ function Session() {
             图已经在上面了 —— 意思靠图,不靠翻译。
           */}
           <View className='row row--wrap'>
-            <View className='chip' onClick={() => playWordAudio((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)}>
+            <View
+              className={chipCls()}
+              onClick={() => {
+                if (blocked()) return
+                playWordAudio((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
+              }}
+            >
               <Text className='chip__t'>🔊 听范读</Text>
             </View>
             <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
               <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
             </View>
             {recPath || getMyVoice(current.card.front, 'kid') ? (
-              <View className='chip' onClick={() => playFile(recPath || getMyVoice(current.card.front, 'kid'))}>
+              <View
+                className={chipCls()}
+                onClick={() => {
+                  if (blocked()) return
+                  playFile(recPath || getMyVoice(current.card.front, 'kid'))
+                }}
+              >
                 <Text className='chip__t'>▶️ 回放</Text>
               </View>
             ) : null}
@@ -1282,17 +1357,23 @@ function Session() {
           {current.card.phonetic ? <Text className='card__ph'>/{current.card.phonetic}/</Text> : null}
           <Text className='card__back'>{current.card.back}</Text>
           <View className='row row--wrap'>
-            <View className='chip' onClick={playCurrent}><Text className='chip__t'>🔊 范读</Text></View>
-            <View className='chip' onClick={playSlow}><Text className='chip__t'>🐢 慢速</Text></View>
+            <View className={chipCls()} onClick={() => { if (!blocked()) playCurrent() }}><Text className='chip__t'>🔊 范读</Text></View>
+            <View className={chipCls()} onClick={() => { if (!blocked()) playSlow() }}><Text className='chip__t'>🐢 慢速</Text></View>
             <View className='chip' onClick={toggleRecord}><Text className='chip__t'>{recording ? '⏹ 停止' : '🔴 录我读的'}</Text></View>
             {/* 回放按**存档**判断 —— 退出重进也该还在(录音从 v47 起就是持久化的) */}
             {recPath || getMyVoice(current.card.front, 'kid') ? (
-              <View className='chip' onClick={() => playFile(recPath || getMyVoice(current.card.front, 'kid'))}>
+              <View
+                className={chipCls()}
+                onClick={() => {
+                  if (blocked()) return
+                  playFile(recPath || getMyVoice(current.card.front, 'kid'))
+                }}
+              >
                 <Text className='chip__t'>▶️ 回放</Text>
               </View>
             ) : null}
             {recPath || getMyVoice(current.card.front, 'kid') ? (
-              <View className='chip chip--ab' onClick={compareAB}><Text className='chip__t'>🆚 对比</Text></View>
+              <View className={chipCls(' chip--ab')} onClick={() => { if (!blocked()) compareAB() }}><Text className='chip__t'>🆚 对比</Text></View>
             ) : null}
           </View>
           <View className={listening ? 'mic mic--on' : 'mic'} onClick={toggleSpeak}><Text className='mic__t'>{listening ? '🎙 读完了' : '🎤 跟读打分'}</Text></View>
@@ -1597,14 +1678,26 @@ function Session() {
           <Text className='say__e'>{redo.emoji ?? '🔤'}</Text>
           <Text className='say__en'>{redo.answer}</Text>
           <View className='row row--wrap'>
-            <View className='chip' onClick={() => void playWordAudio(redo.answer, 2)}>
+            <View
+              className={chipCls()}
+              onClick={() => {
+                if (blocked()) return
+                void playWordAudio(redo.answer, 2)
+              }}
+            >
               <Text className='chip__t'>🔊 听范读</Text>
             </View>
             <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
               <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
             </View>
             {recPath ? (
-              <View className='chip' onClick={() => playFile(recPath)}>
+              <View
+                className={chipCls()}
+                onClick={() => {
+                  if (blocked()) return
+                  playFile(recPath)
+                }}
+              >
                 <Text className='chip__t'>▶️ 回放</Text>
               </View>
             ) : null}
@@ -1691,9 +1784,20 @@ function Session() {
       {(mode === 'picChoose' || mode === 'picChooseEn') && (
         <View className='card'>
           <Text className='pic__emoji'>{(current.card.extra as { emoji?: string } | undefined)?.emoji ?? '❓'}</Text>
-          <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          {/*
+            英语档**题面不给朗读按钮**。
+
+            这道题考的是「看到这只山羊,想起 goat 这个词长什么样」。
+            题面上放一个 🔊,点一下就把答案念出来了 —— 那这道题就退化成
+            「听音选词」,而且是带图的听音选词,比原来还简单。
+            想听的话,下面每个选项都能单独点着听:他得自己听出哪一个是 goat。
+            中文档没有这个问题(答案本来就是他会说的),照旧给朗读。
+          */}
+          {!picEn ? (
+            <View className='audio' onClick={playCurrent}><Text className='audio__t'>🔊</Text></View>
+          ) : null}
           <Text className='card__tip'>
-            {picEn ? '这是什么?先听听每个词,再选' : '这是什么?选出名字'}
+            {picEn ? '这是什么?挨个听听下面的词,选出对的那个' : '这是什么?选出名字'}
           </Text>
           <View className='opts'>
             {picTextOptions.map((opt, oi) => {

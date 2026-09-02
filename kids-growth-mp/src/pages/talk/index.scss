@@ -663,6 +663,41 @@
   &__b--stop .toprec__bt { color: #fff; }
 }
 
+/*
+ * 换边开关。
+ *
+ * 摆在对话正上方,不藏进设置 —— 换边是「这一段怎么练」的决定,
+ * 埋起来他永远碰不到。打开时整条变色,让他一眼看出现在轮到谁问。
+ */
+.swapbar {
+  margin: 14px 0 18px;
+  padding: 18px 22px;
+  border-radius: var(--r-sm);
+  background: #f1f5f9;
+
+  &--on {
+    background: rgba(52, 211, 153, 0.18);
+  }
+
+  &__t {
+    display: block;
+    font-size: 27px;
+    font-weight: 600;
+    color: #334155;
+  }
+
+  &--on .swapbar__t {
+    color: #047857;
+  }
+
+  &__d {
+    display: block;
+    margin-top: 6px;
+    font-size: 21px;
+    color: var(--ink-4);
+  }
+}
+
 /* 连贯对话回放:把一句一句的跟读串成「我和人说了一段话」 */
 .convo {
   margin-top: 34px;
@@ -680,7 +715,8 @@
       background: rgba(239, 68, 68, 0.14);
     }
 
-    &--swap {
+    /* 自问自答:两边都是他的声音时才出现,给个不一样的颜色 */
+    &--self {
       margin-top: 14px;
       background: rgba(52, 211, 153, 0.16);
     }
@@ -696,8 +732,18 @@
     color: #dc2626;
   }
 
-  &__b--swap .convo__t {
+  &__b--self .convo__t {
     color: #059669;
+  }
+
+  /* 还录不够时说清楚差什么 —— 不给按钮也要给下一步 */
+  &__hint {
+    display: block;
+    margin-top: 14px;
+    padding: 0 8px;
+    font-size: 22px;
+    line-height: 1.5;
+    color: var(--ink-4);
   }
 
   &__n {

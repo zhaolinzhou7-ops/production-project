@@ -45,6 +45,11 @@
     font-size: 34px;
   }
 
+  /* 录音期间灰掉:麦克风和喇叭是同一件事,一边录一边放会串音 */
+  &__b--off {
+    opacity: 0.35;
+  }
+
   &__b--rec {
     color: #ef4444;
   }
@@ -75,6 +80,10 @@
   padding: 6px 18px;
   border-radius: 20px;
   background: rgba(99, 102, 241, 0.1);
+}
+
+.ex__all--off {
+  opacity: 0.35;
 }
 
 /* 中文只给家长看:样式故意做得小而灰,不去抢孩子的注意力 */

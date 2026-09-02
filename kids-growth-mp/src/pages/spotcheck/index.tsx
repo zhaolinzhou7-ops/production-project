@@ -163,7 +163,10 @@ function SpotCheck() {
 
       <View className='spot__card'>
         <Text className='spot__deck'>{it.deckName}</Text>
-        <Text className='spot__ask'>{it.ask}</Text>
+        {/* 内容长了自动降一档字号,不然会顶出屏幕 */}
+        <Text className={[...it.ask].length > 8 ? 'spot__ask spot__ask--long' : 'spot__ask'}>
+          {it.ask}
+        </Text>
         <Text className='spot__q'>问他:这个用英语/怎么说?</Text>
 
         {/* ⚠️ 拆成两个独立的「有/无」:同一位置在「带事件」和「不带事件」之间

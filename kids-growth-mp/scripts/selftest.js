@@ -2673,6 +2673,57 @@ function run() {
         `${path.relative(ROOT, tsx)} 用到了本页没有定义的样式类:${missing.slice(0, 8).join(', ')}`,
       )
     }
+
+    /*
+      反过来的一种错:**页面把公共样式盖掉了**。
+
+      小程序里 app.scss 先加载、页面样式后加载,同名同权重时后面的赢。
+      所以页面里再写一遍 `.btn--wide`,app.scss 里那条就等于不存在 ——
+      而且不报任何错,只是那一页长得和别处不一样。
+
+      用户报的「做完题那个返回/完成键特别长」正是这么来的:
+      公共样式已经把收尾按钮收窄到六成,math 页却自己又写了 width:100%。
+      改公共样式时根本不会想到去翻这一页。
+
+      名单只放**真正共用、且必须处处一致**的修饰符 ——
+      配色类的(.btn--primary 各页颜色不同)不在此列,那是有意为之。
+    */
+    const SHARED_ONLY_IN_APP = ['btn--wide', 'tool--off', 'chip--off']
+    const appText = fs.readFileSync(path.join(ROOT, 'src', 'app.scss'), 'utf8')
+    /** 除 app.scss 之外的所有样式文件 */
+    const allScss = []
+    const walkScss = (dir) => {
+      for (const f of fs.readdirSync(dir)) {
+        const p2 = path.join(dir, f)
+        if (fs.statSync(p2).isDirectory()) walkScss(p2)
+        else if (f.endsWith('.scss')) allScss.push(p2)
+      }
+    }
+    walkScss(path.join(ROOT, 'src', 'pages'))
+    walkScss(path.join(ROOT, 'src', 'components'))
+    for (const cls of SHARED_ONLY_IN_APP) {
+      const [blk, mod] = cls.split('--')
+      ok(
+        new RegExp(`&--${mod}\\b`).test(appText) || appText.includes(`.${cls}`),
+        `${cls} 应该在 app.scss 里定义一处`,
+      )
+      for (const scssPath of allScss) {
+        if (scssPath.endsWith(path.join('src', 'app.scss'))) continue
+        // 先把注释剥掉 —— 注释里提到这个类名(比如解释「这里原先写过什么」)不算定义
+        const text = fs
+          .readFileSync(scssPath, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|\s)\/\/[^\n]*/g, '$1')
+        // 页面里写 `.btn { &--wide {} }` 或直接写 `.btn--wide {}` 都算重复定义
+        const nested = new RegExp(`\\.${blk}\\s*\\{[\\s\\S]*?&--${mod}\\s*\\{`).test(text)
+        const flat = text.includes(`.${cls}`) && !text.includes(`className`)
+        ok(
+          !nested && !flat,
+          `${path.relative(ROOT, scssPath)} 又定义了一遍 ${cls} —— 公共修饰符只能在 app.scss 定一处,` +
+            '否则改了公共样式这一页不会跟着变(用户报过的「完成键特别长」就是这个)',
+        )
+      }
+    }
   }
 
   {
@@ -2793,6 +2844,29 @@ function run() {
     ok(swapped.length === lines.length, '互换不该丢句子')
     ok(swapped.every((l, i) => l.text === lines[i].text), '互换只换角色,不该动内容')
     ok(pl.buildPlaylist([{ speaker: 'bot', text: '  ' }], () => '').length === 0, '空句子应被略过')
+
+    /*
+      自问自答:他在「你来问」那一边也录过之后,整段两边都是他的声音。
+      这是趣味,更是复读机 —— 好玩他就会反复放,反复放就是反复输入。
+    */
+    const both = { 'I am fine': '/voice/fine.mp3', 'How are you': '/voice/how.mp3' }
+    const solo = pl.buildPlaylist(lines, (t) => both[t] || '', { ownAll: true })
+    ok(solo[2].isOwnVoice === true, 'ownAll 时机器那句也该用他自己的录音')
+    ok(solo[3].isOwnVoice === true, 'ownAll 时他那句照旧用他自己的录音')
+    ok(solo[0].voice === '', 'ownAll 也不能凭空造录音 —— 没录过就是空,页面用机器音顶上')
+    ok(solo.length === lines.length, 'ownAll 不该丢句子')
+    // 不开 ownAll 时,机器那句绝不能被换成他的声音
+    const plain = pl.buildPlaylist(lines, (t) => both[t] || '')
+    ok(plain[2].voice === '', '不开 ownAll 时机器那句必须还是机器音')
+
+    const rdy = pl.selfTalkReady(lines, (t) => both[t] || '')
+    ok(rdy.ok === true, '两边都录过就该能听自问自答')
+    ok(rdy.askOwn && rdy.answerOwn, '问和答两边都要认出来有他的录音')
+    const half = pl.selfTalkReady(lines, (t) => (t === 'I am fine' ? '/v.mp3' : ''))
+    ok(half.ok === false, '只录了答的那一半,自问自答放出来还是半个机器人,不该给按钮')
+    ok(half.answerOwn === true && half.askOwn === false, '要能说清楚差的是哪一半')
+    const none = pl.selfTalkReady(lines, () => '')
+    ok(none.ok === false && none.own === 0, '一句没录时不该给自问自答')
   }
 
   // ---- 数字包的表达:图要读得出「几个」 ----
@@ -2812,8 +2886,24 @@ function run() {
       ok(chars.length === i + 1, `${w} 的图应该正好是 ${i + 1} 个(实际 ${chars.length} 个)`)
       ok(new Set(chars).size === 1, `${w} 的图应该是同一样东西重复,不能混着摆`)
     })
-    // 零用数字 0️⃣ —— 空罐子表达不了「零」,孩子只会认成「罐子」
-    ok(byEn.get('zero').emoji.indexOf('0') >= 0, '零应该用数字 0 表示')
+    /*
+      零。
+
+      整组卡的规矩是「front 是数字、emoji 是数量」。零画不出个数 ——
+      1–10 靠「重复几个同样的东西」看得出来,零没有东西可重复。
+      空罐子 🫙 会被认成「罐子」;0️⃣ 更糟,它让图也变成了数字,
+      破坏了「图=数量」这条规矩。
+      现在的做法:卡面照旧是数字 0,图给一个他见过的「一个也没有」的场面
+      (空盘子),读出来的话里点明「一个也没有」。
+    */
+    const zero = byEn.get('zero')
+    ok(zero.front === '0', '零的卡面要和 1–10 一样是数字本身')
+    ok([...zero.emoji].length <= 2, '零的图不该是一串东西 —— 那读出来就成了「几个」')
+    ok(zero.emoji.indexOf('0') < 0, '零的图不能又是一个数字 0,否则这张卡只剩符号')
+    ok(
+      (zero.say || '').indexOf('没有') >= 0,
+      '零读出来要点明「一个也没有」—— 光念一个「零」他对不上任何东西',
+    )
     // 序数配名次:奖牌本身没错,错在卡面只写「第一」,和金牌对不上
     ok(byEn.get('first').front.indexOf('名') >= 0, '序数的卡面要写「第一名」,才对得上那块金牌')
   }

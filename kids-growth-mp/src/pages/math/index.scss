@@ -234,11 +234,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  &--wide {
-    width: 100%;
-    box-sizing: border-box;
-    margin-top: 20px;
-  }
+  /*
+    ⚠️ 这里原先写着 `&--wide { width: 100% }`,把 app.scss 里
+    「收尾按钮收窄到六成」那条整个盖掉了 —— 用户报的
+    「做完题那个返回/完成键特别长」就是这么来的:
+    改了公共样式,这一页却还是满行。
+    共用修饰符只在 app.scss 定一处,页面里不再重复定义(自测有关卡钉着)。
+  */
   &--primary {
     background: #f9497a;
   }

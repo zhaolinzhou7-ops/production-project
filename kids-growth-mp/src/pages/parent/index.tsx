@@ -28,6 +28,8 @@ import {
   playText,
   playWordAudio,
   getLastPlayedLabel,
+  diagnoseAudio,
+  type DiagLine,
 } from '../../lib/audio'
 import {
   ensureRewards,
@@ -71,6 +73,32 @@ const DEFAULT_LIMIT = 30
 function Parent() {
   const { prompt, promptNode } = usePrompt()
   const [unlocked, setUnlocked] = useState(false)
+  /*
+    声音自检从首页搬到这里。
+    它是**家长排查问题**用的工具:逐个试听八九个音源、把失败原因列出来。
+    放在首页时孩子随手就点到了 —— 他不知道那是什么,只知道
+    「我点了一下,程序开始自己一个接一个地响」。
+  */
+  const [diag, setDiag] = useState<DiagLine[]>([])
+  const [checking, setChecking] = useState(false)
+  const [progress, setProgress] = useState(0)
+
+  const checkSound = async () => {
+    let lines: DiagLine[] = []
+    try {
+      setChecking(true)
+      lines = await diagnoseAudio((done, total) => setProgress(Math.round((done / total) * 100)))
+    } catch (e) {
+      setChecking(false)
+      Taro.showToast({ title: '自检出错', icon: 'none' })
+      return
+    }
+    setChecking(false)
+    setDiag(lines)
+    // 结果直接画在页面上(比弹窗更好读、也不会被弹窗长度截断)
+    if (lines.some((l) => l.ok)) void playText('小朋友你好', 'zh_CN')
+  }
+
   const [pinInput, setPinInput] = useState('')
   const [stats, setStats] = useState<LearningStats | null>(null)
   const [weak, setWeak] = useState<Array<{ front: string; lapses: number }>>([])
@@ -423,6 +451,80 @@ function Parent() {
   return (
     <View className='pa'>
       {promptNode}
+
+      {/*
+        家长专用的入口全部收在**密码后面**。
+
+        原先内容库、成长档案、声音自检这些和孩子的学习入口混在首页上,
+        孩子随手一点就进了「声音自检」——他不知道那是什么,只知道
+        「我点了一下,程序开始自己响」。而这些页面里还有清空数据、
+        改学段这种一点就回不去的操作。
+
+        分开之后的规则很简单:**孩子能点的都在首页,家长要操作的都在这一页**,
+        中间隔一道密码。首页仍然看得见「家长中心」这个入口 ——
+        藏起来和锁起来是两回事,前者让家长找不到,后者只挡住孩子。
+      */}
+      <Text className='pa__h'>家长工具</Text>
+      <View className='ptiles'>
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/packs/index' })}>
+          <Text className='ptile__i'>📚</Text>
+          <Text className='ptile__t'>内容库</Text>
+        </View>
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/spotcheck/index' })}>
+          <Text className='ptile__i'>🔎</Text>
+          <Text className='ptile__t'>线下抽查</Text>
+        </View>
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/archive/index' })}>
+          <Text className='ptile__i'>🌱</Text>
+          <Text className='ptile__t'>成长档案</Text>
+        </View>
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/habits/index' })}>
+          <Text className='ptile__i'>🪥</Text>
+          <Text className='ptile__t'>习惯设置</Text>
+        </View>
+        <View className='ptile' onClick={() => Taro.navigateTo({ url: '/pages/rewards/index' })}>
+          <Text className='ptile__i'>🎁</Text>
+          <Text className='ptile__t'>奖励管理</Text>
+        </View>
+        <View className='ptile' onClick={() => void checkSound()}>
+          <Text className='ptile__i'>🔊</Text>
+          <Text className='ptile__t'>声音自检</Text>
+        </View>
+      </View>
+      {checking ? <Text className='pa__sound'>正在逐个试听音源… {progress}%</Text> : null}
+      {diag.length > 0 ? (
+        <View className='diag'>
+          <Text className='diag__t'>
+            可用音源 {diag.filter((l) => l.ok).length}/{diag.length}
+            {diag.some((l) => l.ok) ? '(打勾的会自动优先使用)' : ''}
+          </Text>
+          {/* 失败要说清原因 —— 只报一个 ❌ 等于什么都没说 */}
+          {diag.map((l) => (
+            <Text key={l.label} className={l.ok ? 'diag__l diag__l--ok' : 'diag__l'}>
+              {l.ok ? '✅' : '❌'} {l.label}
+              {l.reason ? ` —— ${l.reason}` : ''}
+            </Text>
+          ))}
+          {diag.some((l) => l.reason && l.reason.indexOf('域名') >= 0) ? (
+            <Text className='diag__hint'>
+              有音源因为「域名没加白名单」失败。这个只能在微信公众平台改:
+              登录 mp.weixin.qq.com → 开发管理 → 开发设置 → 服务器域名,
+              把 tts.baidu.com、dict.youdao.com、fanyi.baidu.com、fanyi.sogou.com
+              四个都加进「downloadFile 合法域名」。加完等几分钟再试。
+            </Text>
+          ) : null}
+          {diag.every((l) => !l.ok) ? (
+            <Text className='diag__hint'>
+              全部取不到:开发者工具请勾选「详情 → 本地设置 → 不校验合法域名」;真机需在小程序后台把 tts.baidu.com、dict.youdao.com 加入 downloadFile 合法域名。
+            </Text>
+          ) : null}
+          <Text className='diag__close' onClick={() => setDiag([])}>
+            收起
+          </Text>
+        </View>
+      ) : null}
+
+
       {/* 等级 */}
       <View className='lv'>
         <Text className='lv__e'>{stats.level.cur.emoji}</Text>

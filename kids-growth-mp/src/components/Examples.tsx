@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { View, Text } from '@tarojs/components'
+import Taro from '@tarojs/taro'
 import { examplesFor, pluralPhrase } from '../core/examples'
-import { playWordAudio } from '../lib/audio'
+import { playWordAudio, stopAudio } from '../lib/audio'
 import { startRecord, stopRecord, playFile, keepRecording } from '../lib/recorder'
 import { saveMyVoice, getMyVoice } from '../store/voice'
 import './Examples.scss'
@@ -47,6 +48,44 @@ export default function Examples(props: {
   /** 改一下就重新渲染:录音索引是同步读的,不会自己通知 */
   const [tick, setTick] = useState(0)
 
+  /*
+    「连读」的定时器要存下来。
+
+    这是用户报的那个 bug 的根:原先连读是一串 setTimeout 撒出去就不管了 ——
+    点了连读再去点录音,喇叭里的句子照样一条一条往外蹦,
+    全被麦克风录进他自己的声音里。而且离开这一页它们还会继续开火。
+
+    存下来才停得住:开录之前先把这一串清掉,离开页面也清掉。
+  */
+  const allTimers = useRef<Array<ReturnType<typeof setTimeout>>>([])
+  const clearAll = () => {
+    for (const t of allTimers.current) clearTimeout(t)
+    allTimers.current = []
+  }
+  useEffect(
+    () => () => {
+      clearAll()
+      /*
+        没停的录音也要停。不停的话互斥闸会一直锁着(见 lib/audioLock),
+        换到别的页面就变成「哪儿都没声音」—— 而且看不出原因,
+        比声音打架难查得多。
+      */
+      stopRecord()
+    },
+    [],
+  )
+
+  /*
+    录音期间不许放声音 —— 麦克风和喇叭是同一件事。
+    真正的闸门在 lib/audioLock,这里再挡一层是为了给一句说明:
+    按钮能点、点了没反应,看起来就是「坏了」。
+  */
+  const blocked = (): boolean => {
+    if (!recordingOf) return false
+    Taro.showToast({ title: '正在录音,先点 ⏹ 停', icon: 'none' })
+    return true
+  }
+
   const lines: string[] = []
   const phrase = pluralPhrase(word, packKey)
   for (const l of examplesFor(word, packKey, topic)) lines.push(l)
@@ -61,6 +100,9 @@ export default function Examples(props: {
       return
     }
     if (recordingOf) return
+    // 开录之前把连读那一串掐掉,否则句子会被录进他自己的声音里
+    clearAll()
+    stopAudio()
     setRecordingOf(line)
     startRecord(
       (path) => {
@@ -84,10 +126,19 @@ export default function Examples(props: {
 
   /** 三条连起来读一遍:短语 → 句子,一次听完整 */
   const playAll = () => {
+    if (blocked()) return
+    // 上一次连读还没放完就再点一次:先清掉,不然两串会叠着响
+    clearAll()
     lines.forEach((line, i) => {
       // 每条之间留够时间,不然会互相打断
-      setTimeout(() => void playWordAudio(line), i * 2200)
+      allTimers.current.push(setTimeout(() => void playWordAudio(line), i * 2200))
     })
+  }
+
+  /** 点着听:录音期间挡住 */
+  const say = (line: string) => {
+    if (blocked()) return
+    void playWordAudio(line)
   }
 
   return (
@@ -95,7 +146,7 @@ export default function Examples(props: {
       <View className='ex__top'>
         <Text className='ex__h'>Read it 读一读</Text>
         <View className='ex__tops'>
-          <Text className='ex__all' onClick={playAll}>
+          <Text className={recordingOf ? 'ex__all ex__all--off' : 'ex__all'} onClick={playAll}>
             ▶ 连读
           </Text>
           {zh ? (
@@ -111,11 +162,11 @@ export default function Examples(props: {
         const busy = recordingOf === line
         return (
           <View key={line} className='ex__row'>
-            <Text className='ex__t' onClick={() => void playWordAudio(line)}>
+            <Text className='ex__t' onClick={() => say(line)}>
               {line}
             </Text>
             <View className='ex__acts'>
-              <Text className='ex__b' onClick={() => void playWordAudio(line)}>
+              <Text className={recordingOf ? 'ex__b ex__b--off' : 'ex__b'} onClick={() => say(line)}>
                 🔊
               </Text>
               {busy ? (
@@ -129,7 +180,13 @@ export default function Examples(props: {
                 </Text>
               ) : null}
               {mine && !busy ? (
-                <Text className='ex__b' onClick={() => playFile(mine)}>
+                <Text
+                  className={recordingOf ? 'ex__b ex__b--off' : 'ex__b'}
+                  onClick={() => {
+                    if (blocked()) return
+                    playFile(mine)
+                  }}
+                >
                   ▶
                 </Text>
               ) : null}

@@ -48,7 +48,13 @@ import { isSpeechAvailable } from '../../lib/speech'
 import { scorePronunciation } from '../../core/score'
 import CorrectBurst from '../../components/CorrectBurst'
 import { getMyVoice, saveMyVoice, deleteMyVoice, myVoiceCount, pruneMissing } from '../../store/voice'
-import { buildPlaylist, ownVoiceCount, swapRoles, type DialogLine } from '../../core/playlist'
+import {
+  buildPlaylist,
+  ownVoiceCount,
+  selfTalkReady,
+  swapRoles,
+  type DialogLine,
+} from '../../core/playlist'
 import { rankForRecording, type RankedSentence } from '../../core/voicePriority'
 import { useParentGate } from '../../components/ParentGate'
 import { withGuard } from '../../components/Guard'
@@ -117,6 +123,7 @@ function Talk() {
 
   const startParentRec = (sentence: string) => {
     if (parentRec) return
+    stopConvo()
     setParentRec(sentence)
     startRecord(
       (tempPath) => {
@@ -191,6 +198,20 @@ function Talk() {
   /** 本段对话里拿到的最高星,练完时存进记录 */
   const [bestStars, setBestStars] = useState(0)
 
+  /*
+    ---- 角色互换(真的换,不只是回放时换) ----
+
+    原来只有一个方向:机器问、他答。他练到的永远是**回答**。
+    可提问是另一半能力,而且更难 —— 回答只要听懂了接一句,
+    提问得先想清楚「我想知道什么」。4 岁半正是满脑子问号的年纪,
+    把提问这一半交给他,他反而更来劲:问完机器真的会答,那是他触发的。
+
+    打开之后这一轮里:上面那句(原本机器问的)变成**他要说的**,
+    下面那句(原本他答的)变成**机器答的**。录音、打分的目标句跟着换,
+    所以他录下来的是问句 —— 这也正是「自问自答」回放能成立的前提。
+  */
+  const [swap, setSwap] = useState(false)
+
   // ---------------- 自由对话 ----------------
   const [chatLines, setChatLines] = useState<ChatLine[]>([])
   const [chatState, setChatState] = useState<ChatState>(newChatState())
@@ -258,6 +279,7 @@ function Talk() {
 
   const back = () => {
     stopAudio()
+    setSwap(false)
     setDialog(null)
     setCartoon(null)
     setRhyme(null)
@@ -271,20 +293,47 @@ function Talk() {
     用定时器串,不靠 onEnded —— 音源偶尔不出声时靠 onEnded 会卡死不动,
     这个坑在磨耳朵那里已经踩过一次了。
   */
+  /*
+    录音期间不许放声音。
+
+    真正的闸门在 lib/audioLock:一开录,所有在放的声音立刻停,
+    录音期间任何播放请求都不响应 —— 因为喇叭里的范读会被麦克风一起录进去,
+    回放时听到的是自己念一半、机器念一半糊在一起。
+
+    但光靠闸门不够:按钮照样能点、点了却没反应,那看起来就是「坏了」。
+    所以这里再挡一层,并告诉他为什么 —— **静默失败比出错更难查**。
+  */
+  const blocked = () => {
+    if (!recording && !parentRec) return false
+    Taro.showToast({ title: '正在录音,先点 ⏹ 停止', icon: 'none' })
+    return true
+  }
+
   const [playing, setPlaying] = useState(false)
   const convoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /*
+    这两个延时任务也要存下来。
+    不存的话离开页面它们照样会到点开火 —— 人已经回到首页了,
+    兜里的手机突然念一句英文。
+  */
+  const abTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const failTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const dialogLines = (d: Dialog, swap = false): DialogLine[] => {
+  const dialogLines = (d: Dialog, swapped = false): DialogLine[] => {
     const lines: DialogLine[] = []
     for (const t of d.turns) {
       lines.push({ speaker: 'bot', text: t.bot })
       lines.push({ speaker: 'kid', text: t.expect })
     }
-    return swap ? swapRoles(lines) : lines
+    return swapped ? swapRoles(lines) : lines
   }
 
   const convoStats = (d: Dialog) =>
     ownVoiceCount(buildPlaylist(dialogLines(d), (t) => getMyVoice(t, 'kid')))
+
+  /** 自问自答放不放得起来:问句和答句各要有至少一句是他自己录的 */
+  const selfTalk = (d: Dialog) => selfTalkReady(dialogLines(d), (t) => getMyVoice(t, 'kid'))
 
   const stopConvo = () => {
     if (convoTimer.current) clearTimeout(convoTimer.current)
@@ -293,9 +342,10 @@ function Talk() {
     setPlaying(false)
   }
 
-  const playConvo = (d: Dialog, swap = false) => {
+  const playConvo = (d: Dialog, swapped = false, ownAll = false) => {
+    if (blocked()) return
     stopConvo()
-    const items = buildPlaylist(dialogLines(d, swap), (t) => getMyVoice(t, 'kid'))
+    const items = buildPlaylist(dialogLines(d, swapped), (t) => getMyVoice(t, 'kid'), { ownAll })
     if (items.length === 0) return
     setPlaying(true)
     let i = 0
@@ -316,8 +366,19 @@ function Talk() {
     step()
   }
 
-  // 离开页面把连播停掉,免得返回首页还在响
-  useEffect(() => () => stopConvo(), [])
+  // 离开页面把连播停掉,免得返回首页还在响。
+  // 顺便把两个延时任务清掉、把没停的录音停掉 ——
+  // 录音不停的话互斥闸会一直锁着,回到别的页面就变成「哪儿都没声音」。
+  useEffect(
+    () => () => {
+      stopConvo()
+      if (abTimer.current) clearTimeout(abTimer.current)
+      if (failTimer.current) clearTimeout(failTimer.current)
+      if (replyTimer.current) clearTimeout(replyTimer.current)
+      stopRecord()
+    },
+    [],
+  )
 
   const reward = () => {
     // 撞上每日上限时不再加分,但照常练 —— 记下来给结算页说明一句
@@ -332,8 +393,24 @@ function Talk() {
 
   // ---------------- 跟读:录音 / 打分 / A-B 对比 ----------------
 
-  const toggleRecord = (kidTarget: string) => {
+  /*
+    `replyAfter`:他说完之后机器接的那一句。
+
+    这是角色互换真正的回报。他问出 "How many ducks?" 之后,
+    要是屏幕只回一句「录好啦」,那他刚才做的事和跟读没区别 ——
+    **提问之所以是提问,是因为有人答**。所以录音一停,隔半秒机器就答上,
+    像真的被他问到了一样。半秒不是随便定的:立刻接会像回声,
+    太久他的注意力就跑了。
+  */
+  const toggleRecord = (kidTarget: string, replyAfter?: string) => {
     if (!recording) {
+      /*
+        开录之前把连播掐掉。
+        lib/audioLock 会停掉正在响的声音,但连播是一串定时器 ——
+        声音停了,定时器还在,过一秒它又放下一句。必须从这里停。
+      */
+      stopConvo()
+      if (replyTimer.current) clearTimeout(replyTimer.current)
       setRecording(true)
       setMsg('录音中…读完再点一次')
       startRecord(
@@ -348,7 +425,13 @@ function Talk() {
             () => setRecPath(path),
           )
           setRecording(false)
-          setMsg('录好啦,可以对比听听')
+          setMsg(replyAfter ? '问得好!听它怎么答 👇' : '录好啦,可以对比听听')
+          if (replyAfter) {
+            replyTimer.current = setTimeout(() => {
+              replyTimer.current = null
+              playWordAudio(replyAfter)
+            }, 600)
+          }
         },
         () => {
           setRecording(false)
@@ -362,14 +445,19 @@ function Talk() {
 
   /** A/B 对比:先放范读,再放自己的,差别一听就出来 */
   const compareAB = (sentence: string) => {
+    if (blocked()) return
+    if (abTimer.current) clearTimeout(abTimer.current)
     playWordAudio(sentence)
-    setTimeout(() => {
+    abTimer.current = setTimeout(() => {
+      abTimer.current = null
       if (recPath) playFile(recPath)
     }, 2600)
   }
 
   /** `alts` 是同样正确的其它说法,打分时一并比对,取最高分 */
   const gradeSpeak = (target: string, alts?: string[]) => {
+    // 识别本身要占麦克风,和录音撞车
+    if (!listening && blocked()) return
     if (!isSpeechAvailable()) {
       setMsg('这台设备没有语音识别,读完自己点「我读对了」就好')
       return
@@ -406,10 +494,15 @@ function Talk() {
   const [failedSent, setFailedSent] = useState('')
 
   const listen = (sentence: string) => {
+    if (blocked()) return
     setFailedSent('')
+    if (failTimer.current) clearTimeout(failTimer.current)
     playWordAudio(sentence)
     // 全部音源试完大约要几秒,之后再看这一句是不是彻底没读出来
-    setTimeout(() => setFailedSent(getFailedSentence()), 6000)
+    failTimer.current = setTimeout(() => {
+      failTimer.current = null
+      setFailedSent(getFailedSentence())
+    }, 6000)
   }
 
   /** 一句台词下面通用的「听 / 慢 / 录 / 对比 / 打分」工具条 */
@@ -443,7 +536,13 @@ function Talk() {
           </View>
         ) : null}
         {mine && !busy ? (
-          <View className='vbar__b' onClick={() => playFile(mine)}>
+          <View
+            className='vbar__b'
+            onClick={() => {
+              if (blocked()) return
+              playFile(mine)
+            }}
+          >
             <Text className='vbar__t'>▶️ 试听</Text>
           </View>
         ) : null}
@@ -457,16 +556,34 @@ function Talk() {
     )
   }
 
-  const toolbar = (sentence: string, alts?: string[]) => (
+  /*
+    录音时,除了「⏹ 停止」以外的按钮全部灰掉。
+
+    灰掉不等于拿掉 —— 拿掉会让按钮位置整排跳动,4 岁半的孩子手指已经
+    伸过去了,按钮却挪了地方。灰在原处、点了给一句话说明,才是他能懂的。
+    (而且节点数量保持不变,Taro 也不会在同一位置上换节点类型。)
+  */
+  const toolCls = () => (recording ? 'tool tool--off' : 'tool')
+
+  const toolbar = (sentence: string, alts?: string[], replyAfter?: string) => (
     <View className='tools'>
       {voiceBar(sentence)}
-      <View className='tool' onClick={() => listen(sentence)}>
+      <View className={toolCls()} onClick={() => listen(sentence)}>
         <Text className='tool__t'>🔊 听</Text>
       </View>
-      <View className='tool' onClick={() => playEnglishSlow(sentence)}>
+      <View
+        className={toolCls()}
+        onClick={() => {
+          if (blocked()) return
+          playEnglishSlow(sentence)
+        }}
+      >
         <Text className='tool__t'>🐢 慢速</Text>
       </View>
-      <View className={recording ? 'tool tool--rec' : 'tool'} onClick={() => toggleRecord(sentence)}>
+      <View
+        className={recording ? 'tool tool--rec' : 'tool'}
+        onClick={() => toggleRecord(sentence, replyAfter)}
+      >
         <Text className='tool__t'>{recording ? '⏹ 停止' : '🎙 录我的'}</Text>
       </View>
       {/*
@@ -475,16 +592,22 @@ function Talk() {
         退出再进来按钮就没了,用户的感受就是「没有回放功能」。
       */}
       {recPath || getMyVoice(sentence, 'kid') ? (
-        <View className='tool' onClick={() => playFile(recPath || getMyVoice(sentence, 'kid'))}>
+        <View
+          className={toolCls()}
+          onClick={() => {
+            if (blocked()) return
+            playFile(recPath || getMyVoice(sentence, 'kid'))
+          }}
+        >
           <Text className='tool__t'>▶️ 回放</Text>
         </View>
       ) : null}
       {recPath ? (
-        <View className='tool' onClick={() => compareAB(sentence)}>
+        <View className={toolCls()} onClick={() => compareAB(sentence)}>
           <Text className='tool__t'>🆚 对比</Text>
         </View>
       ) : null}
-      <View className='tool' onClick={() => gradeSpeak(sentence, alts)}>
+      <View className={toolCls()} onClick={() => gradeSpeak(sentence, alts)}>
         <Text className='tool__t'>{listening ? '✅ 读完了' : '⭐ 打分'}</Text>
       </View>
     </View>
@@ -707,6 +830,7 @@ function Talk() {
                   setDialog(d)
                   setStep(0)
                   setBestStars(0)
+                  setSwap(false)
                   resetLine()
                   playWordAudio(d.turns[0].bot)
                 }}
@@ -728,6 +852,16 @@ function Talk() {
     }
     const turn = dialog.turns[step]
     const last = step >= dialog.turns.length - 1
+    /*
+      互换之后,「他要说的那句」和「机器说的那句」整个对调:
+      平时他要说 turn.expect(回答),互换后他要说 turn.bot(提问)。
+      录音、打分、连播全都跟着这一个变量走 —— 只在这里算一次,
+      下面各处都引用它,免得漏改某一处导致「录的是 A、打分打的是 B」。
+    */
+    const mine = swap ? turn.bot : turn.expect
+    const mineZh = swap ? turn.botZh : turn.expectZh
+    const theirs = swap ? turn.expect : turn.bot
+    const theirsZh = swap ? turn.expectZh : turn.botZh
     return (
       <View className='play'>
         <View className='play__bar'>
@@ -740,37 +874,101 @@ function Talk() {
           </Text>
         </View>
 
+        {/*
+          换边开关。
+          两个分支都是同一个带 onClick 的 View,只换 class 和文字 ——
+          带事件/不带事件的节点在同一位置互换会让 Taro 报 `_num`。
+        */}
+        <View
+          className={swap ? 'swapbar swapbar--on' : 'swapbar'}
+          onClick={() => {
+            stopConvo()
+            setSwap(!swap)
+            resetLine()
+            /*
+              换完先放一遍 turn.bot —— 两个方向要听的都是它:
+              换成他来问,turn.bot 就是他要说的那句;
+              换回机器问,turn.bot 就是机器开口的那句。
+              他还不识字,不听就不知道要说什么。
+            */
+            playWordAudio(turn.bot)
+          }}
+        >
+          {/*
+            措辞要准。这些对话里 bot 那句**大多**是问句(What is it? / How many ducks?),
+            但也有几句是招呼(Hello! / Here you are!)。一律写成「你来问」,
+            碰到招呼句时孩子会对不上;写成「你先说、它来答」两种都对,
+            而且照样说清楚了「这回轮到你起头」。
+          */}
+          <Text className='swapbar__t'>{swap ? '🙋 你先说,它来答' : '🤖 它先说,你来答'}</Text>
+          <Text className='swapbar__d'>
+            {swap
+              ? '你问完它就回答你 —— 点一下换回去'
+              : '点一下换成你先说(问问题比回答更难,也更好玩)'}
+          </Text>
+        </View>
+
+        {/*
+          互换时,他那句排在前面(他先问),机器那句排在后面(它后答)。
+          顺序不能只靠文字说明 —— 4 岁半是照着屏幕从上往下走的,
+          谁在上面谁就先说。
+        */}
+        {swap ? (
+          <View className='bubble bubble--me'>
+            <View className='bubble__body'>
+              <Text className='bubble__lab'>轮到你先说</Text>
+              <Text className='bubble__en'>{mine}</Text>
+              <Text
+                className={showZh ? 'bubble__zh' : 'bubble__peek'}
+                onClick={() => setShowZh(true)}
+              >
+                {showZh ? mineZh : '看中文提示'}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         <View className='bubble bubble--bot'>
           <Text className='bubble__e'>{turn.emoji ?? '🤖'}</Text>
           <View className='bubble__body'>
-            <Text className='bubble__en' onClick={() => playWordAudio(turn.bot)}>
-              {turn.bot}
-            </Text>
-            <Text className='bubble__zh'>{turn.botZh}</Text>
-          </View>
-        </View>
-
-        <View className='bubble bubble--me'>
-          <View className='bubble__body'>
-            <Text className='bubble__lab'>轮到你说</Text>
-            <Text className='bubble__en'>{turn.expect}</Text>
-            {/*
-              ⚠️ 这里必须是**同一个节点**在两种状态间切换,不能写成
-              「有 onClick 的 Text」和「没有 onClick 的 Text」二选一。
-              Taro 对带事件和不带事件的节点编译方式不同,在同一位置互换会让
-              节点别名对不上,真机上报 `componentsAlias[...]._num` 的错。
-            */}
+            {swap ? <Text className='bubble__lab'>它这样回答你 · 点一下听</Text> : null}
             <Text
-              className={showZh ? 'bubble__zh' : 'bubble__peek'}
-              onClick={() => setShowZh(true)}
+              className='bubble__en'
+              onClick={() => {
+                if (blocked()) return
+                playWordAudio(theirs)
+              }}
             >
-              {showZh ? turn.expectZh : '看中文提示'}
+              {theirs}
             </Text>
+            <Text className='bubble__zh'>{theirsZh}</Text>
           </View>
         </View>
 
-        {toolbar(turn.expect, turn.alts)}
-        {turn.alts && turn.alts.length > 0 ? (
+        {!swap ? (
+          <View className='bubble bubble--me'>
+            <View className='bubble__body'>
+              <Text className='bubble__lab'>轮到你说</Text>
+              <Text className='bubble__en'>{mine}</Text>
+              {/*
+                ⚠️ 这里必须是**同一个节点**在两种状态间切换,不能写成
+                「有 onClick 的 Text」和「没有 onClick 的 Text」二选一。
+                Taro 对带事件和不带事件的节点编译方式不同,在同一位置互换会让
+                节点别名对不上,真机上报 `componentsAlias[...]._num` 的错。
+              */}
+              <Text
+                className={showZh ? 'bubble__zh' : 'bubble__peek'}
+                onClick={() => setShowZh(true)}
+              >
+                {showZh ? mineZh : '看中文提示'}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* 互换时把机器要答的那句一起传进去 —— 他问完,它就答 */}
+        {toolbar(mine, swap ? undefined : turn.alts, swap ? theirs : undefined)}
+        {!swap && turn.alts && turn.alts.length > 0 ? (
           <Text className='alts'>这样说也对:{turn.alts.join(' / ')}</Text>
         ) : null}
         {feedback()}
@@ -810,7 +1008,7 @@ function Talk() {
         <View className='convo'>
           <View
             className={playing ? 'convo__b convo__b--on' : 'convo__b'}
-            onClick={() => (playing ? stopConvo() : playConvo(dialog))}
+            onClick={() => (playing ? stopConvo() : playConvo(dialog, swap))}
           >
             <Text className='convo__t'>
               {playing ? '⏹ 停止播放' : '▶️ 连起来听一遍(像真的对话)'}
@@ -825,12 +1023,41 @@ function Talk() {
             })()}
           </Text>
           {/*
-            角色互换:一直是机器问、他答,他练的只有「回答」。
-            而提问和回答是两种能力,提问还更难 —— 它要求他先想清楚自己想知道什么。
+            **自问自答。**
+
+            平时连播是「机器一句、他一句」,他听到的只有一半自己。
+            但只要他在「你来问」那一边也录过,这段两边就都有他的声音了 ——
+            这时候整段放出来,是他自己在跟自己一问一答。
+
+            这个功能不是为了好玩才做的(虽然确实好玩):
+            好玩他就会反复放,反复放就是反复输入 —— 趣味在这里是复读机,
+            比任何「再练一遍」的提示都有效。
+
+            按钮只在两边都有他的录音时才出现 —— 只有一边时点开听到的
+            仍然是半个机器人,那会让他觉得这个按钮坏了。
           */}
-          <View className='convo__b convo__b--swap' onClick={() => playConvo(dialog, true)}>
-            <Text className='convo__t'>🔁 换你来问(角色互换)</Text>
-          </View>
+          {(() => {
+            const st = selfTalk(dialog)
+            if (st.ok) {
+              return (
+                <View
+                  className='convo__b convo__b--self'
+                  onClick={() => playConvo(dialog, false, true)}
+                >
+                  <Text className='convo__t'>
+                    🙋‍♂️ 全是我的声音(自己问自己答 · {st.own}/{st.total} 句)
+                  </Text>
+                </View>
+              )
+            }
+            return (
+              <Text className='convo__hint'>
+                {st.answerOwn && !st.askOwn
+                  ? '想听「自己问自己答」?把上面切到「你来问」,再录几句问话就能听了'
+                  : '想听「自己问自己答」?两边都录上几句 —— 答的录几句,再切到「你来问」录几句'}
+              </Text>
+            )
+          })()}
         </View>
       </View>
     )

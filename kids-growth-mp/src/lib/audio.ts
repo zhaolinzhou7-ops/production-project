@@ -1,6 +1,7 @@
 import Taro from '@tarojs/taro'
 import { getMyVoice } from '../store/voice'
 import { playFile, fileExists, stopFile } from './recorder'
+import { isRecording, registerAudioStopper } from './audioLock'
 import { readObject, writeObject } from '../store/db'
 import { textToSpeech, isSpeechAvailable, type SpeechLang } from './speech'
 
@@ -65,6 +66,8 @@ export function getFailedSentence(): string {
 
 /** 用户主动选择逐词听时才调这个 */
 export function playWordByWord(text: string): void {
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
   const words = text.split(/[\s,.!?;:"']+/).filter((w) => /[A-Za-z]/.test(w))
   if (words.length === 0) return
   token += 1
@@ -341,6 +344,13 @@ export function stopAudio(): void {
   }
 }
 
+/*
+  把「停掉一切声音」登记给互斥闸。
+  录音一开始它会被调用 —— 连播定时器、自动朗读、上一页残留的播放链
+  都不经过按钮,只有从播放器这一层停才停得干净。
+*/
+registerAudioStopper(stopAudio)
+
 /**
  * 换上新的播放上下文,并把上一个销毁掉。
  *
@@ -474,6 +484,8 @@ function playSequence(
  * InnerAudioContext 支持 playbackRate,0.75 倍速对小朋友刚好 —— 比听不清再重放有效得多。
  */
 export function playEnglishSlow(text: string, rate = 0.75): void {
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
   const t = text.trim()
   if (!t) return
   token += 1
@@ -543,6 +555,8 @@ function playMine(text: string): boolean {
 }
 
 export function playWordAudio(word: string, accent: Accent = 2): void {
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
   const t = word.trim()
   if (!t) return
   if (playMine(t)) return
@@ -595,6 +609,8 @@ async function playPluginText(text: string, lang: SpeechLang): Promise<boolean> 
  * 朗读一段文字。插件优先(中文最自然),没有插件就走多音源真人管线。
  */
 export async function playText(text: string, lang: SpeechLang): Promise<void> {
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
   const t = text.trim()
   if (!t) return
   if (playMine(t)) return

@@ -1,4 +1,5 @@
 import Taro from '@tarojs/taro'
+import { beginRecording, endRecording, isRecording } from './audioLock'
 
 // 录音(用于「录我读的 → 回放」),与 WechatSI 的识别分开:
 // - RecorderManager 负责录音并给出 tempFilePath 供回放/AB 对比
@@ -25,6 +26,8 @@ function rec(): Taro.RecorderManager {
   if (!manager) {
     manager = Taro.getRecorderManager()
     manager.onStop((res) => {
+      // 先开闸再回调:回调里往往紧接着就要放一遍刚录的,不开闸会被自己挡住
+      endRecording()
       const cb = pendingStop
       // 先清再调:回调里如果又发起一次录音,新注册的不能被这次清理擦掉
       pendingStop = null
@@ -32,6 +35,7 @@ function rec(): Taro.RecorderManager {
       if (cb) cb(res.tempFilePath)
     })
     manager.onError((res) => {
+      endRecording()
       const cb = pendingError
       pendingStop = null
       pendingError = null
@@ -52,6 +56,9 @@ export function startRecord(onStop: (tempFilePath: string) => void, onError?: (m
   const r = rec()
   pendingStop = onStop
   pendingError = onError ?? null
+  // 上闸:正在响的声音立刻停掉,录音期间任何播放请求都不响应。
+  // 不这么做的话喇叭里的范读会被麦克风一起录进去。
+  beginRecording()
   r.start({
     duration: 15000,
     format: 'mp3',
@@ -71,6 +78,8 @@ export function stopRecord(): void {
 
 /** 回放一个本地音频文件 */
 export function playFile(tempFilePath: string): void {
+  // 正在录音时不放 —— 放了就会被录进去,而且两个声音叠着响
+  if (isRecording()) return
   try {
     const p = player()
     p.stop()

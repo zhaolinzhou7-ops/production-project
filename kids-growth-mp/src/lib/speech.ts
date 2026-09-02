@@ -1,6 +1,8 @@
 // 微信同声传译插件(WechatSI)封装:语音识别(用于本地打分)+ 文字转语音(中文/英文 TTS)。
 // 需在 src/app.config.ts 的 plugins 里注册 WechatSI,并在 mp 后台添加该插件。
 
+import { stopAllAudio } from './audioLock'
+
 export type SpeechLang = 'zh_CN' | 'en_US'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +47,11 @@ export interface RecognizeCallbacks {
 
 /** 开始「录音 + 识别」(WechatSI 一体):读完后调用 stopRecognize()。 */
 export function startRecognize(lang: SpeechLang, cb: RecognizeCallbacks): boolean {
+  /*
+    识别本身也要用麦克风,所以进来先把正在放的声音停掉 ——
+    否则喇叭里的范读会被当成「他说的话」识别进去,打出来的分完全不作数。
+  */
+  stopAllAudio()
   try {
     const m = manager()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

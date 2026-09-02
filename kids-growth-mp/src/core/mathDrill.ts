@@ -220,13 +220,26 @@ export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
   return MATH_KINDS.find((k) => k.kind === kind)
 }
 
+/*
+  幼儿档删掉了纯「数一数」类题型(count10 数一数、countShape 数图形)。
+
+  理由是具体的:他 20 以内加减已经做得不错了。让一个会算的孩子去
+  一个一个数图形,不是简单,是**倒退** —— 数出来又慢又容易错,
+  而且会把他刚建立起来的「直接算」的习惯拉回「点着数」。
+  数数是数感的第一级台阶,他早就过了那一级。
+
+  看图列式(picAdd / picSub / picDiff)**保留**:它练的不是数数,
+  是「看懂一幅图、知道该用加还是用减」—— 一年级立刻就考这个,
+  而且和「会算 5+3」是完全不同的两件事。
+  真要数数的场合还剩一个:英语口算的 How many —— 那里数数只是载体,
+  练的是英语。
+*/
 const TODDLER_KINDS: MathKind[] = [
-  'count10', 'add10', 'sub10', 'makeTen', 'compare',
+  'add10', 'sub10', 'makeTen', 'compare',
   // 英语口算:数字是他已经会的部分,所以英语那一半的负担很小
   'enCount', 'enAdd', 'enSub',
-  'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern', 'countShape',
-  // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」,
-  // 是完全不同的两件事,而一年级立刻就考后者
+  'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern',
+  // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」
   'picAdd', 'picSub', 'picDiff',
   // 4–6 岁真正的思维板块:方位、分类、比较、推理、专注力
   'position', 'oddOne', 'sizeCmp', 'logic3', 'spotDiff',
