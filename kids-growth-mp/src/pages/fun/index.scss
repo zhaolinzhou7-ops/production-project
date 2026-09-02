@@ -202,3 +202,52 @@
   background: linear-gradient(135deg, #fff1f6, #ffe4ec);
   border: 3px solid #f9497a;
 }
+
+/*
+ * 主题贴纸册。
+ *
+ * 一张 60 格的大网格里,「还差 12 张」是个抽象数字 —— 孩子不知道差的是哪几张,
+ * 也就没有「就差一张了」那股劲。分成一本一本之后,每一本都是一个够得着的目标,
+ * 空着的那一格就在眼前。
+ */
+.book {
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.6);
+
+  /* 集齐的册子整本变色 —— 那一下是这套收集机制真正的奖赏 */
+  &--done {
+    background: rgba(52, 211, 153, 0.16);
+  }
+
+  &__hd {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  &__e {
+    font-size: 40px;
+    margin-right: 12px;
+  }
+
+  &__t {
+    flex: 1;
+    min-width: 0;
+    font-size: 27px;
+    font-weight: 700;
+    color: var(--ink-2);
+  }
+
+  &__n {
+    flex-shrink: 0;
+    font-size: 23px;
+    color: var(--ink-4);
+  }
+
+  &--done .book__n {
+    color: #047857;
+    font-weight: 700;
+  }
+}

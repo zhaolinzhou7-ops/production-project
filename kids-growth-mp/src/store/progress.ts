@@ -1,10 +1,10 @@
 import { KEYS, readTable, readObject, writeObject } from './db'
 import { todayISO, addDays } from '../core/dateUtils'
 import { earnedCodes, type AchievementCtx } from '../core/achievements'
-import { STICKER_CATALOG } from '../core/stickers'
+import { STICKER_CATALOG, STICKER_BOOKS, completedBooks } from '../core/stickers'
 import { ownedStickers, getPet } from './fun'
 import { levelOf, type LevelInfo } from '../core/levels'
-import { getPoints, getStudyStreak } from './study'
+import { getPoints, getStudyStreak, packProgress } from './study'
 import type { StudyState } from '../types'
 import type { TimelineInput } from '../core/timeline'
 
@@ -146,21 +146,38 @@ export function achievementCtx(childId: string): AchievementCtx {
   const st = getStats(childId)
   const c = getCounters()
   const pet = getPet()
+  const owned = ownedStickers()
+  /*
+    内容徽章要知道每个包练熟到什么程度。
+    packProgress 已经在算这件事(给教学大纲用),这里直接借过来 ——
+    「掌握」的口径两边必须一致,否则内容库说练熟了、徽章却不发,
+    家长会以为是坏了。
+  */
+  const mastery: Record<string, number> = {}
+  try {
+    for (const p of packProgress(childId)) {
+      mastery[p.key] = p.total > 0 ? p.mastered / p.total : 0
+    }
+  } catch {
+    // 算不出来只是少几枚徽章,不该让整个成就页崩掉
+  }
   return {
     sessions: st.sessions,
     mastered: st.mastered,
     streak: st.streak,
     perfects: c.perfects,
     bestCombo: c.bestCombo,
-    stickers: ownedStickers().length,
+    stickers: owned.length,
     petsGrown: pet.graduated.length,
     mathDone: st.mathDone,
     challengeDays: c.challengeDays,
+    books: completedBooks(owned).length,
+    packMastery: mastery,
   }
 }
 
 export function earnedAchievements(childId: string): string[] {
-  return earnedCodes(achievementCtx(childId), STICKER_CATALOG.length)
+  return earnedCodes(achievementCtx(childId), STICKER_CATALOG.length, STICKER_BOOKS.length)
 }
 
 /**

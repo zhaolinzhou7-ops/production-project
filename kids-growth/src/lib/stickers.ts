@@ -1,7 +1,21 @@
 import { db } from '../db/db'
 
-// 贴纸收藏册:会话正确率 ≥80% 掉落一张随机「未拥有」贴纸。
-// 存在 settings.stickers(childId → 贴纸 key 数组),随备份一起导出。
+/*
+  贴纸收藏册。存在 settings.stickers(childId → 贴纸 key 数组),随备份一起导出。
+
+  ⚠️ w65 的一次结构性重做 —— 不是「多加几张」那么简单。
+
+  原来是一排互不相干的 emoji,随机掉落,唯一目标是集齐。
+  问题在于:**孩子没法追求任何一张具体的贴纸**。
+  「还差 12 张」是一个抽象数字,他不知道差的是哪 12 张,
+  也就没有「就差一张了」的那种劲头 —— 而那股劲头正是收集类奖励
+  全部的心理动力所在。集卡册之所以让人上瘾,靠的从来不是总数,
+  是那一页上空着的最后一格。
+
+  所以现在分成 10 本主题册,每本 6 张:目标变具体了(「太空册就差彗星了」),
+  掉落也会偏向快集齐的那一册,让册子真的能被集完。
+  顺带补了 12 张新贴纸,把每一册凑成整 6 张。
+*/
 
 export interface StickerDef {
   key: string
@@ -59,9 +73,124 @@ export const STICKER_CATALOG: StickerDef[] = [
   { key: 'kite', emoji: '🪁', name: '风筝' },
   { key: 'balloon', emoji: '🎈', name: '气球' },
   { key: 'gift', emoji: '🎁', name: '神秘礼物' },
+
+  /*
+    ---- w65 新增 12 张 ----
+    加它们不是为了「多」,是为了把每一本主题册凑成整 6 张 ——
+    一本册子差一格永远补不上,比没有这本册子更让人难受。
+  */
+  { key: 'shark', emoji: '🦈', name: '大鲨鱼' },
+  { key: 'seal', emoji: '🦭', name: '小海豹' },
+  { key: 'snail', emoji: '🐌', name: '慢吞吞蜗牛' },
+  { key: 'ant', emoji: '🐜', name: '小蚂蚁' },
+  { key: 'spider', emoji: '🕷️', name: '织网蜘蛛' },
+  { key: 'lizard', emoji: '🦎', name: '变色蜥蜴' },
+  { key: 'croc', emoji: '🐊', name: '大鳄鱼' },
+  { key: 'fossil', emoji: '🦴', name: '恐龙化石' },
+  { key: 'volcano', emoji: '🌋', name: '火山' },
+  { key: 'key', emoji: '🗝️', name: '藏宝箱钥匙' },
+  { key: 'snowflake', emoji: '❄️', name: '小雪花' },
+  { key: 'cloud', emoji: '☁️', name: '棉花糖云' },
 ]
 
 const byKey = new Map(STICKER_CATALOG.map((s) => [s.key, s]))
+
+/** 一本主题册 */
+export interface StickerBook {
+  key: string
+  emoji: string
+  name: string
+  /** 这一册里的贴纸 key;顺序就是册子里的排列顺序 */
+  members: string[]
+}
+
+/**
+ * 十本主题册,每本 6 张。
+ *
+ * 分册的依据是**孩子能一眼看懂的类别**(森林、海洋、恐龙……),
+ * 不是按稀有度或难度分 —— 稀有度对 4 岁半没有意义,
+ * 他认得出「这一格是恐龙,我还差一只」。
+ */
+export const STICKER_BOOKS: StickerBook[] = [
+  {
+    key: 'forest',
+    emoji: '🌳',
+    name: '森林伙伴',
+    members: ['panda', 'tiger', 'rabbit', 'fox', 'lion', 'koala'],
+  },
+  {
+    key: 'ocean',
+    emoji: '🌊',
+    name: '海洋世界',
+    members: ['whale', 'dolphin', 'octopus', 'penguin', 'shark', 'seal'],
+  },
+  {
+    key: 'garden',
+    emoji: '🌼',
+    name: '花园小虫',
+    members: ['butterfly', 'bee', 'ladybug', 'snail', 'ant', 'spider'],
+  },
+  {
+    key: 'dino',
+    emoji: '🦖',
+    name: '恐龙时代',
+    members: ['dino', 'trex', 'lizard', 'croc', 'fossil', 'volcano'],
+  },
+  {
+    key: 'space',
+    emoji: '🚀',
+    name: '太空探险',
+    members: ['rocket', 'ufo', 'star', 'comet', 'planet', 'alien'],
+  },
+  {
+    key: 'magic',
+    emoji: '🧙',
+    name: '魔法世界',
+    members: ['unicorn', 'dragon', 'wizard', 'fairy', 'mermaid', 'ghost'],
+  },
+  {
+    key: 'sweets',
+    emoji: '🍰',
+    name: '甜品屋',
+    members: ['cake', 'icecream', 'donut', 'candy', 'pizza', 'sushi'],
+  },
+  {
+    key: 'treasure',
+    emoji: '👑',
+    name: '宝藏箱',
+    members: ['crown', 'gem', 'medal', 'trophy', 'gift', 'key'],
+  },
+  {
+    key: 'playground',
+    emoji: '🎪',
+    name: '玩乐场',
+    members: ['guitar', 'drum', 'soccer', 'basketball', 'skateboard', 'robot'],
+  },
+  {
+    key: 'sky',
+    emoji: '🌈',
+    name: '天上飞的',
+    members: ['rainbow', 'balloon', 'kite', 'owl', 'snowflake', 'cloud'],
+  },
+]
+
+export function getBook(key: string): StickerBook | undefined {
+  return STICKER_BOOKS.find((b) => b.key === key)
+}
+
+/** 这一册集到几张 / 一共几张 */
+export function bookProgress(book: StickerBook, owned: string[]): { got: number; total: number } {
+  const set = new Set(owned)
+  return { got: book.members.filter((k) => set.has(k)).length, total: book.members.length }
+}
+
+/** 已经集齐的册子 */
+export function completedBooks(owned: string[]): StickerBook[] {
+  return STICKER_BOOKS.filter((b) => {
+    const p = bookProgress(b, owned)
+    return p.total > 0 && p.got === p.total
+  })
+}
 
 export function getSticker(key: string): StickerDef | undefined {
   return byKey.get(key)
@@ -87,15 +216,49 @@ export async function resetStickers(childId: string): Promise<void> {
 }
 
 /**
- * 掉落一张随机「未拥有」贴纸并保存;集齐时返回 null(界面另行夸奖)。
+ * 掉一张还没有的贴纸。
+ *
+ * **偏向快集齐的那一册。**
+ *
+ * 纯随机有个很实际的毛病:册子永远差最后一两张。
+ * 60 张里随机抽,想补上「太空册最后那颗彗星」平均要等 30 多次 ——
+ * 而集卡册全部的劲头就在那最后一格上,等太久那股劲就散了。
+ *
+ * 所以先看有没有「只差 1–2 张」的册子,有就从那里面抽;
+ * 一本都没有才在全部缺的里面随机。
+ * 这不是放水:掉落的门槛(正确率 ≥80%)一点没变,
+ * 变的只是**掉哪一张** —— 同样的付出,给他一个够得着的目标。
  */
+export function rollSticker(owned: string[]): StickerDef | undefined {
+  const has = new Set(owned)
+  const missing = STICKER_CATALOG.filter((s) => !has.has(s.key))
+  if (missing.length === 0) return undefined
+
+  /*
+    只差 1–2 张的册子优先。
+    差 3 张以上不算「快集齐」—— 那样几乎每本册子都会被算进来,
+    偏向就失去意义了。
+  */
+  const NEARLY_DONE = 2
+  const nearly: string[] = []
+  for (const b of STICKER_BOOKS) {
+    const p = bookProgress(b, owned)
+    const left = p.total - p.got
+    if (left > 0 && left <= NEARLY_DONE) {
+      for (const k of b.members) if (!has.has(k)) nearly.push(k)
+    }
+  }
+  const pool = nearly.length > 0 ? missing.filter((s) => nearly.includes(s.key)) : missing
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
+/** 掉落一张贴纸并存起来;集齐时返回 null(界面另行夸奖) */
 export async function awardSticker(childId: string): Promise<StickerDef | null> {
   const settings = await db.settings.get('singleton')
   if (!settings) return null
-  const owned = new Set(settings.stickers?.[childId] ?? [])
-  const pool = STICKER_CATALOG.filter((s) => !owned.has(s.key))
-  if (pool.length === 0) return null
-  const win = pool[Math.floor(Math.random() * pool.length)]
+  const owned = settings.stickers?.[childId] ?? []
+  const win = rollSticker(owned)
+  if (!win) return null
   const stickers = {
     ...(settings.stickers ?? {}),
     [childId]: [...(settings.stickers?.[childId] ?? []), win.key],

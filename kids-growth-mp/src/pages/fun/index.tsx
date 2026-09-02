@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
-import { STICKER_CATALOG } from '../../core/stickers'
+import {
+  STICKER_CATALOG,
+  STICKER_BOOKS,
+  bookProgress,
+  completedBooks,
+  getSticker,
+} from '../../core/stickers'
 import { PET_LINES, getLine, stageOf, toNextStage, isFullyGrown, FEED_THRESHOLDS } from '../../core/pets'
 import {
   ownedStickers,
@@ -194,23 +200,51 @@ function Fun() {
         ) : null}
       </View>
 
-      {/* 贴纸册 */}
+      {/*
+        贴纸册。
+
+        v65 从「一张大网格 60 格」改成**十本主题册**。
+        原因不是好看:一张 60 格的网格里,「还差 12 张」是个抽象数字,
+        孩子不知道差的是哪 12 张,也就没有「就差一张了」那股劲 ——
+        而那股劲才是收集类奖励全部的心理动力。
+        分册之后目标变具体了:「太空册就差彗星了」。
+        掉落也会偏向快集齐的那一册(见 core/stickers 的 rollSticker)。
+      */}
       <View className='sec'>
         <Text className='sec__t'>
-          贴纸册 {owned.length}/{STICKER_CATALOG.length}
+          贴纸册 {owned.length}/{STICKER_CATALOG.length} · 集齐{' '}
+          {completedBooks(owned).length}/{STICKER_BOOKS.length} 本
         </Text>
-        <Text className='sec__tip'>一次练习答对 8 成以上,就会掉一张新贴纸。</Text>
-        <View className='stickers'>
-          {STICKER_CATALOG.map((s) => {
-            const has = owned.includes(s.key)
-            return (
-              <View key={s.key} className={has ? 'st st--on' : 'st'}>
-                <Text className='st__e'>{has ? s.emoji : '❔'}</Text>
-                <Text className='st__n'>{has ? s.name : '???'}</Text>
+        <Text className='sec__tip'>
+          一次练习答对 8 成以上就掉一张新贴纸,快集齐的那一册会先掉。
+        </Text>
+        {STICKER_BOOKS.map((b) => {
+          const p = bookProgress(b, owned)
+          const full = p.got === p.total
+          return (
+            <View key={b.key} className={full ? 'book book--done' : 'book'}>
+              <View className='book__hd'>
+                <Text className='book__e'>{b.emoji}</Text>
+                <Text className='book__t'>{b.name}</Text>
+                <Text className='book__n'>
+                  {full ? '✅ 集齐啦' : `${p.got}/${p.total}`}
+                </Text>
               </View>
-            )
-          })}
-        </View>
+              <View className='stickers'>
+                {b.members.map((k) => {
+                  const def = getSticker(k)
+                  const has = owned.includes(k)
+                  return (
+                    <View key={k} className={has ? 'st st--on' : 'st'}>
+                      <Text className='st__e'>{has ? def?.emoji : '❔'}</Text>
+                      <Text className='st__n'>{has ? def?.name : '???'}</Text>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          )
+        })}
         <Text className='sec__danger' onClick={() => confirmReset('stickers')}>
           清空贴纸册
         </Text>

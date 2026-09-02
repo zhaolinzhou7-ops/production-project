@@ -42,6 +42,7 @@ const MODULES = [
   'syllabus',
   'playlist',
   'mathDrill',
+  'stickers',
   'adaptive',
   'scoreCard',
   'recommend',
@@ -91,6 +92,7 @@ const spot = await load('spotCheck')
 const syl = await load('syllabus')
 const playlist = await load('playlist')
 const mathDrill = await load('mathDrill')
+const stickers = await load('stickers')
 
 let checks = 0
 let failed = 0
@@ -103,6 +105,84 @@ function ok(cond, what) {
 }
 function eq(a, b, what) {
   ok(Object.is(a, b) || JSON.stringify(a) === JSON.stringify(b), `${what} — 得到 ${JSON.stringify(a)},期望 ${JSON.stringify(b)}`)
+}
+
+/*
+  ---- 贴纸主题册 + 兑换小额档(w65)----
+
+  原来的问题不是「奖励不够多」,是两处结构缺陷:
+  ① 一排互不相干的贴纸随机掉落 —— 孩子没法追求任何一张具体的,
+     「还差 12 张」是个抽象数字,没有「就差一张了」那股劲;
+  ② 兑换最便宜的也要 40 分,一个 4 岁半要攒三四天 ——
+     而这个年纪几乎没有延迟满足能力,三天后才兑现的奖励等于没有奖励。
+*/
+{
+  const inBooks = stickers.STICKER_BOOKS.flatMap((b) => b.members)
+  eq(inBooks.length, stickers.STICKER_CATALOG.length, '每张贴纸都要进册子,总数要对得上')
+  eq(new Set(inBooks).size, inBooks.length, '同一张贴纸不能出现在两本册子里')
+  for (const k of inBooks) ok(!!stickers.getSticker(k), `册子里的 ${k} 必须真的存在`)
+  for (const b of stickers.STICKER_BOOKS) {
+    eq(b.members.length, 6, `${b.name} 应该是 6 张`)
+    ok(!!b.emoji && !!b.name, '每本册子都要有名字和图标')
+  }
+
+  const first = stickers.STICKER_BOOKS[0]
+  eq(stickers.bookProgress(first, []).got, 0, '一张没有时进度是 0')
+  eq(stickers.bookProgress(first, first.members).got, 6, '全有时进度是满的')
+  eq(stickers.completedBooks([]).length, 0, '什么都没集时没有集齐的册子')
+  eq(stickers.completedBooks(first.members).length, 1, '集齐一本要认出来')
+
+  /*
+    掉落偏向「快集齐的那一册」。
+    纯随机的毛病很实际:册子永远差最后一两张,而集卡册全部的劲头
+    就在那最后一格上,等太久那股劲就散了。
+  */
+  const almost = first.members.slice(0, 5)
+  for (let i = 0; i < 30; i++) {
+    const got = stickers.rollSticker(almost)
+    ok(got && got.key === first.members[5], '只差一张时必须掉那一张')
+  }
+  const seen = new Set()
+  for (let i = 0; i < 200; i++) {
+    const got = stickers.rollSticker([])
+    if (got) seen.add(got.key)
+  }
+  ok(seen.size > 20, '没有接近集齐的册子时,掉落应该是全随机的')
+  eq(stickers.rollSticker(stickers.STICKER_CATALOG.map((x) => x.key)), undefined, '集齐后不再掉落')
+  const half = stickers.STICKER_CATALOG.slice(0, 30).map((x) => x.key)
+  for (let i = 0; i < 50; i++) {
+    const got = stickers.rollSticker(half)
+    ok(got && !half.includes(got.key), '绝不能掉一张已经有的')
+  }
+  // 掉落门槛没有被放宽 —— 变的只是掉哪一张
+  ok(stickers.qualifiesForSticker(8, 10), '正确率 80% 掉贴纸')
+  ok(!stickers.qualifiesForSticker(7, 10), '正确率不够不掉')
+}
+
+{
+  /*
+    兑换清单在 src/db/seedData.ts 里,那个文件会把 Dexie 一起拖进来 ——
+    自测只编译 src/lib,所以这里直接读源文件里的那一段。
+    检查的是清单本身,不是它怎么被读出来的,读法用哪种都不影响结论。
+  */
+  const seedSrc = readFileSync(path.join(ROOT, 'src', 'db', 'seedData.ts'), 'utf8')
+  const block = seedSrc.slice(seedSrc.indexOf('export const DEFAULT_REWARDS'))
+  const rewards = [...block.slice(0, block.indexOf('\n]')).matchAll(
+    /\{ name: '([^']+)', icon: '([^']+)', costPoints: (\d+) \}/g,
+  )].map((m) => ({ name: m[1], icon: m[2], costPoints: +m[3] }))
+
+  const costs = rewards.map((r) => r.costPoints)
+  ok(rewards.length >= 15, `兑换项要够挑(实际 ${rewards.length})`)
+  eq(new Set(rewards.map((r) => r.name)).size, costs.length, '兑换项不能重名')
+  ok(
+    costs.filter((c) => c <= 30).length >= 6,
+    `至少要有 6 项 30 分以内的 —— 让积分每天都花得出去(实际 ${costs.filter((c) => c <= 30).length} 项)`,
+  )
+  ok(Math.min(...costs) <= 15, '最便宜的一项要一天就够得着')
+  for (const r of rewards) {
+    ok(r.costPoints > 0 && !!r.name && !!r.icon, `${r.name} 要有名字、图标和价格`)
+    ok(r.name.length <= 20, `${r.name} 太长,兑换卡片上放不下`)
+  }
 }
 
 // ---------------------------------------------------------------- 难度自适应

@@ -52,7 +52,14 @@ import { buildPlan, planMinutes, type PlanDeck } from '../lib/dailyPlan'
 import { buildDailyCard } from '../lib/scoreCard'
 import { modesFor } from '../lib/practiceModes'
 import { isMuted, setMuted } from '../lib/sfx'
-import { STICKER_CATALOG, getOwnedStickers, resetStickers } from '../lib/stickers'
+import {
+  STICKER_CATALOG,
+  STICKER_BOOKS,
+  completedBooks,
+  getSticker,
+  getOwnedStickers,
+  resetStickers,
+} from '../lib/stickers'
 import { PET_LINES, getPet, choosePet, getTrophies, graduatePet, resetPet } from '../lib/pets'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { todayISO } from '../lib/dateUtils'
@@ -683,7 +690,8 @@ export function LearnHomePage() {
           <div className="flex-1 text-left">
             <div className="font-bold text-gray-800">我的贴纸册</div>
             <div className="text-xs text-gray-400">
-              已集 {owned.size}/{STICKER_CATALOG.length} 张 · 练得好(正确率80%+)就掉落新贴纸
+              已集 {owned.size}/{STICKER_CATALOG.length} 张 · 集齐{' '}
+              {completedBooks([...owned]).length}/{STICKER_BOOKS.length} 本 · 练得好(正确率80%+)就掉新贴纸
             </div>
           </div>
           <ChevronRight
@@ -693,18 +701,50 @@ export function LearnHomePage() {
         </button>
         {showStickers && (
           <>
-            <div className="mt-3 grid grid-cols-8 gap-1.5">
-              {STICKER_CATALOG.map((s) => (
-                <div
-                  key={s.key}
-                  title={owned.has(s.key) ? s.name : '???'}
-                  className={`flex h-9 items-center justify-center rounded-lg text-xl ${
-                    owned.has(s.key) ? 'bg-sun-400/15' : 'bg-gray-100 opacity-40 grayscale'
-                  }`}
-                >
-                  {owned.has(s.key) ? s.emoji : '❔'}
-                </div>
-              ))}
+            {/*
+              分成一本一本,不再是一张大网格。
+
+              一张 60 格的网格里,「还差 12 张」是个抽象数字 —— 孩子不知道
+              差的是哪几张,也就没有「就差一张了」那股劲,而那股劲才是
+              收集类奖励全部的心理动力。分册之后每一本都是够得着的目标,
+              空着的那一格就在眼前。掉落也会偏向快集齐的那一册。
+            */}
+            <div className="mt-3 space-y-2">
+              {STICKER_BOOKS.map((b) => {
+                const got = b.members.filter((k) => owned.has(k)).length
+                const full = got === b.members.length
+                return (
+                  <div
+                    key={b.key}
+                    className={`rounded-xl p-2 ${full ? 'bg-mint-400/15' : 'bg-black/[0.03]'}`}
+                  >
+                    <div className="mb-1 flex items-center gap-1.5 text-[11px]">
+                      <span className="text-base">{b.emoji}</span>
+                      <span className="flex-1 font-bold text-gray-600">{b.name}</span>
+                      <span className={full ? 'font-bold text-mint-600' : 'text-gray-400'}>
+                        {full ? '✅ 集齐啦' : `${got}/${b.members.length}`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {b.members.map((k) => {
+                        const def = getSticker(k)
+                        const has = owned.has(k)
+                        return (
+                          <div
+                            key={k}
+                            title={has ? def?.name : '???'}
+                            className={`flex h-9 items-center justify-center rounded-lg text-xl ${
+                              has ? 'bg-sun-400/20' : 'bg-gray-100 opacity-40 grayscale'
+                            }`}
+                          >
+                            {has ? def?.emoji : '❔'}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
             {owned.size > 0 && (
               <div className="mt-2 text-right">

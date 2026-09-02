@@ -2897,6 +2897,203 @@ function run() {
     ok(study.listErrorCards(cidD).length === 3, '同一道题反复错只存一条')
   }
 
+  /*
+    ---- 奖励:贴纸主题册 + 成就密度 + 内容徽章(v65)----
+
+    原来的问题不是「奖励不够多」,是三处结构缺陷:
+    ① 48 张互不相干的贴纸随机掉落 —— 孩子没法追求任何一张具体的,
+       「还差 12 张」是个抽象数字,没有「就差一张了」那股劲;
+    ② 18 枚徽章全是累计数,一枚都不指向他学的内容;
+    ③ 门槛前密后疏,50 组到 200 组之间要走几个月,中间一枚都拿不到。
+  */
+  {
+    const stk = L('core/stickers.js')
+
+    // 每一张都要恰好属于一本册子,不多不少 —— 漏一张就永远集不齐
+    const inBooks = stk.STICKER_BOOKS.flatMap((b) => b.members)
+    ok(inBooks.length === stk.STICKER_CATALOG.length, '每张贴纸都要进册子,总数要对得上')
+    ok(new Set(inBooks).size === inBooks.length, '同一张贴纸不能出现在两本册子里')
+    for (const k of inBooks) ok(!!stk.getSticker(k), `册子里的 ${k} 必须真的存在`)
+    for (const b of stk.STICKER_BOOKS) {
+      ok(b.members.length === 6, `${b.name} 应该是 6 张(实际 ${b.members.length})`)
+      ok(!!b.emoji && !!b.name, '每本册子都要有名字和图标 —— 孩子靠这个认出是哪一本')
+    }
+
+    // 进度与集齐
+    const first = stk.STICKER_BOOKS[0]
+    ok(stk.bookProgress(first, []).got === 0, '一张没有时进度是 0')
+    ok(stk.bookProgress(first, first.members).got === 6, '全有时进度是满的')
+    ok(stk.completedBooks([]).length === 0, '什么都没集时没有集齐的册子')
+    ok(stk.completedBooks(first.members).length === 1, '集齐一本要认出来')
+    ok(
+      stk.completedBooks(stk.STICKER_CATALOG.map((x) => x.key)).length ===
+        stk.STICKER_BOOKS.length,
+      '全部集齐时每本都算集齐',
+    )
+
+    /*
+      掉落偏向「快集齐的那一册」。
+
+      纯随机的毛病很实际:册子永远差最后一两张。60 张里随机抽,
+      想补上「太空册最后那颗彗星」平均要等 30 多次 ——
+      而集卡册全部的劲头就在那最后一格上,等太久那股劲就散了。
+    */
+    {
+      // 第一本只差最后一张,其余一张没有
+      const owned = first.members.slice(0, 5)
+      for (let i = 0; i < 30; i++) {
+        const got = stk.rollSticker(owned)
+        ok(got && got.key === first.members[5], '只差一张时必须掉那一张')
+      }
+      // 一本都不接近集齐时,照旧全随机(不能把掉落锁死在某一本上)
+      const seen = new Set()
+      for (let i = 0; i < 200; i++) {
+        const got = stk.rollSticker([])
+        if (got) seen.add(got.key)
+      }
+      ok(seen.size > 20, '没有接近集齐的册子时,掉落应该是全随机的')
+      // 全集齐了就不再掉
+      ok(stk.rollSticker(stk.STICKER_CATALOG.map((x) => x.key)) === undefined, '集齐后不再掉落')
+      // 掉的一定是还没有的那张
+      const half = stk.STICKER_CATALOG.slice(0, 30).map((x) => x.key)
+      for (let i = 0; i < 50; i++) {
+        const got = stk.rollSticker(half)
+        ok(got && !half.includes(got.key), '绝不能掉一张已经有的')
+      }
+    }
+
+    // 掉落门槛没有被放宽 —— 变的只是掉哪一张
+    ok(stk.qualifiesForSticker(8, 10), '正确率 80% 掉贴纸')
+    ok(!stk.qualifiesForSticker(7, 10), '正确率不够不掉')
+    ok(!stk.qualifiesForSticker(3, 3), '题太少不掉 —— 否则三题一组刷贴纸')
+  }
+
+  {
+    const ach = L('core/achievements.js')
+    const stk2 = L('core/stickers.js')
+
+    // code 不能重复,否则「刚拿到」的去重会出错
+    const codes = ach.ACHIEVEMENTS.map((a) => a.code)
+    ok(new Set(codes).size === codes.length, '成就 code 不能重复')
+    for (const a of ach.ACHIEVEMENTS) {
+      ok(!!a.name && !!a.emoji && !!a.how, `${a.code} 要有名字、图标和一句「怎么拿到」`)
+      ok(a.how.length <= 30, `${a.code} 的说明要短到孩子听得完`)
+    }
+
+    const base = {
+      sessions: 0, mastered: 0, streak: 0, perfects: 0, bestCombo: 0,
+      stickers: 0, petsGrown: 0, mathDone: 0, challengeDays: 0,
+    }
+    ok(ach.earnedCodes(base, 60, 10).length === 0, '什么都没做时一枚都不该有')
+
+    /*
+      **密度**:中段不能有长长的空白。
+      原来 10 → 50 → 200 组,一个每天两三组的孩子在 50 到 200 之间
+      要走三四个月,中间一枚都拿不到 —— 而这个年纪需要的恰恰是密集反馈。
+      这里把「组数」这条线上的门槛取出来,检查相邻两级的跨度不要太大。
+    */
+    for (const [field, cap, unit] of [
+      ['sessions', 200, '组'],
+      ['mastered', 500, '张'],
+      ['streak', 100, '天'],
+    ]) {
+      const at = (n) => ach.earnedCodes({ ...base, [field]: n }, 60, 10).length
+      const marks = []
+      let last = at(0)
+      for (let n = 1; n <= cap; n++) {
+        const cur = at(n)
+        if (cur > last) marks.push(n)
+        last = cur
+      }
+      ok(marks.length >= 4, `${field} 这条线至少要有 4 级(实际 ${marks.length})`)
+      for (let i = 1; i < marks.length; i++) {
+        ok(
+          marks[i] / marks[i - 1] <= 3.5,
+          `第 ${marks[i - 1]}${unit} 到第 ${marks[i]}${unit} 之间跨度太大,中间会有很长一段拿不到东西`,
+        )
+      }
+    }
+
+    // 单调:数字只增不减,拿到的成就不能变少
+    {
+      let prev = 0
+      for (let n = 0; n <= 600; n += 10) {
+        const cur = ach.earnedCodes({ ...base, mastered: n }, 60, 10).length
+        ok(cur >= prev, '掌握数增加时成就不该变少')
+        prev = cur
+      }
+    }
+
+    // 集齐册子的成就
+    ok(ach.earnedCodes({ ...base, books: 1 }, 60, 10).indexOf('book1') >= 0, '集齐一本要给徽章')
+    ok(ach.earnedCodes({ ...base, books: 2 }, 60, 10).indexOf('book3') < 0, '两本还不够 book3')
+    ok(ach.earnedCodes({ ...base, books: 10 }, 60, 10).indexOf('bookAll') >= 0, '全集齐要给全套徽章')
+    ok(
+      ach.earnedCodes({ ...base, books: 10 }, 60, 0).indexOf('bookAll') < 0,
+      '不知道总共几本时不能乱发「全套」',
+    )
+
+    /*
+      **内容徽章**:补的是这套成就最大的一个洞 ——
+      原来全是累计数,孩子拿到「记住 100 个」和他今天学会 goat 没有联系。
+    */
+    ok(ach.PACK_BADGES.length > 0, '要有内容徽章')
+    for (const b of ach.PACK_BADGES) {
+      // 指向的内容包必须真的存在,否则这枚徽章永远拿不到
+      ok(
+        content.BUILTIN_PACKS.some((p) => p.key === b.packKey),
+        `${b.name} 指向的内容包 ${b.packKey} 必须存在`,
+      )
+      const just = ach.earnedCodes(
+        { ...base, packMastery: { [b.packKey]: ach.PACK_BADGE_THRESHOLD } },
+        60,
+        10,
+      )
+      ok(just.indexOf(b.code) >= 0, `${b.name} 达到门槛就该发`)
+      const notYet = ach.earnedCodes(
+        { ...base, packMastery: { [b.packKey]: ach.PACK_BADGE_THRESHOLD - 0.01 } },
+        60,
+        10,
+      )
+      ok(notYet.indexOf(b.code) < 0, `${b.name} 没到门槛不能发`)
+    }
+    ok(ach.PACK_BADGE_THRESHOLD < 1, '门槛不能是 100% —— 那样这枚徽章几乎永远拿不到')
+
+    // 每一枚发出去的 code 都要能查到定义,否则界面上会出现空白徽章
+    const all = ach.earnedCodes(
+      {
+        sessions: 999, mastered: 999, streak: 999, perfects: 999, bestCombo: 999,
+        stickers: stk2.STICKER_CATALOG.length, petsGrown: 9, mathDone: 9999,
+        challengeDays: 999, books: stk2.STICKER_BOOKS.length,
+        packMastery: Object.fromEntries(ach.PACK_BADGES.map((b) => [b.packKey, 1])),
+      },
+      stk2.STICKER_CATALOG.length,
+      stk2.STICKER_BOOKS.length,
+    )
+    ok(all.length === ach.ACHIEVEMENTS.length, `全满时应拿到全部徽章(${all.length}/${ach.ACHIEVEMENTS.length})`)
+    for (const c of all) ok(!!ach.getAchievement(c), `发出的 ${c} 必须有定义`)
+  }
+
+  {
+    /*
+      ---- 兑换清单:必须有「今晚就能用掉」的那一档 ----
+
+      原来八项全在 60–300 分。一个 4 岁半每天挣十几分,最便宜的也要攒四五天 ——
+      而这个年纪几乎没有延迟满足能力,四天后才能兑现的奖励,
+      和没有奖励在心理上是一回事。
+    */
+    const rw = L('store/rewards.js')
+    const costs = rw.DEFAULT_REWARDS.map((r) => r.cost)
+    ok(rw.DEFAULT_REWARDS.length >= 15, '兑换项要够挑')
+    ok(new Set(rw.DEFAULT_REWARDS.map((r) => r.id)).size === costs.length, '兑换项 id 不能重复')
+    ok(costs.filter((c) => c <= 30).length >= 6, '至少要有 6 项 30 分以内的 —— 让积分每天都花得出去')
+    ok(Math.min(...costs) <= 15, '最便宜的一项要一天就够得着')
+    for (const r of rw.DEFAULT_REWARDS) {
+      ok(r.cost > 0 && !!r.name && !!r.emoji, `${r.id} 要有名字、图标和价格`)
+      ok(r.name.length <= 20, `${r.name} 太长,兑换卡片上放不下`)
+    }
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')

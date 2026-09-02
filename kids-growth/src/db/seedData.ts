@@ -64,15 +64,49 @@ export const DEFAULT_TASKS_BY_STAGE: Record<AgeStage, TaskTemplate[]> = {
 /** 向后兼容:未指定阶段时的默认(小学) */
 export const DEFAULT_TASKS: TaskTemplate[] = DEFAULT_TASKS_BY_STAGE.primary
 
+/*
+  兑换清单。
+
+  ⚠️ w65 补了一整档「小额」奖励,这是原来最要命的一个缺口。
+
+  原来最便宜的一项也要 40 分。一个 4 岁半每天挣十几分,意味着
+  **最便宜的那项也要攒三四天** —— 于是积分对他来说永远是「在攒,还不能用」。
+  而这个年纪几乎没有延迟满足能力:一个三天后才能兑现的奖励,
+  和没有奖励在心理上是一回事。
+
+  小额奖励的作用不是「更好的奖品」,是**让积分每天都真的花得出去** ——
+  一个能立刻换到东西的分数,才是他愿意去挣的分数。
+
+  整份清单也刻意往**体验与陪伴**上挪:用物质奖励换学习,长期会削弱
+  孩子本身的兴趣(过度理由效应);而「爸爸陪你玩一小时」这类既是奖励
+  也是亲子时间,没有这个副作用。家长可以自行增删改价。
+*/
 export const DEFAULT_REWARDS: Array<{ name: string; icon: string; costPoints: number }> = [
-  { name: '睡前多讲一个故事', icon: '📚', costPoints: 40 },
+  // ---- 小额:今晚就能用掉 ----
+  { name: '睡前多讲一个故事', icon: '📚', costPoints: 10 },
+  { name: '换一次超级大抱抱', icon: '🤗', costPoints: 10 },
+  { name: '点一首歌全家一起唱', icon: '🎵', costPoints: 15 },
+  { name: '自己挑明天穿什么', icon: '👕', costPoints: 15 },
+  { name: '当一次小老师考考爸妈', icon: '🧑‍🏫', costPoints: 20 },
+  { name: '自己挑今天的水果', icon: '🍓', costPoints: 20 },
+  { name: '骑一次马马(爸爸背)', icon: '🐴', costPoints: 25 },
+  { name: '关灯玩十分钟手电筒', icon: '🔦', costPoints: 25 },
+  { name: '给爷爷奶奶打个视频', icon: '📞', costPoints: 30 },
+  { name: '当一天家庭小队长', icon: '🎖️', costPoints: 30 },
+
+  // ---- 中额:攒两三天 ----
   { name: '看30分钟动画片', icon: '📺', costPoints: 50 },
   { name: '多玩20分钟', icon: '🎮', costPoints: 60 },
-  { name: '选今晚的一个小零食', icon: '🍪', costPoints: 60 },
-  { name: '一次冰淇淋', icon: '🍦', costPoints: 80 },
+  { name: '爸爸妈妈陪玩一小时', icon: '🤹', costPoints: 80 },
+  { name: '一起做一次点心', icon: '🧁', costPoints: 85 },
+  { name: '在客厅搭一晚帐篷', icon: '⛺', costPoints: 95 },
   { name: '决定周末晚餐吃什么', icon: '🍜', costPoints: 120 },
+
+  // ---- 大额:一两周的目标 ----
   { name: '选一本新书', icon: '📖', costPoints: 150 },
+  { name: '家庭电影之夜(他选片)', icon: '🍿', costPoints: 180 },
   { name: '周末去公园/游乐场', icon: '🎡', costPoints: 250 },
+  { name: '去一次博物馆/动物园', icon: '🦕', costPoints: 280 },
   { name: '去电影院看一场电影', icon: '🎬', costPoints: 300 },
   { name: '一个心愿小礼物', icon: '🎁', costPoints: 500 },
 ]
