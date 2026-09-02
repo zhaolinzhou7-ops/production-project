@@ -1,4 +1,5 @@
 import { playRemote, cancelRemote, ensureAudioEl, preloadRemote } from './tts'
+import { isRecording, registerAudioStopper } from './audioLock'
 import { hasMyVoice, getMyVoice } from '../db/voices'
 
 /** 发音口音:1=英式 2=美式(有道 dictvoice 约定) */
@@ -212,6 +213,9 @@ function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
  */
 export function speak(text: string, lang = 'en-US', rate = 0.9, times = 1, isFallback = false): void {
   if (typeof speechSynthesis === 'undefined') return
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
+
   if (!isFallback) cancelRemote() // 手动点朗读时,先停掉正在放的网络音频
   warmVoices()
   if (pendingSpeakTimer) {
@@ -300,6 +304,20 @@ function playBlob(blob: Blob, times: number, rate = 1): Promise<void> {
   })
 }
 
+/*
+  把「停掉一切声音」登记给互斥闸(见 lib/audioLock)。
+  录音一开始它会被调用 —— 连播定时器、自动朗读、上一页残留的播放链
+  都不经过按钮,只有从播放器这一层停才停得干净。
+*/
+registerAudioStopper(() => {
+  cancelRemote()
+  try {
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel()
+  } catch {
+    /* 忽略 */
+  }
+})
+
 /** 这句话有没有家长录音(同步,播放路径上要立刻知道) */
 export function hasParentVoice(text: string): boolean {
   return hasMyVoice(text, 'parent')
@@ -307,6 +325,7 @@ export function hasParentVoice(text: string): boolean {
 
 /** 放家长录音;没有或放不出来时返回 false,由调用方回退 */
 export async function playParentVoice(text: string, times = 1, rate = 1): Promise<boolean> {
+  if (isRecording()) return false
   if (!hasMyVoice(text, 'parent')) return false
   const blob = await getMyVoice(text, 'parent').catch(() => null)
   if (!blob) return false
@@ -320,6 +339,8 @@ export async function playParentVoice(text: string, times = 1, rate = 1): Promis
 
 /** 有录音就用录音,否则走 fallback(在线音源 → 合成音) */
 function mineFirst(text: string, fallback: () => void, rate = 1): void {
+  // 正在录音时不出声 —— 喇叭里的声音会被麦克风一起录进去(见 lib/audioLock)
+  if (isRecording()) return
   if (!hasMyVoice(text, 'parent')) {
     fallback()
     return

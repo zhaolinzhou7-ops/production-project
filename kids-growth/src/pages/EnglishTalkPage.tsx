@@ -14,7 +14,14 @@ import {
   normalizeForCompare,
 } from '../lib/audio'
 import { scorePronunciation, isRecordingSupported, startRecording, playRecording, type Recorder } from '../lib/pronounce'
-import { saveMyVoice } from '../db/voices'
+import { saveMyVoice, getMyVoice, hasMyVoice } from '../db/voices'
+import {
+  buildPlaylist,
+  ownVoiceCount,
+  selfTalkReady,
+  swapRoles,
+  type DialogLine,
+} from '../lib/playlist'
 import { hasParentVoice } from '../lib/audio'
 import { sfxCorrect, sfxFanfare, sfxSticker } from '../lib/sfx'
 import { qualifiesForSticker, awardSticker, type StickerDef } from '../lib/stickers'
@@ -153,6 +160,18 @@ export function EnglishTalkPage() {
   // ---- 对话状态 ----
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [turnIdx, setTurnIdx] = useState(0)
+  /*
+    ---- 角色互换(真的换,不只是回放时换) ----
+
+    原来只有一个方向:机器问、他答。他练到的永远是**回答**。
+    可提问是另一半能力,而且更难 —— 回答只要听懂了接一句,
+    提问得先想清楚「我想知道什么」。
+
+    打开之后这一轮里:上面那句(原本机器问的)变成他要说的,
+    下面那句(原本他答的)变成机器答的。识别、录音的目标句跟着换,
+    所以他录下来的是问句 —— 这也正是「自问自答」回放能成立的前提。
+  */
+  const [swap, setSwap] = useState(false)
   const [turnStars, setTurnStars] = useState<number[]>([])
   const [listening, setListening] = useState(false)
   const [msg, setMsg] = useState('')
@@ -231,6 +250,8 @@ export function EnglishTalkPage() {
   const startDialog = (d: Dialog) => {
     setDialog(d)
     setTurnIdx(0)
+    // 每段从「它先说」开始 —— 换边是这一段里的选择,不该跟着他跨段带走
+    setSwap(false)
     setTurnStars([])
     setDone(null)
     setWonSticker(null)
@@ -262,20 +283,97 @@ export function EnglishTalkPage() {
   const listenDialog = async () => {
     if (!dialog) return
     const turn = dialog.turns[turnIdx]
+    // 互换之后他要说的是问句,识别的目标句也得跟着换 ——
+    // 不换的话他问了一句,程序拿另一句去比对,分数完全不作数
+    const target = swap ? turn.bot : turn.expect
+    const reply = swap ? turn.expect : ''
     setListening(true)
-    setMsg('聆听中…请用英语回答')
+    setMsg(swap ? '聆听中…用英语问它' : '聆听中…请用英语回答')
     try {
-      const r = await recognizeOnce(turn.expect, 'en-US')
-      const score = scoreReply(r.transcript, turn.expect)
+      const r = await recognizeOnce(target, 'en-US')
+      const score = scoreReply(r.transcript, target)
       setListening(false)
       setLastStars(score.stars)
       setMsg(score.message + (r.transcript ? `(听到:${r.transcript})` : ''))
-      if (score.stars >= 2) setTimeout(() => nextTurn(score.stars), 1400)
+      /*
+        他问完,机器要真的答上。
+
+        这是角色互换的回报所在:提问之所以是提问,是因为有人答。
+        要是他问出 "How many ducks?" 之后屏幕只回一句「说得不错」,
+        那他刚才做的事和跟读没区别。
+      */
+      if (reply) setTimeout(() => sayEn(reply), 700)
+      if (score.stars >= 2) setTimeout(() => nextTurn(score.stars), reply ? 2600 : 1400)
     } catch {
       setListening(false)
       setMsg('没听清,再试一次;也可以点「我说对了」继续')
     }
   }
+
+  /*
+    ---- 连贯对话回放 ----
+
+    练习是一句一句割裂的:机器说一句、他跟一句、翻页、再来一句。
+    练完他脑子里留下的是十个碎片,而不是「我和人说了一段话」。
+    而语言真正的成就感来自连起来那一刻。
+
+    排期是纯逻辑(lib/playlist),这里只按排期一句一句放。
+    用定时器串,不靠 onended —— 音源偶尔不出声时靠 onended 会卡死不动。
+
+    `voiceOf` 返回的是句子本身当标记(有没有录过是同步能问的),
+    真正的音频在播的时候才去 IndexedDB 里取 —— 排期不该等 IO。
+  */
+  const [convoPlaying, setConvoPlaying] = useState(false)
+  const convoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const dialogLines = (d: Dialog, swapped = false): DialogLine[] => {
+    const lines: DialogLine[] = []
+    for (const t of d.turns) {
+      lines.push({ speaker: 'bot', text: t.bot })
+      lines.push({ speaker: 'kid', text: t.expect })
+    }
+    return swapped ? swapRoles(lines) : lines
+  }
+
+  const kidVoiceOf = (t: string) => (hasMyVoice(t, 'kid') ? t : '')
+
+  const stopConvo = () => {
+    if (convoTimer.current) clearTimeout(convoTimer.current)
+    convoTimer.current = null
+    setConvoPlaying(false)
+  }
+
+  const playConvo = (d: Dialog, swapped = false, ownAll = false) => {
+    stopConvo()
+    const items = buildPlaylist(dialogLines(d, swapped), kidVoiceOf, { ownAll })
+    if (items.length === 0) return
+    setConvoPlaying(true)
+    let i = 0
+    const step = () => {
+      if (i >= items.length) {
+        setConvoPlaying(false)
+        return
+      }
+      const it = items[i]
+      i += 1
+      // 他自己录过就放他的;没录过用机器音顶上,**不跳过** ——
+      // 跳过会让整段缺一半,听起来像机器在自言自语
+      if (it.voice) {
+        void getMyVoice(it.voice, 'kid').then((b) => {
+          if (b) playRecording(b)
+          else sayEn(it.text)
+        })
+      } else {
+        sayEn(it.text)
+      }
+      const dur = 900 + it.text.split(/\s+/).length * 320
+      convoTimer.current = setTimeout(step, dur + it.gapMs)
+    }
+    step()
+  }
+
+  // 离开页面把连播停掉,免得回到首页还在响
+  useEffect(() => () => stopConvo(), [])
 
   // ---- 复述逻辑 ----
   const startRetellRound = () => {
@@ -340,17 +438,33 @@ export function EnglishTalkPage() {
       if (rec) {
         const blob = await rec.stop()
         setRecBlob(blob)
+        /*
+          存到哪一句名下,必须跟着「这一轮他说的是哪句」走。
+
+          互换之后他说的是 bot 那句(提问),照旧存到 expect 名下的话:
+          ①「连起来听」会把他的问句当成答句放,整段颠倒;
+          ② 自问自答永远凑不齐两边,那个按钮永远不出现。
+        */
+        const turn = dialog?.turns[turnIdx]
         const target =
           tab === 'retell'
             ? retells[rIdx]?.en
             : tab === 'dialog'
-              ? dialog?.turns[turnIdx]?.expect
+              ? swap
+                ? turn?.bot
+                : turn?.expect
               : ''
         if (target) await saveMyVoice(target, blob, 'kid')
       }
       return
     }
     try {
+      /*
+        开录之前把连播掐掉。
+        lib/audioLock 会停掉正在响的声音,但连播是一串定时器 ——
+        声音停了,定时器还在,过一秒它又放下一句,全被麦克风录进去。
+      */
+      stopConvo()
       setRecBlob(null)
       recorderRef.current = await startRecording()
       setRecording(true)
@@ -519,6 +633,8 @@ export function EnglishTalkPage() {
         setTab(t)
         setDone(null)
         setDialog(null)
+        setSwap(false)
+        stopConvo()
         setRhyme(null)
         setRetellStarted(false)
         setCartoon(null)
@@ -580,6 +696,7 @@ export function EnglishTalkPage() {
             onClick={() => {
               setDone(null)
               setDialog(null)
+              setSwap(false)
               setRetellStarted(false)
             }}
             className="rounded-2xl bg-white/80 px-6 py-3 font-bold text-gray-600 active:scale-95 transition"
@@ -656,23 +773,79 @@ export function EnglishTalkPage() {
           {dialog.turns[turnIdx].emoji && (
             <div className="my-3 text-7xl">{dialog.turns[turnIdx].emoji}</div>
           )}
+
+          {/*
+            换边开关。
+
+            措辞要准:这些对话里机器那句**大多**是问句(What is it? / How many ducks?),
+            但也有几句是招呼(Hello! / Here you are!)。一律写成「你来问」,
+            碰到招呼句时孩子会对不上;写成「你先说、它来答」两种都对,
+            而且照样说清楚了「这回轮到你起头」。
+          */}
+          <button
+            onClick={() => {
+              stopConvo()
+              setSwap((v) => !v)
+              resetPerTurn()
+              // 换完先放一遍 bot 那句:换成他先说,它就是他要说的;
+              // 换回机器先说,它就是机器开口的那句。两个方向要听的都是它。
+              setTimeout(() => sayEn(dialog.turns[turnIdx].bot), 300)
+            }}
+            className={`mb-3 w-full max-w-sm rounded-2xl px-4 py-2.5 text-left active:scale-95 ${
+              swap ? 'bg-mint-400/25' : 'bg-white/70'
+            }`}
+          >
+            <div className={`text-sm font-bold ${swap ? 'text-mint-600' : 'text-gray-600'}`}>
+              {swap ? '🙋 你先说,它来答' : '🤖 它先说,你来答'}
+            </div>
+            <div className="mt-0.5 text-[11px] text-gray-400">
+              {swap ? '你问完它就回答你 —— 点一下换回去' : '点一下换成你先说(提问比回答更难,也更好玩)'}
+            </div>
+          </button>
+
+          {/* 互换时他那句排在前面 —— 4 岁半是照着屏幕从上往下走的,谁在上面谁先说 */}
+          {swap && (
+            <div className="w-full max-w-sm rounded-3xl rounded-tr-md bg-sun-400/20 p-4 text-left shadow-sm">
+              <div className="text-[11px] font-bold text-gray-500">轮到你先说</div>
+              <div className="text-lg font-bold text-gray-800">{dialog.turns[turnIdx].bot}</div>
+              <div className="mt-0.5 text-xs text-gray-400">{dialog.turns[turnIdx].botZh}</div>
+              <button
+                onClick={() => sayEn(dialog.turns[turnIdx].bot)}
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-gray-600 active:scale-95"
+              >
+                <Volume2 size={13} /> 听听怎么说
+              </button>
+            </div>
+          )}
+
           {/* 机器人气泡 */}
-          <div className="w-full max-w-sm rounded-3xl rounded-tl-md bg-white/85 p-4 text-left shadow-sm">
-            <div className="text-lg font-bold text-gray-800">🤖 {dialog.turns[turnIdx].bot}</div>
-            <div className="mt-0.5 text-xs text-gray-400">{dialog.turns[turnIdx].botZh}</div>
+          <div
+            className={`w-full max-w-sm rounded-3xl rounded-tl-md bg-white/85 p-4 text-left shadow-sm ${
+              swap ? 'mt-3' : ''
+            }`}
+          >
+            {swap && <div className="text-[11px] font-bold text-gray-500">它这样回答你</div>}
+            <div className="text-lg font-bold text-gray-800">
+              🤖 {swap ? dialog.turns[turnIdx].expect : dialog.turns[turnIdx].bot}
+            </div>
+            <div className="mt-0.5 text-xs text-gray-400">
+              {swap ? dialog.turns[turnIdx].expectZh : dialog.turns[turnIdx].botZh}
+            </div>
             <button
-              onClick={() => sayEn(dialog.turns[turnIdx].bot)}
+              onClick={() => sayEn(swap ? dialog.turns[turnIdx].expect : dialog.turns[turnIdx].bot)}
               className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600 active:scale-95"
             >
-              <Volume2 size={13} /> 再听一遍
+              <Volume2 size={13} /> {swap ? '听它怎么答' : '再听一遍'}
             </button>
           </div>
 
-          {/* 提示 */}
-          <button onClick={() => setShowHint((v) => !v)} className="mt-3 text-xs text-gray-400 underline">
-            {showHint ? '收起提示' : '💡 不会说?看提示'}
-          </button>
-          {showHint && (
+          {/* 提示:互换时他要说的已经写在上面了,再给一遍「答案示范」就成了剧透 */}
+          {!swap && (
+            <button onClick={() => setShowHint((v) => !v)} className="mt-3 text-xs text-gray-400 underline">
+              {showHint ? '收起提示' : '💡 不会说?看提示'}
+            </button>
+          )}
+          {!swap && showHint && (
             <div className="mt-2 w-full max-w-sm rounded-2xl bg-sun-400/15 p-3">
               <div className="font-bold text-gray-700">{dialog.turns[turnIdx].expect}</div>
               <div className="text-xs text-gray-400">{dialog.turns[turnIdx].expectZh}</div>
@@ -683,6 +856,19 @@ export function EnglishTalkPage() {
                 <Volume2 size={12} /> 听答案示范
               </button>
             </div>
+          )}
+
+          {/* 录下自己说的这一句 —— 录了才有「连起来听」和「自问自答」 */}
+          {isRecordingSupported() && (
+            <button
+              onClick={() => void toggleRecord()}
+              className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium active:scale-95 ${
+                recording ? 'bg-orange-100 text-orange-600' : 'bg-brand-100 text-brand-600'
+              }`}
+            >
+              {recording ? <Square size={15} /> : <Disc size={15} />}
+              {recording ? '停止' : '录我说的'}
+            </button>
           )}
 
           {recognitionOk && (
@@ -710,6 +896,67 @@ export function EnglishTalkPage() {
             <button onClick={() => nextTurn(3)} className="rounded-xl bg-mint-100 px-4 py-2 text-sm text-mint-600 active:scale-95">
               我说对了
             </button>
+          </div>
+
+          {/*
+            **把整段串起来放一遍。**
+
+            练习是一句一句割裂的:机器说一句、他跟一句、翻页、再来一句。
+            练完他脑子里留下的是十个碎片,而不是「我和人说了一段话」。
+            而语言真正的成就感来自连起来那一刻 —— 机器的声音和他自己的声音
+            一来一回地放出来,他会发现「原来这一整段是我说的」。
+            没录过的那几句用机器音顶上,**不跳过**:跳过整段就缺一半。
+          */}
+          <div className="mt-6 w-full max-w-sm rounded-2xl bg-white/70 p-3">
+            <button
+              onClick={() => (convoPlaying ? stopConvo() : playConvo(dialog, swap))}
+              className={`w-full rounded-xl px-4 py-2.5 text-sm font-bold active:scale-95 ${
+                convoPlaying ? 'bg-orange-100 text-orange-600' : 'bg-brand-100 text-brand-600'
+              }`}
+            >
+              {convoPlaying ? '⏹ 停止播放' : '▶️ 连起来听一遍(像真的对话)'}
+            </button>
+            {(() => {
+              const st = ownVoiceCount(buildPlaylist(dialogLines(dialog), kidVoiceOf))
+              return st.kid > 0 && st.own > 0 ? (
+                <div className="mt-2 text-center text-[11px] text-gray-400">
+                  这段里有 {st.own}/{st.kid} 句是你自己的声音
+                </div>
+              ) : null
+            })()}
+            {/*
+              **自问自答。**
+
+              平时连播是「机器一句、他一句」,他听到的只有一半自己。
+              但只要他在「你先说」那一边也录过,这段两边就都有他的声音了 ——
+              整段放出来是他自己在跟自己一问一答。
+
+              好玩他就会反复放,反复放就是反复输入 ——
+              趣味在这里不是包装,是复读机。
+
+              两边都有录音时才给按钮:只有一边时点开听到的仍然是半个机器人,
+              那会让他觉得这个按钮坏了。
+            */}
+            {(() => {
+              const st = selfTalkReady(dialogLines(dialog), kidVoiceOf)
+              if (st.ok) {
+                return (
+                  <button
+                    onClick={() => playConvo(dialog, false, true)}
+                    className="mt-2 w-full rounded-xl bg-mint-400/25 px-4 py-2.5 text-sm font-bold text-mint-600 active:scale-95"
+                  >
+                    🙋‍♂️ 全是我的声音(自己问自己答 · {st.own}/{st.total} 句)
+                  </button>
+                )
+              }
+              return (
+                <div className="mt-2 text-center text-[11px] leading-relaxed text-gray-400">
+                  {st.answerOwn && !st.askOwn
+                    ? '想听「自己问自己答」?把上面切到「你先说」,再录几句就能听了'
+                    : '想听「自己问自己答」?两边都录上几句 —— 答的录几句,再切到「你先说」录几句'}
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}

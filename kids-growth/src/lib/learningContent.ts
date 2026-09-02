@@ -115,7 +115,16 @@ export const BUILTIN_PACKS: BuiltinPackMeta[] = [
     icon: '🔢',
     itemType: 'pic',
     stages: ['toddler'],
-    rev: 4, // 数字表达修正:1 用一个苹果、0 用 0️⃣、序数配名次
+    /*
+      rev 5(w63):0 从 0️⃣ 改成空盘子 🍽️,读出来是「零,一个也没有」。
+
+      整组卡的规矩是「front 是数字、emoji 是数量」。零是唯一画不出个数的数 ——
+      1–10 靠「重复几个同样的东西」看得出来,零没有东西可重复。
+      空罐子会被认成「罐子」;0️⃣ 更糟,它让图也变成了数字,规矩就破了。
+      现在给「一个也没有」找一个他见过的场面:空盘子(吃完了、一个不剩)。
+      (rev 4:1 用一个苹果、序数配名次)
+    */
+    rev: 5,
     load: () => import('../data/decks/enlight-numbers.json').then((m) => m.default as BuiltinPackData),
   },
   {

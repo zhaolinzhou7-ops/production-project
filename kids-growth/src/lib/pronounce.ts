@@ -2,6 +2,7 @@
 // 启发式(编辑距离),不做音素级测评;够孩子练、且不上传录音。
 import { normalizeForCompare } from './audio'
 import { ensureAudioEl, cancelRemote } from './tts'
+import { beginRecording, endRecording, isRecording } from './audioLock'
 
 function levenshtein(a: string, b: string): number {
   const m = a.length
@@ -65,6 +66,9 @@ export interface Recorder {
 /** 开始录音;stop() 返回音频 Blob 供回放。只存内存,不落盘不上传。 */
 export async function startRecording(): Promise<Recorder> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  // 上闸:正在响的声音立刻停,录音期间任何播放请求都不响应。
+  // 不这么做的话喇叭里的范读会被麦克风一起录进去(见 lib/audioLock)。
+  beginRecording()
   const rec = new MediaRecorder(stream)
   const chunks: BlobPart[] = []
   rec.ondataavailable = (e) => {
@@ -78,12 +82,15 @@ export async function startRecording(): Promise<Recorder> {
     stop: () =>
       new Promise<Blob>((resolve) => {
         rec.onstop = () => {
+          // 先开闸再回调:回调里往往紧接着就要放一遍刚录的,不开闸会被自己挡住
+          endRecording()
           cleanup()
           resolve(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }))
         }
         rec.stop()
       }),
     cancel: () => {
+      endRecording()
       try {
         rec.stop()
       } catch {
@@ -105,6 +112,8 @@ let playbackUrl: string | null = null
  * - 两个播放器各放各的,会叠着一起响。
  */
 export function playRecording(blob: Blob): void {
+  // 正在录音时不放 —— 放了就会被录进去,而且两个声音叠着响
+  if (isRecording()) return
   try {
     const a = ensureAudioEl()
     cancelRemote()
