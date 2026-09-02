@@ -69,6 +69,8 @@ function MathRun() {
   const [challengeDone, setChallengeDone] = useState(false)
   /** 点过的那些实物(按「第几组-第几个」记),用来做「点着数」 */
   const [tapped, setTapped] = useState<string[]>([])
+  /** 点选题:他点的是第几个(0 = 还没点)—— 只用来画高亮,判分在 submit 里 */
+  const [chosen, setChosen] = useState(0)
 
   /** 这一组是不是英语口算 —— 决定题面要不要念出来 */
   const isEnglish = kinds.some((k) => k === 'enCount' || k === 'enAdd' || k === 'enSub')
@@ -117,10 +119,18 @@ function MathRun() {
     flushNow()
   }
 
-  const submit = () => {
+  /**
+   * 交卷。
+   *
+   * `picked` 是点选题选中的第几个(从 1 开始);输入题传 undefined,走输入框。
+   */
+  const submit = (picked?: number) => {
     if (feedback !== 'none') return
     const p = problems[idx]
-    const isRight = input.trim() !== '' && Number(input.trim()) === p.answer
+    const isRight =
+      picked !== undefined
+        ? picked === p.answer
+        : input.trim() !== '' && Number(input.trim()) === p.answer
     /*
       算错的题**自动进错题本**,而且是以「能重新算一遍」的形式进去的:
       带上正确答案和那张图,重做时还是让他输入,不是让他看一眼答案自评。
@@ -132,7 +142,19 @@ function MathRun() {
           front: p.text,
           back: String(p.answer),
           subject: '数学',
-          redo: { type: 'input', answer: p.answer, visual: p.visual },
+          /*
+            重做时的形式要和做题时**一模一样** ——
+            点选题错了不能变成让他打字。这是用户定过的规矩:
+            「错了什么类型的题就归入什么错题,不要换类型」。
+          */
+          redo: p.choices
+            ? {
+                type: 'choice',
+                options: p.choices.map((c) => c.label),
+                answer: p.choices[p.answer - 1]?.label ?? String(p.answer),
+                optionKind: p.choices[0]?.kind === 'text' ? 'text' : 'emoji',
+              }
+            : { type: 'input', answer: p.answer, visual: p.visual },
         })
       } catch {
         /* 记错题失败不该打断做题 */
@@ -159,6 +181,7 @@ function MathRun() {
         } else {
           setIdx(idx + 1)
           setInput('')
+          setChosen(0)
           setFeedback('none')
           setTapped([])
         }
@@ -234,6 +257,69 @@ function MathRun() {
       {burst > 0 ? <CorrectBurst seed={burst} combo={combo} /> : null}
       <View className='q'>
         <Text className='q__t'>{p?.text}</Text>
+
+        {/*
+          **钟面。**
+          emoji 里的 🕒 只有十二个固定整点、而且小到看不清指针 ——
+          认时间这道题的全部内容就在指针上,所以只能自己画一个。
+          时针要跟着分钟走(3:30 的时针在 3 和 4 中间),
+          画成正对着 3 的话,教给他的是错的。
+        */}
+        {p?.clock ? (
+          <View className='clock'>
+            <View className='clock__face'>
+              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h, i) => (
+                <Text
+                  key={h}
+                  className='clock__num'
+                  style={{
+                    transform: `rotate(${i * 30}deg) translateY(-104px) rotate(${-i * 30}deg)`,
+                  }}
+                >
+                  {h}
+                </Text>
+              ))}
+              <View
+                className='clock__hand clock__hand--h'
+                style={{
+                  transform: `rotate(${((p.clock.hour % 12) + p.clock.minute / 60) * 30}deg)`,
+                }}
+              />
+              <View
+                className='clock__hand clock__hand--m'
+                style={{ transform: `rotate(${p.clock.minute * 6}deg)` }}
+              />
+              <View className='clock__pin' />
+            </View>
+          </View>
+        ) : null}
+
+        {/*
+          **方位图。**
+          「在盒子里面」用任何 emoji 组合都表达不了 ——
+          试过用 ASCII 方括号 `[ 🐰 ]`,孩子看到的是两个字符,不是一个盒子。
+          所以画一个真的方框,把东西摆进去 / 摆上面 / 摆下面 / 摆旁边。
+        */}
+        {p?.spatial ? (
+          <View className='sp2'>
+            {p.spatial.where === 'above' ? (
+              <Text className='sp2__thing'>{p.spatial.thing}</Text>
+            ) : null}
+            <View className='sp2__mid'>
+              <View className='sp2__box'>
+                {p.spatial.where === 'in' ? (
+                  <Text className='sp2__thing'>{p.spatial.thing}</Text>
+                ) : null}
+              </View>
+              {p.spatial.where === 'beside' ? (
+                <Text className='sp2__thing'>{p.spatial.thing}</Text>
+              ) : null}
+            </View>
+            {p.spatial.where === 'below' ? (
+              <Text className='sp2__thing'>{p.spatial.thing}</Text>
+            ) : null}
+          </View>
+        ) : null}
         {/*
           英语口算的题面要**能听**。
           他还不认字,更不认英文字 —— 题目摆在那儿不出声,这道题对他就是空白。
@@ -290,21 +376,75 @@ function MathRun() {
             </Text>
           </View>
         ) : null}
-        <Input
-          className={
-            feedback === 'ok' ? 'q__inp q__inp--ok' : feedback === 'no' ? 'q__inp q__inp--no' : 'q__inp'
-          }
-          type='number'
-          value={input}
-          onInput={(e) => setInput(e.detail.value)}
-          onConfirm={submit}
-          placeholder='?'
-        />
+        {/*
+          **点选题:点一下就是作答,不用打字。**
+
+          v66 补的是这个模块最要命的一处:思维板块(找不同类、找不同、
+          比长短、找规律)早就写好了,但每一道都要求他读题、然后输入一个序号 ——
+          「1.🍎 2.🚗 3.🚌 4.🚲 哪个不是一伙的?(答序号)」。
+          一个不识字的 4 岁半明明一眼就知道苹果不是车,却因为不会输入而做不了。
+          题目考的东西被交互挡在了外面。
+
+          ⚠️ 两个分支都必须是带 onClick 的同一种节点,
+          否则 Taro 会在同一位置上换节点类型,真机报 _num。
+        */}
+        {p.choices ? (
+          <View className={p.choices[0]?.kind === 'row' ? 'ch ch--row' : 'ch'}>
+            {p.choices.map((c, i) => {
+              const n = i + 1
+              const show = feedback !== 'none'
+              const cls = show
+                ? n === p.answer
+                  ? 'ch__b ch__b--right'
+                  : n === chosen
+                    ? 'ch__b ch__b--wrong'
+                    : 'ch__b'
+                : 'ch__b'
+              return (
+                <View
+                  key={`${c.label}-${i}`}
+                  className={`${cls} ch__b--${c.kind ?? 'emoji'}`}
+                  onClick={() => {
+                    if (feedback !== 'none') return
+                    setChosen(n)
+                    submit(n)
+                  }}
+                >
+                  <Text className={`ch__t ch__t--${c.kind ?? 'emoji'}`}>{c.label}</Text>
+                </View>
+              )
+            })}
+          </View>
+        ) : null}
+
+        {!p.choices ? (
+          <Input
+            className={
+              feedback === 'ok' ? 'q__inp q__inp--ok' : feedback === 'no' ? 'q__inp q__inp--no' : 'q__inp'
+            }
+            type='number'
+            value={input}
+            onInput={(e) => setInput(e.detail.value)}
+            onConfirm={() => submit()}
+            placeholder='?'
+          />
+        ) : null}
       </View>
-      {feedback === 'no' && p ? <Text className='q__ans'>正确答案:{p.answer}</Text> : null}
-      <View className='btn btn--primary btn--wide' onClick={submit}>
-        <Text className='btn__t'>{feedback === 'none' ? '确定' : feedback === 'ok' ? '✓ 答对了' : '看下一题'}</Text>
-      </View>
+      {/* 点选题的正确答案直接在选项上标出来了,不用再写一遍数字 */}
+      {feedback === 'no' && p && !p.choices ? (
+        <Text className='q__ans'>正确答案:{p.answer}</Text>
+      ) : null}
+      {/*
+        点选题**不给「确定」按钮** —— 点了选项就已经答完了,
+        再让他找一个确定键,等于多设一道他不认识的门槛。
+      */}
+      {!p?.choices ? (
+        <View className='btn btn--primary btn--wide' onClick={() => submit()}>
+          <Text className='btn__t'>
+            {feedback === 'none' ? '确定' : feedback === 'ok' ? '✓ 答对了' : '看下一题'}
+          </Text>
+        </View>
+      ) : null}
     </View>
   )
 }

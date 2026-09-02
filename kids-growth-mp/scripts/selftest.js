@@ -388,25 +388,104 @@ function run() {
     const tgt = po.text.split('\n')[1].split('数,')[1].split(' 排第几个')[0]
     const realIdx = poRow.findIndex((c) => c === tgt)
     eq(fromLeft ? realIdx + 1 : poRow.length - realIdx, po.answer, '认方位:实际位置必须等于答案')
-    // 找不同类
-    const oo = md.generateProblem('oddOne', 'toddler')
-    ok(oo.answer >= 1 && oo.answer <= 4, '找不同类的答案应是 1–4')
-    // 比长短
-    const sc = md.generateProblem('sizeCmp', 'toddler')
-    const scL = sc.text.split('\n')
-    const len1 = [...scL[0].replace('1. ', '')].length
-    const len2 = [...scL[1].replace('2. ', '')].length
-    ok(len1 !== len2, '比长短:两行不能一样长,否则没有答案')
-    eq(len1 > len2 ? 1 : 2, sc.answer, '比长短:更长的那一行必须等于答案')
-    // 找不同
-    const sd = md.generateProblem('spotDiff', 'toddler')
-    const [r1, r2] = sd.text.split('\n')
-    const a1 = [...r1]
-    const a2 = [...r2]
-    eq(a1.length, a2.length, '找不同:两排长度必须一样')
-    const diffs = a1.map((c, k) => (c === a2[k] ? -1 : k + 1)).filter((k) => k > 0)
-    eq(diffs.length, 1, '找不同:必须只有一个位置不同')
-    eq(diffs[0], sd.answer, '找不同:那个位置必须等于答案')
+    // 序数的答案是数字,但 4 岁半会说不会写 —— 要给一排数字按钮点
+    eq(po.choices.length, poRow.length, '序数题的按钮个数要和那一排的个数一样')
+    /*
+      ---- v66:思维题改成「点图作答」----
+
+      这些题型早就写好了,但每一道都要求他**读题、然后输入一个序号**:
+      「1.🍎 2.🚗 3.🚌 4.🚲 哪个和其它三个不是一伙的?(答序号)」——
+      一个不识字的 4 岁半明明一眼就知道苹果不是车,却因为不会输入而做不了。
+      题目考的东西被交互挡在了外面。下面这一批断言钉的就是「点得着」。
+    */
+    for (const k of ['oddOne', 'sizeCmp', 'spotDiff', 'position', 'where', 'clock']) {
+      const q = md.generateProblem(k, 'toddler')
+      ok(Array.isArray(q.choices) && q.choices.length >= 2, `${k} 必须给可点的选项,不能让他打字`)
+      ok(
+        q.answer >= 1 && q.answer <= q.choices.length,
+        `${k} 的答案必须落在选项范围里(答案 ${q.answer},选项 ${q.choices.length} 个)`,
+      )
+      for (const c of q.choices) ok(!!c.label, `${k} 的每个选项都要有内容`)
+      // 题面上不能再出现「答序号」「答 1 或 2」这类打字时代的残留
+      ok(!/答序号|答 1 或 2|第几个不一样/.test(q.text), `${k} 的题面不该再要求输入序号`)
+    }
+
+    // 找不同类:四选一,四个图不能重复
+    const oo2 = md.generateProblem('oddOne', 'toddler')
+    eq(oo2.choices.length, 4, '找不同类应是四选一')
+    eq(new Set(oo2.choices.map((c) => c.label)).size, 4, '四个选项不能有重复的图')
+
+    // 比长短:两条长度不能接近 —— 7 对 8 在手机上看着一样长,那考的是眼力不是比较
+    const sc2 = md.generateProblem('sizeCmp', 'toddler')
+    const scl1 = [...sc2.choices[0].label].length
+    const scl2 = [...sc2.choices[1].label].length
+    ok(Math.abs(scl1 - scl2) >= 3, `比长短的两条至少差 3 格(实际 ${scl1} vs ${scl2})`)
+    eq(scl1 > scl2 ? 1 : 2, sc2.answer, '比长短:更长的那一条必须等于答案')
+
+    // 找不同:选项那一排和题干那一排,必须正好差一个位置
+    const sd2 = md.generateProblem('spotDiff', 'toddler')
+    const sdTop = [...sd2.text.split('\n')[1]]
+    const sdBot = sd2.choices.map((c) => c.label)
+    eq(sdTop.length, sdBot.length, '找不同:两排长度必须一样')
+    const sdDiffs = sdTop.map((c, k) => (c === sdBot[k] ? -1 : k + 1)).filter((k) => k > 0)
+    eq(sdDiffs.length, 1, '找不同:必须只有一个位置不同')
+    eq(sdDiffs[0], sd2.answer, '找不同:那个位置必须等于答案')
+
+    /*
+      ---- v66 新增:方位 / 分与合 / 认识时间 ----
+    */
+    {
+      const w = md.generateProblem('where', 'toddler')
+      ok(!!w.spatial, '方位题要带图 —— emoji 拼不出「在盒子里面」')
+      eq(w.choices.length, 4, '方位题固定四个词一起出,他是把这四个当成一套学的')
+      eq(new Set(w.choices.map((c) => c.label)).size, 4, '四个方位词不能重复')
+      /*
+        **不能同时出现「在外面」和「在旁边」。**
+        东西画在盒子旁边时两个都成立 —— 他点了旁边,程序判他错,而他没错。
+        一道两个答案都对的题比一道难题有害得多:
+        它教给孩子的是「这个东西的对错没有道理」。
+      */
+      const labels = w.choices.map((c) => c.label)
+      ok(
+        !(labels.includes('在外面') && labels.includes('在旁边')),
+        '「在外面」和「在旁边」不能同时当选项 —— 会有两个正确答案',
+      )
+      // 答案要和图对得上
+      const map = { in: '在里面', above: '在上面', below: '在下面', beside: '在旁边' }
+      eq(labels[w.answer - 1], map[w.spatial.where], '方位题:答案必须和画出来的位置一致')
+    }
+
+    {
+      const sp = md.generateProblem('split', 'toddler')
+      const m = /^(\d+) 可以分成 (\d+) 和几/.exec(sp.text)
+      ok(!!m, `分一分的题面应是「几 可以分成 几 和几?」(实际 ${sp.text})`)
+      eq(Number(m[1]) - Number(m[2]), sp.answer, '分一分:总数减去一半必须等于答案')
+      ok(sp.answer >= 1, '分一分不能分出 0 —— 那不是他这个年纪该想的事')
+      ok(!!sp.visual, '分一分要配图 —— 分解本来就是「把一堆分成两堆」这个动作')
+      eq(sp.visual.groups.length, 2, '分一分的图要真的是两堆')
+
+      const ms = md.generateProblem('makeSum', 'toddler')
+      const m2 = /^(\d+) 和几合起来是 (\d+)/.exec(ms.text)
+      ok(!!m2, `合起来的题面应是「几 和几合起来是 几?」(实际 ${ms.text})`)
+      eq(Number(m2[2]) - Number(m2[1]), ms.answer, '合起来:总数减去已知那份必须等于答案')
+      ok(ms.answer >= 1, '合起来的答案不能是 0')
+    }
+
+    {
+      const ck = md.generateProblem('clock', 'toddler')
+      ok(!!ck.clock, '认时间要带钟面数据')
+      ok(ck.clock.hour >= 1 && ck.clock.hour <= 12, '钟点应在 1–12')
+      /*
+        **只出整点和半点。**
+        4–6 岁认时间的正确顺序是先整点、再半点,分钟要到小学。
+        一上来出 3:25,他学到的只有挫败。
+      */
+      ok(ck.clock.minute === 0 || ck.clock.minute === 30, '只出整点和半点')
+      eq(ck.choices.length, 4, '认时间应是四选一')
+      eq(new Set(ck.choices.map((c) => c.label)).size, 4, '四个时间选项不能重复')
+      const want = ck.clock.minute === 30 ? `${ck.clock.hour} 点半` : `${ck.clock.hour} 点`
+      eq(ck.choices[ck.answer - 1].label, want, '认时间:答案必须和钟面一致')
+    }
     // 简单枚举
     const en = md.generateProblem('enumerate', 'primary')
     const enm = /有 (\d+) .+?、(\d+) /.exec(en.text)
@@ -452,6 +531,22 @@ function run() {
     eq(nums.reduce((x, y) => x + y, 0) / nums.length, av.answer, '平均数:总和/个数 必须等于答案')
     ok(nums.every((x) => x > 0), '平均数的每个数都该是正数')
   }
+
+  /*
+    「合起来是 10」应该占多数。
+
+    凑十是这一档里回报最高的一件事:10 以内的分合练熟之后,
+    20 以内的进位加几乎是自动的。这是个统计性质的断言,
+    所以放在上面那个 400 次随机循环之外,自己抽样。
+  */
+  {
+    let ten = 0
+    for (let i = 0; i < 300; i++) {
+      if (/是 10\?/.test(md.generateProblem('makeSum', 'toddler').text)) ten += 1
+    }
+    ok(ten > 150, `「合起来是 10」应该占多数(实际 ${ten}/300)`)
+  }
+
 
   // ---- 学段:没选过必须能被认出来,不能静默当成小学 ----
   reset()

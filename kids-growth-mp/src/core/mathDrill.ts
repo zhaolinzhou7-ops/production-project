@@ -27,6 +27,11 @@ export type MathKind =
   | 'sizeCmp'
   | 'logic3'
   | 'spotDiff'
+  // v66 新增:空间方位、数的分与合、认识时间
+  | 'where'
+  | 'split'
+  | 'makeSum'
+  | 'clock'
   // 小学及以上
   | 'add'
   | 'sub'
@@ -76,6 +81,40 @@ export interface MathProblem {
   answer: number
   /** 数形结合图示;题目太大(超过 20 个)时不给,画出来反而数不清 */
   visual?: MathVisual
+  /**
+   * **可以点的选项** —— 点一下就是作答,不用打字。
+   *
+   * ⚠️ v66 补的是这个模块最要命的一处:思维板块(找不同类、找不同、
+   * 比长短、找规律)早就写好了,但**每一道都要求他读题、然后输入一个序号**:
+   *
+   *   「1.🍎 2.🚗 3.🚌 4.🚲 哪个和其它三个不是一伙的?(答序号)」
+   *
+   * 对一个不识字的 4 岁半来说,这道题真正的门槛不是分类,
+   * 是「看懂编号 + 会写数字」。他明明一眼就知道苹果不是车,
+   * 却因为不会输入而做不了 —— 题目考的东西被交互挡在了外面。
+   *
+   * 正确的交互只有一个:**直接点那个图**。
+   * 有 choices 时 answer 是「第几个选项」(从 1 开始)。
+   */
+  choices?: MathChoice[]
+  /** 钟面(认识时间专用)—— emoji 画不出钟,只能让页面自己画 */
+  clock?: { hour: number; minute: number }
+  /**
+   * 方位图(空间方位专用)。
+   *
+   * 同样是 emoji 画不出来的东西:「在盒子**里面**」用任何 emoji 组合
+   * 都表达不了 —— 试过用 ASCII 方括号 `[ 🐰 ]`,孩子看到的是两个字符,
+   * 不是一个盒子。所以交给页面画一个真的方框,把东西摆进去/摆出来。
+   */
+  spatial?: { thing: string; where: 'in' | 'above' | 'below' | 'beside' }
+}
+
+/** 一个可点的选项 */
+export interface MathChoice {
+  /** 显示什么:一个 emoji、一串 emoji(比长短)、或一个数字 */
+  label: string
+  /** 排版方式:'emoji' 一个大图;'row' 一整排(比长短用);'text' 数字或词 */
+  kind?: 'emoji' | 'row' | 'text'
 }
 
 /** 图示里用的实物 —— 都是孩子认得、且一眼能数清的 */
@@ -241,8 +280,17 @@ const TODDLER_KINDS: MathKind[] = [
   'add20', 'sub20', 'chain', 'ordinal', 'half', 'pattern',
   // 幼小衔接:看图列式 —— 从「会算 5+3」到「看懂一幅图知道该用加法」
   'picAdd', 'picSub', 'picDiff',
-  // 4–6 岁真正的思维板块:方位、分类、比较、推理、专注力
-  'position', 'oddOne', 'sizeCmp', 'logic3', 'spotDiff',
+  /*
+    4–6 岁真正的思维板块:方位、分类、比较、专注力。
+
+    ⚠️ logic3(「小红比小明快,小明比小刚快,谁最快?」)v66 从幼儿档拿掉了。
+    它是**纯文字的三段论**:一个不识字的孩子做不了,读给他听也不行 ——
+    三个名字加两组比较关系,超出这个年纪的工作记忆。
+    它是一道好题,但是给六七岁的。摆在这里只会让他每次都点错然后放弃。
+  */
+  'position', 'oddOne', 'sizeCmp', 'spotDiff',
+  // v66:空间方位、数的分与合、认识时间
+  'where', 'split', 'makeSum', 'clock',
 ]
 
 /**
@@ -542,7 +590,21 @@ function genHalf(): MathProblem {
  * 这才是真正的「幼儿奥数」—— 不是算得更快,是看出**藏在后面的那条规则**。
  * 等差、等比、隔项三种,覆盖了低龄段绝大多数规律题。
  */
-function genPattern(): MathProblem {
+/**
+ * 找规律。
+ *
+ * ⚠️ v66 拆成两档,原因很实在:
+ * 原来这道题一律出**数字序列**(2,4,8,16,( ) / 1,6,2,6,3,6,( ))——
+ * 一个 4 岁半得先认数字、看出倍增关系、再把答案写出来。
+ * 三道坎叠在一起,而其中**没有一道是「找规律」本身**。
+ *
+ * 4–6 岁真正该练的规律是**看得见的**:🍎🍌🍎🍌🍎❓
+ * 他一眼就能接下去,而这正是「规律」这个概念最早的样子。
+ * 数字序列留给认得数、写得出的年纪。
+ */
+function genPattern(stage: AgeStage = 'primary'): MathProblem {
+  if (stage === 'toddler') return genPatternVisual()
+
   const type = randInt(1, 3)
   if (type === 1) {
     const start = randInt(1, 5)
@@ -559,6 +621,38 @@ function genPattern(): MathProblem {
   const a = randInt(1, 4)
   const fix = randInt(6, 9)
   return { text: `${a}, ${fix}, ${a + 1}, ${fix}, ${a + 2}, ${fix}, ( )\n接着填什么?`, answer: a + 3 }
+}
+
+/** 幼儿档的找规律:看得见的重复,点一个图接下去 */
+function genPatternVisual(): MathProblem {
+  const pool = ['🍎', '🍌', '⭐', '🐟', '🌸', '🚗', '🐤', '🎈', '🍓', '🔵']
+  const shuffled = [...pool].sort(() => Math.random() - 0.5)
+  const [a, b, c, d] = shuffled
+
+  /*
+    三种规律,由易到难:
+    AB AB(最容易看出来)→ AAB AAB → ABC ABC。
+    长度都控制在一屏放得下,而且**至少重复两轮半** ——
+    只给一轮半的话那不叫规律,叫猜。
+  */
+  const kind = randInt(1, 3)
+  let unit: string[]
+  if (kind === 1) unit = [a, b]
+  else if (kind === 2) unit = [a, a, b]
+  else unit = [a, b, c]
+
+  const seq: string[] = []
+  while (seq.length < unit.length * 2 + 1) seq.push(unit[seq.length % unit.length])
+  const want = unit[seq.length % unit.length]
+
+  // 选项:正确的那个 + 三个同池子里的干扰项
+  const wrong = [a, b, c, d].filter((x) => x !== want).slice(0, 3)
+  const opts = [want, ...wrong].sort(() => Math.random() - 0.5)
+  return {
+    text: `${seq.join('')}❓\n接下来是哪一个?`,
+    answer: opts.indexOf(want) + 1,
+    choices: opts.map((x) => ({ label: x, kind: 'emoji' as const })),
+  }
 }
 
 /** 数图形:数量与专注力一起练,而且不需要认字 */
@@ -700,18 +794,27 @@ function genPicDiff(): MathProblem {
 function genPosition(): MathProblem {
   const fill = pick(['🍎', '🌟', '🔵'])
   const target = pick(['🐣', '🦋', '🍓'])
-  const n = randInt(5, 8)
+  const n = randInt(4, 6)
   const at = randInt(2, n - 1)
   const row = new Array(n).fill(fill)
   row[at - 1] = target
   const fromLeft = randInt(1, 2) === 1
+  const ans = fromLeft ? at : n - at + 1
+  /*
+    序数题的答案是个数字,但 4 岁半**会说不会写** ——
+    让他打字等于把「会不会数」换成了「会不会写」。给一排数字按钮点。
+  */
   return {
     text: `${row.join('')}\n从${fromLeft ? '左' : '右'}边数,${target} 排第几个?`,
-    answer: fromLeft ? at : n - at + 1,
+    answer: ans,
+    choices: Array.from({ length: n }, (_, i) => ({
+      label: String(i + 1),
+      kind: 'text' as const,
+    })),
   }
 }
 
-/** 找不同类:分类与归纳。答序号,不用认字 */
+/** 找不同类:分类与归纳。**点那个图**就行,不用认字也不用打字 */
 function genOddOne(): MathProblem {
   const groups: Array<[string[], string[]]> = [
     [['🍎', '🍌', '🍇', '🍓'], ['🚗', '✈️', '🚌']],
@@ -719,6 +822,9 @@ function genOddOne(): MathProblem {
     [['🚗', '🚌', '🚲', '✈️'], ['🍎', '🐶', '⚽']],
     [['👕', '👖', '🧦', '👟'], ['🍕', '🐟', '📕']],
     [['⚽', '🏀', '🎾', '🏐'], ['🍇', '🐶', '🚗']],
+    [['🐟', '🐙', '🦀', '🐬'], ['🐤', '🌻', '🚌']],
+    [['🌻', '🌷', '🌹', '🌼'], ['🐱', '🍕', '🚲']],
+    [['🥕', '🌽', '🍅', '🥦'], ['🐶', '⚽', '🎈']],
   ]
   const [same, other] = pick(groups)
   const three = [...same].sort(() => Math.random() - 0.5).slice(0, 3)
@@ -728,12 +834,13 @@ function genOddOne(): MathProblem {
   let k = 0
   for (let i = 1; i <= 4; i++) row.push(i === at ? odd : three[k++])
   return {
-    text: `${row.map((x, i) => `${i + 1}.${x}`).join('  ')}\n哪个和其它三个不是一伙的?(答序号)`,
+    text: '哪个和其它三个不是一伙的?',
     answer: at,
+    choices: row.map((x) => ({ label: x, kind: 'emoji' as const })),
   }
 }
 
-/** 比长短/高矮:用重复的方块表示长度,一眼能比出来 */
+/** 比长短/高矮:用重复的方块表示长度,一眼能比出来 —— 点长的那一条 */
 function genSizeCmp(): MathProblem {
   /*
     ⚠️ 只用真 emoji。原先这里用的是 ▬(U+25AC)—— 它长得像方块,
@@ -745,12 +852,23 @@ function genSizeCmp(): MathProblem {
     ['长', '🟦'],
     ['大', '🟨'],
   ])
-  let a = randInt(2, 8)
-  let b = randInt(2, 8)
-  if (a === b) b = a + 1
+  /*
+    两条的差距至少要有 3 格。
+    原先是各自随机 2–8,于是会出 7 对 8 —— 差一格,在手机上
+    两排 emoji 看着一样长。那道题考的就不是「比长短」,是眼力。
+    比长短这一档要的是**一眼就能看出来**,难度该来自别处。
+  */
+  const a = randInt(2, 5)
+  const b = a + randInt(3, 4)
+  const longFirst = randInt(1, 2) === 1
+  const [x, y] = longFirst ? [b, a] : [a, b]
   return {
-    text: `1. ${unit.repeat(a)}\n2. ${unit.repeat(b)}\n哪个更${what}?(答 1 或 2)`,
-    answer: a > b ? 1 : 2,
+    text: `哪个更${what}?`,
+    answer: longFirst ? 1 : 2,
+    choices: [
+      { label: unit.repeat(x), kind: 'row' },
+      { label: unit.repeat(y), kind: 'row' },
+    ],
   }
 }
 
@@ -779,16 +897,22 @@ function genLogic3(): MathProblem {
   }
 }
 
-/** 找不同:两排里有一个位置不一样。练的是专注力,不是知识 */
+/**
+ * 找不同:两排里有一个位置不一样。练的是专注力,不是知识。
+ *
+ * 原先问的是「第几个不一样?」,要他数出位置再输入数字 ——
+ * 找不同这件事他三秒就看出来了,却卡在「第几个」上。
+ * 现在把两排都做成可点的:**看到哪个不一样就点哪个**。
+ */
 function genSpotDiff(): MathProblem {
   /*
     这里只能用**单码点**的 emoji。
     ❤️ 这类是「基本字符 + 变体选择符」两个码点拼出来的,混进来之后
-    两排的视觉长度会对不齐,判定「第几个不一样」也会错位。
+    两排的视觉长度会对不齐,判定也会错位。
   */
   const a = pick(['🔵', '🟢', '🟣'])
   const b = pick(['🔴', '🟡', '🟠'])
-  const n = randInt(5, 8)
+  const n = randInt(4, 6)
   const at = randInt(1, n)
   const row1: string[] = []
   const row2: string[] = []
@@ -797,7 +921,147 @@ function genSpotDiff(): MathProblem {
     row1.push(e)
     row2.push(i === at ? (e === a ? b : a) : e)
   }
-  return { text: `${row1.join('')}\n${row2.join('')}\n第几个不一样?`, answer: at }
+  /*
+    选项是**第二排的每一格**,上面那排作为对照写在题干里。
+    只让点一排:两排都能点的话「点哪一个才算」说不清楚 ——
+    不一样是一对,不是一个。
+  */
+  return {
+    text: `上下两排,下面这排哪个和上面不一样?\n${row1.join('')}`,
+    answer: at,
+    choices: row2.map((x) => ({ label: x, kind: 'emoji' as const })),
+  }
+}
+
+
+// ---------------- v66:空间方位 / 分与合 / 认识时间 ----------------
+
+/**
+ * 在哪里 —— 空间方位。
+ *
+ * 为什么值得单独一档:上下里外前后左右是**数学和语言共同的地基**。
+ * 「把积木放在盒子上面」这句话他要先听懂 in / on / under 才谈得上做,
+ * 而后面所有的应用题、所有的图形题,读题都建立在这几个词上。
+ * 4–6 岁正是这几个词从「大概知道」变成「不会弄错」的阶段。
+ *
+ * 用两个 emoji 的**上下左右排布**表示关系,选项是四个词 ——
+ * 词他不认识,但题目会念出来,而画面他一眼就懂。
+ */
+function genWhere(): MathProblem {
+  const thing = pick(['🐱', '🐶', '🐤', '🐰', '🦋', '🍎', '⭐'])
+
+  /*
+    ⚠️ 不出「左 / 右」。
+    分左右要到 5–6 岁才稳,而且一行里两个 emoji 谁在左谁在右,
+    在不同手机的字体下间距差别很大 —— 出一道他必然会错、
+    而且错得没道理的题,教不会他任何东西。左右留到大一点再说。
+
+    盒子由页面画(见 spatial):emoji 拼不出「在里面」,
+    原先用 ASCII 方括号 `[ 🐰 ]` 顶替,孩子看到的是两个字符不是盒子。
+  */
+  /*
+    ⚠️ 也不出「在外面」。
+
+    这一条是画出来才发现的:东西画在盒子旁边,「在外面」和「在旁边」
+    **同时成立** —— 他点了旁边,程序判他错,而他没错。
+    一道两个答案都对的题,比一道难题有害得多:它教给孩子的是
+    「这个东西的对错没有道理」。
+
+    剩下四个互斥、且都画得清楚:里面 / 上面 / 下面 / 旁边。
+    每次都是这四个一起出现 —— 固定成一组反而更好,
+    他是把这四个词**当成一套**学会的。
+  */
+  const cases: Array<{ where: 'in' | 'above' | 'below' | 'beside'; word: string }> = [
+    { where: 'in', word: '在里面' },
+    { where: 'above', word: '在上面' },
+    { where: 'below', word: '在下面' },
+    { where: 'beside', word: '在旁边' },
+  ]
+  const c = pick(cases)
+  const opts = cases.map((x) => x.word).sort(() => Math.random() - 0.5)
+  return {
+    text: `${thing} 在盒子的哪里?`,
+    answer: opts.indexOf(c.word) + 1,
+    spatial: { thing, where: c.where },
+    choices: opts.map((x) => ({ label: x, kind: 'text' as const })),
+  }
+}
+
+/**
+ * 分一分 —— 数的分解。
+ *
+ * 「5 可以分成 2 和几」是幼小衔接里**进位加减真正的地基**。
+ * 他现在会算 5+3,但那多半是数出来的;要一眼看出 8 是 5 和 3,
+ * 靠的是分与合这套东西。凑十法、退位减,全都建在它上面。
+ *
+ * 配图不是装饰:分解本来就是「把一堆分成两堆」这个动作,
+ * 看得见那两堆,他才不是在背口诀。
+ */
+function genSplit(): MathProblem {
+  const total = randInt(3, 10)
+  const left = randInt(1, total - 1)
+  const right = total - left
+  const emoji = pick(COUNTABLES)
+  return {
+    text: `${total} 可以分成 ${left} 和几?`,
+    answer: right,
+    visual: visualOf(
+      [
+        { emoji, n: left },
+        { emoji, n: right },
+      ],
+      ['|'],
+    ),
+  }
+}
+
+/** 合起来 —— 分解的反向:几和几合起来是 10 */
+function genMakeSum(): MathProblem {
+  /*
+    优先出「合成 10」。
+    凑十是这一档里回报最高的一件事:10 以内的分合练熟之后,
+    20 以内的进位加几乎是自动的。所以三次里有两次考 10。
+  */
+  const total = randInt(1, 3) === 1 ? randInt(5, 9) : 10
+  const left = randInt(1, total - 1)
+  const emoji = pick(COUNTABLES)
+  return {
+    text: `${left} 和几合起来是 ${total}?`,
+    answer: total - left,
+    visual: visualOf([{ emoji, n: left }], []),
+  }
+}
+
+/**
+ * 看钟表 —— 认识时间。
+ *
+ * 只出**整点和半点**。
+ * 4–6 岁认时间的正确顺序是:先能把「短针指着 3」和「3 点」对上,
+ * 再是半点,分钟要到小学。一上来就出 3:25,他学到的只有挫败。
+ *
+ * 钟面 emoji 画不出来(🕒 这类是固定的十二个整点,而且很多手机上小到看不清),
+ * 所以交给页面用 CSS 画一个真的表盘 —— 见 clock 字段。
+ */
+function genClock(): MathProblem {
+  const hour = randInt(1, 12)
+  const half = randInt(1, 2) === 1
+  const minute = half ? 30 : 0
+  const right = half ? `${hour} 点半` : `${hour} 点`
+
+  // 干扰项:相邻的钟点、以及「整点↔半点」搞混的那一种 —— 都是他真会犯的错
+  const near = (h: number) => ((h + 11) % 12) + 1
+  const wrongs = [
+    half ? `${hour} 点` : `${hour} 点半`,
+    `${near(hour + 1)} 点${half ? '半' : ''}`,
+    `${near(hour - 1)} 点${half ? '' : '半'}`,
+  ]
+  const opts = [right, ...wrongs].sort(() => Math.random() - 0.5)
+  return {
+    text: '现在是几点?',
+    answer: opts.indexOf(right) + 1,
+    clock: { hour, minute },
+    choices: opts.map((x) => ({ label: x, kind: 'text' as const })),
+  }
 }
 
 // ---------------- 思维档:枚举与巧算 ----------------
@@ -972,7 +1236,7 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
     case 'half':
       return genHalf()
     case 'pattern':
-      return genPattern()
+      return genPattern(stage)
     case 'countShape':
       return genCountShape()
     case 'series':
@@ -995,6 +1259,14 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genOddOne()
     case 'sizeCmp':
       return genSizeCmp()
+    case 'where':
+      return genWhere()
+    case 'split':
+      return genSplit()
+    case 'makeSum':
+      return genMakeSum()
+    case 'clock':
+      return genClock()
     case 'logic3':
       return genLogic3()
     case 'spotDiff':

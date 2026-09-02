@@ -428,3 +428,180 @@
     color: #4f46e5;
   }
 }
+
+/*
+ * ---- v66:点选作答 / 钟面 / 方位图 ----
+ */
+
+/*
+ * 可点的选项。
+ *
+ * 思维题原先要他读题再输入序号,一个不识字的 4 岁半明明一眼看出答案
+ * 却做不了。现在点图就是作答 —— 所以这些块必须**够大**:
+ * 手指不是鼠标,而且他会连点。
+ */
+.ch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 30px;
+
+  &__b {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px;
+    padding: 16px 22px;
+    box-sizing: border-box;
+    border-radius: var(--r-md);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--sh-1);
+    transition: transform 0.09s ease, filter 0.09s ease;
+
+    &:active {
+      transform: scale(0.94);
+      filter: brightness(0.93);
+    }
+
+    /* 一个大图:四个一行放不下,两个一行正好 */
+    &--emoji {
+      width: 44%;
+    }
+
+    /* 词(方位、几点):一行两个,字要够大 */
+    &--text {
+      width: 44%;
+    }
+
+    /* 一整排(比长短):必须独占一行,不然两条长度没法比 */
+    &--row {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    &--right {
+      background: rgba(52, 211, 153, 0.3);
+    }
+
+    &--wrong {
+      background: rgba(239, 68, 68, 0.22);
+    }
+  }
+
+  /* 比长短:两条上下排,左端对齐才比得出来 */
+  &--row {
+    flex-direction: column;
+  }
+
+  &__t {
+    &--emoji { font-size: 76px; line-height: 1.1; }
+    &--text { font-size: 38px; font-weight: 700; color: var(--ink); }
+    &--row { font-size: 40px; line-height: 1.2; word-break: break-all; }
+  }
+}
+
+/*
+ * 钟面。
+ *
+ * emoji 里的 🕒 只有十二个固定整点,而且小到看不清指针 ——
+ * 认时间这道题的全部内容就在指针上,只能自己画。
+ */
+.clock {
+  display: flex;
+  justify-content: center;
+  margin: 30px 0 10px;
+
+  &__face {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    border-radius: 130px;
+    background: #fff;
+    border: 8px solid #cbd5e1;
+    box-shadow: var(--sh-1);
+  }
+
+  &__num {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 40px;
+    height: 40px;
+    margin: -20px 0 0 -20px;
+    text-align: center;
+    line-height: 40px;
+    font-size: 28px;
+    font-weight: 700;
+    color: #475569;
+  }
+
+  &__hand {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    border-radius: 6px;
+    transform-origin: 50% 100%;
+    background: #334155;
+
+    /* 时针短而粗、分针长而细 —— 这是他区分两根针的唯一线索 */
+    &--h {
+      width: 12px;
+      height: 66px;
+      margin-left: -6px;
+    }
+
+    &--m {
+      width: 8px;
+      height: 100px;
+      margin-left: -4px;
+      background: #f9497a;
+    }
+  }
+
+  &__pin {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 10px;
+    background: #334155;
+  }
+}
+
+/*
+ * 方位图。
+ *
+ * 「在盒子里面」用 emoji 拼不出来 —— 原先拿 ASCII 方括号顶替,
+ * 孩子看到的是两个字符,不是一个盒子。这里画一个真的方框。
+ */
+.sp2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 30px 0 10px;
+
+  &__mid {
+    display: flex;
+    align-items: center;
+  }
+
+  &__box {
+    width: 170px;
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 8px dashed #94a3b8;
+    border-radius: var(--r-sm);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  &__thing {
+    font-size: 68px;
+    line-height: 1.2;
+    margin: 8px;
+  }
+}
