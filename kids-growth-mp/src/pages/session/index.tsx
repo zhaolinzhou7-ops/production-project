@@ -499,6 +499,7 @@ function Session() {
     return () => {
       stopAudio()
       clearChars()
+      if (fxTimer.current) clearTimeout(fxTimer.current)
       if (abTimer.current) clearTimeout(abTimer.current)
       // 还没停的录音也要停 —— 不停的话互斥闸一直锁着,
       // 回到别的页面就变成「哪儿都没声音」,而且看不出原因
@@ -647,6 +648,8 @@ function Session() {
     ②中途去点录音,声音虽然被互斥闸挡住了,定时器却还在空转,
     松开录音的一瞬间又冒出半句诗。
   */
+  /** 点击反馈动画的收尾定时器(声明在这里,卸载 effect 用得着) */
+  const fxTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const charTimers = useRef<Array<ReturnType<typeof setTimeout>>>([])
   const clearChars = () => {
     for (const t of charTimers.current) clearTimeout(t)
@@ -885,6 +888,55 @@ function Session() {
   }
   /* 灰在原处而不是拿掉 —— 拿掉会让整排按钮跳位置,手指已经伸过去了 */
   const chipCls = (extra = '') => `chip${extra}${recording ? ' chip--off' : ''}`
+
+  /*
+    ---- 点击反馈 ----
+
+    用户报「点完之后看不到反馈」。根子在于:手指点下去之后屏幕上
+    没有任何东西动,他不知道自己点中了没有,于是**再点一次** ——
+    而喇叭和选项又挨着,第二下很容易落到旁边那个上。
+    所以「看不到反馈」和「容易点错」其实是同一件事的两头。
+
+    这里记下「刚点的是哪一个」,界面据此加一个动画类,
+    动画放完由定时器摘掉。不用 :active:那个只在手指按着的一瞬间有效,
+    他点得又快又轻,那一帧根本看不到。
+  */
+  const [tapFx, setTapFx] = useState('')
+  const fx = (key: string) => {
+    if (fxTimer.current) clearTimeout(fxTimer.current)
+    /*
+      **反馈不只有看得见的那一种。**
+
+      加一下极轻的震动:他的手指还在屏幕上,震动是最快到达的确认 ——
+      比动画早一帧,而且**不需要他盯着看**。
+      4 岁半点完常常已经把眼睛移开了,那时候只有触觉还在。
+    */
+    try {
+      Taro.vibrateShort({ type: 'light' })
+    } catch {
+      /* 有的设备不支持,忽略 */
+    }
+    setTapFx(key)
+    // 700ms 比动画本身长一点 —— 短了会在动画收尾时把类摘掉,看起来像卡了一下
+    fxTimer.current = setTimeout(() => {
+      fxTimer.current = null
+      setTapFx('')
+    }, 700)
+  }
+  /**
+   * 选项的 class:在原来的对错配色上,叠加两种**动**的反馈。
+   *
+   * · tapped —— 点中了就弹一下。这是「我按到了」,在对错出来之前就发生;
+   * · shook  —— 答错时轻轻晃一下。只变红对快速扫视是不够的,
+   *             而晃动是余光也能捕捉到的信号;晃得很轻,不吓人。
+   *
+   * 「错了没有」直接看 cls 里有没有 --wrong —— 各处判对错的变量名不一样
+   * (answer / blank.answer / redo.answer),但配色是统一算好的,
+   * 从这里读最不容易漏。
+   */
+  const optCls = (cls: string, opt: string): string =>
+    `${cls}${tapFx === `pick-${opt}` ? ' tapped' : ''}${cls.indexOf('--wrong') >= 0 ? ' shook' : ''}`
+
 
   const toggleRecord = () => {
     if (!recording) {
@@ -1149,7 +1201,7 @@ function Session() {
               const isRight = opt === answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={`${cls}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked || locked()) return; setPicked(opt); setTimeout(() => advance(opt === answer), 550) }}>
+                <View key={opt} className={`${optCls(cls, opt)}${isHanzi ? ' opt--hz' : ''}`} onClick={() => { if (picked || locked()) return; fx(`pick-${opt}`); setPicked(opt); setTimeout(() => advance(opt === answer), 550) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -1261,16 +1313,27 @@ function Session() {
             他要练的是「看到这个词就读出来」,中文摆在旁边只会让他先去看中文。
             图已经在上面了 —— 意思靠图,不靠翻译。
           */}
-          <View className='row row--wrap'>
+          {/*
+            **听的按钮和说的按钮分两排。**
+            原先挤在同一排里,他想听一遍范读、手指偏一点就开始录音了;
+            而录音一开互斥闸会把声音全停掉,表现成「点了范读没声音」——
+            他根本不知道自己按了录音。
+          */}
+          <View className='grp'>
+            <Text className='grp__lab'>👂</Text>
             <View
-              className={chipCls()}
+              className={`${chipCls()}${tapFx === 'say-listen' ? ' chip--on' : ''}`}
               onClick={() => {
                 if (blocked()) return
+                fx('say-listen')
                 playWordAudio((current.card.extra as { en?: string } | undefined)?.en ?? current.card.back)
               }}
             >
               <Text className='chip__t'>🔊 听范读</Text>
             </View>
+          </View>
+          <View className='grp'>
+            <Text className='grp__lab'>🎤</Text>
             <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
               <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
             </View>
@@ -1356,9 +1419,25 @@ function Session() {
           <Text className='card__front'>{current.card.front}</Text>
           {current.card.phonetic ? <Text className='card__ph'>/{current.card.phonetic}/</Text> : null}
           <Text className='card__back'>{current.card.back}</Text>
-          <View className='row row--wrap'>
-            <View className={chipCls()} onClick={() => { if (!blocked()) playCurrent() }}><Text className='chip__t'>🔊 范读</Text></View>
-            <View className={chipCls()} onClick={() => { if (!blocked()) playSlow() }}><Text className='chip__t'>🐢 慢速</Text></View>
+          {/* 听的一组 */}
+          <View className='grp'>
+            <Text className='grp__lab'>👂</Text>
+            <View
+              className={`${chipCls()}${tapFx === 'sp-play' ? ' chip--on' : ''}`}
+              onClick={() => { if (!blocked()) { fx('sp-play'); playCurrent() } }}
+            >
+              <Text className='chip__t'>🔊 范读</Text>
+            </View>
+            <View
+              className={`${chipCls()}${tapFx === 'sp-slow' ? ' chip--on' : ''}`}
+              onClick={() => { if (!blocked()) { fx('sp-slow'); playSlow() } }}
+            >
+              <Text className='chip__t'>🐢 慢速</Text>
+            </View>
+          </View>
+          {/* 说的一组 —— 和上面隔开,免得想听范读却按到录音 */}
+          <View className='grp'>
+            <Text className='grp__lab'>🎤</Text>
             <View className='chip' onClick={toggleRecord}><Text className='chip__t'>{recording ? '⏹ 停止' : '🔴 录我读的'}</Text></View>
             {/* 回放按**存档**判断 —— 退出重进也该还在(录音从 v47 起就是持久化的) */}
             {recPath || getMyVoice(current.card.front, 'kid') ? (
@@ -1473,10 +1552,11 @@ function Session() {
               return (
                 <View
                   key={opt}
-                  className={`${cls} opt--hz`}
+                  className={`${optCls(cls, opt)} opt--hz`}
                   onClick={() => {
                     if (picked) return
                     if (picked || locked()) return
+                    fx(`pick-${opt}`)
                     setPicked(opt)
                     if (opt === answer) void playText(answer, 'zh_CN')
                     setTimeout(() => advance(opt === answer), 550)
@@ -1538,7 +1618,7 @@ function Session() {
               const isRight = opt === blank.answer
               const cls = show ? (isRight ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
               return (
-                <View key={opt} className={cls} onClick={() => { if (picked || locked()) return; setPicked(opt); setTimeout(() => advance(opt === blank.answer), 650) }}>
+                <View key={opt} className={optCls(cls, opt)} onClick={() => { if (picked || locked()) return; fx(`pick-${opt}`); setPicked(opt); setTimeout(() => advance(opt === blank.answer), 650) }}>
                   <Text className='opt__t'>{opt}</Text>
                 </View>
               )
@@ -1591,9 +1671,10 @@ function Session() {
                 return (
                   <View
                     key={opt}
-                    className={cls}
+                    className={optCls(cls, opt)}
                     onClick={() => {
                       if (picked || locked()) return
+                      fx(`pick-${opt}`)
                       setPicked(opt)
                       const right = opt === redo.answer
                       if (right) playRedoAudio()
@@ -1620,9 +1701,10 @@ function Session() {
               return (
                 <View
                   key={opt}
-                  className={cls}
+                  className={optCls(cls, opt)}
                   onClick={() => {
                     if (picked || locked()) return
+                    fx(`pick-${opt}`)
                     setPicked(opt)
                     const right = opt === redo.answer
                     if (right) playRedoAudio()
@@ -1677,16 +1759,21 @@ function Session() {
         <View className='card card--say'>
           <Text className='say__e'>{redo.emoji ?? '🔤'}</Text>
           <Text className='say__en'>{redo.answer}</Text>
-          <View className='row row--wrap'>
+          <View className='grp'>
+            <Text className='grp__lab'>👂</Text>
             <View
-              className={chipCls()}
+              className={`${chipCls()}${tapFx === 'rd-listen' ? ' chip--on' : ''}`}
               onClick={() => {
                 if (blocked()) return
+                fx('rd-listen')
                 void playWordAudio(redo.answer, 2)
               }}
             >
               <Text className='chip__t'>🔊 听范读</Text>
             </View>
+          </View>
+          <View className='grp'>
+            <Text className='grp__lab'>🎤</Text>
             <View className={recording ? 'chip chip--rec' : 'chip'} onClick={() => toggleRecord()}>
               <Text className='chip__t'>{recording ? '⏹ 停' : '🎙 录下来'}</Text>
             </View>
@@ -1804,8 +1891,18 @@ function Session() {
               const answer = picEn ? current.card.back : current.card.front
               const show = picked !== null
               const cls = show ? (opt === answer ? 'opt opt--right' : opt === picked ? 'opt opt--wrong' : 'opt') : 'opt'
+              const spkKey = `spk-${opt}`
               return (
-                <View key={opt} className={cls}>
+                /*
+                  **喇叭拉出来单独成键,和选项隔开一整个手指的距离。**
+
+                  原先 🔊 是塞在选项条里的一小块,和「选这个」的点击区只隔 8px ——
+                  他想听一下,手指偏一点就把答案交了。而这道题本来就是让他
+                  逐个听过再选的,误触等于把这道题毁掉。
+                  中间那个字母块以前还是个**死区**(没有 onClick,点了毫无反应),
+                  现在并进选项里,整条都能点。
+                */
+                <View key={opt} className='optrow'>
                   {/*
                     **每个选项都能单独点着听。**
 
@@ -1813,34 +1910,43 @@ function Session() {
                     就知道是山羊,于是在四个他读不出来的词里瞎点一个 ——
                     答对了,但他既不知道 goat 怎么读,也不知道另外三个是什么。
                     那道题练的是「认图」,不是英语。
-
-                    现在左边那个 🔊 可以逐个试听:他要先听出哪一个读作 goat,
-                    才点得对。这一下就把题目从「认图」变成了**音—形—义三者对上**,
-                    而这正是拼读的地基。
                   */}
-                  <Text
-                    className='opt__spk'
+                  <View
+                    className={tapFx === spkKey ? 'spk spk--on' : 'spk'}
                     onClick={() => {
                       if (locked()) return
+                      fx(spkKey)
                       void playWordAudio(opt)
                     }}
                   >
-                    🔊
-                  </Text>
-                  <Text className='opt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
-                  <Text
-                    className='opt__t'
+                    {/* 波纹:点下去荡一圈出去,松手之后还在动,他才看得见 */}
+                    {tapFx === spkKey ? <View className='spk__ring' /> : null}
+                    <Text>🔊</Text>
+                  </View>
+                  <View
+                    className={`${optCls(cls, opt)} opt--pick`}
                     onClick={() => {
                       if (picked || locked()) return
+                      fx(`pick-${opt}`)
                       setPicked(opt)
                       // 选完把正确答案再读一遍 —— 错了也要听见对的那个长什么样
                       if (picEn) void playWordAudio(answer)
                       else playPic(current.card)
-                      setTimeout(() => advance(opt === answer), opt === answer ? 700 : 1200)
+                      /*
+                        **答错要多停一会儿。**
+
+                        原先答错停 1200ms,而正确答案念出来就要一秒 ——
+                        他刚听到「goat」,页面就翻走了。
+                        可答错的那一下**恰恰是最该慢下来的时刻**:
+                        他正带着「我以为是那个」的疑问,这时候听清正确答案,
+                        才是这道题真正教到他的地方。答对了倒可以快点走。
+                      */
+                      setTimeout(() => advance(opt === answer), opt === answer ? 700 : 2200)
                     }}
                   >
-                    {opt}
-                  </Text>
+                    <Text className='opt__k'>{OPTION_LETTERS[oi] ?? ''}</Text>
+                    <Text className='opt__t'>{opt}</Text>
+                  </View>
                 </View>
               )
             })}
@@ -1881,10 +1987,11 @@ function Session() {
               return (
                 <View
                   key={opt}
-                  className={cls}
+                  className={optCls(cls, opt)}
                   onClick={() => {
                     if (picked) return
                     if (picked || locked()) return
+                    fx(`pick-${opt}`)
                     setPicked(opt)
                     setTimeout(() => advance(opt === answer), 550)
                   }}
@@ -1933,10 +2040,11 @@ function Session() {
               return (
                 <View
                   key={opt}
-                  className={cls}
+                  className={optCls(cls, opt)}
                   onClick={() => {
                     if (picked) return
                     if (picked || locked()) return
+                    fx(`pick-${opt}`)
                     setPicked(opt)
                     setTimeout(() => advance(opt === answer), 550)
                   }}

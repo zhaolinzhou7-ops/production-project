@@ -403,7 +403,9 @@ function MathRun() {
               return (
                 <View
                   key={`${c.label}-${i}`}
-                  className={`${cls} ch__b--${c.kind ?? 'emoji'}`}
+                  className={`${cls} ch__b--${c.kind ?? 'emoji'}${
+                    chosen === n && feedback === 'none' ? ' tapped' : ''
+                  }${show && n === chosen && n !== p.answer ? ' shook' : ''}`}
                   onClick={() => {
                     if (feedback !== 'none') return
                     setChosen(n)

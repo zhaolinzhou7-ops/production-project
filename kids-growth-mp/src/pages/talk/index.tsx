@@ -319,6 +319,8 @@ function Talk() {
   const abTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const failTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** 点击反馈动画的收尾定时器 */
+  const fxTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dialogLines = (d: Dialog, swapped = false): DialogLine[] => {
     const lines: DialogLine[] = []
@@ -375,6 +377,7 @@ function Talk() {
       if (abTimer.current) clearTimeout(abTimer.current)
       if (failTimer.current) clearTimeout(failTimer.current)
       if (replyTimer.current) clearTimeout(replyTimer.current)
+      if (fxTimer.current) clearTimeout(fxTimer.current)
       stopRecord()
     },
     [],
@@ -565,50 +568,105 @@ function Talk() {
   */
   const toolCls = () => (recording ? 'tool tool--off' : 'tool')
 
+  /*
+    ---- 点击反馈 ----
+
+    用户报「点完之后看不到反馈」。手指点下去屏幕上没有任何东西动,
+    他不知道自己点中了没有,于是再点一次 —— 而按钮又挨着,
+    第二下很容易落到旁边那个上。所以「没反馈」和「点错」是一件事的两头。
+    不用 :active:那个只在按着的一瞬间有效,他点得又快又轻,那一帧看不到。
+  */
+  const [tapFx, setTapFx] = useState('')
+  const fx = (key: string) => {
+    if (fxTimer.current) clearTimeout(fxTimer.current)
+    setTapFx(key)
+    fxTimer.current = setTimeout(() => {
+      fxTimer.current = null
+      setTapFx('')
+    }, 700)
+  }
+  const toolFx = (key: string) => `${toolCls()}${tapFx === key ? ' chip--on' : ''}`
+
+  /*
+    **听的按钮和说的按钮分成两排。**
+
+    原先六个按钮挤在同一排里,中间只隔 12px —— 他想听一遍范读,
+    手指偏一点就开始录音了;而录音一开互斥闸会把声音全停掉
+    (见 lib/audioLock),表现成「点了没声音」,他根本不知道自己按了录音。
+
+    两排各带一个图标标签:他不识字,但 👂 和 🎤 分得清,
+    这比任何文字说明都管用。
+  */
   const toolbar = (sentence: string, alts?: string[], replyAfter?: string) => (
     <View className='tools'>
       {voiceBar(sentence)}
-      <View className={toolCls()} onClick={() => listen(sentence)}>
-        <Text className='tool__t'>🔊 听</Text>
-      </View>
-      <View
-        className={toolCls()}
-        onClick={() => {
-          if (blocked()) return
-          playEnglishSlow(sentence)
-        }}
-      >
-        <Text className='tool__t'>🐢 慢速</Text>
-      </View>
-      <View
-        className={recording ? 'tool tool--rec' : 'tool'}
-        onClick={() => toggleRecord(sentence, replyAfter)}
-      >
-        <Text className='tool__t'>{recording ? '⏹ 停止' : '🎙 录我的'}</Text>
-      </View>
-      {/*
-        回放要看**存档**,不是这次会话的临时状态。
-        v47 起孩子的录音是存下来的,但界面一直只看 recPath ——
-        退出再进来按钮就没了,用户的感受就是「没有回放功能」。
-      */}
-      {recPath || getMyVoice(sentence, 'kid') ? (
+      <View className='grp'>
+        <Text className='grp__lab'>👂</Text>
         <View
-          className={toolCls()}
+          className={toolFx('t-listen')}
           onClick={() => {
-            if (blocked()) return
-            playFile(recPath || getMyVoice(sentence, 'kid'))
+            fx('t-listen')
+            listen(sentence)
           }}
         >
-          <Text className='tool__t'>▶️ 回放</Text>
+          <Text className='tool__t'>🔊 听</Text>
         </View>
-      ) : null}
-      {recPath ? (
-        <View className={toolCls()} onClick={() => compareAB(sentence)}>
-          <Text className='tool__t'>🆚 对比</Text>
+        <View
+          className={toolFx('t-slow')}
+          onClick={() => {
+            if (blocked()) return
+            fx('t-slow')
+            playEnglishSlow(sentence)
+          }}
+        >
+          <Text className='tool__t'>🐢 慢速</Text>
         </View>
-      ) : null}
-      <View className={toolCls()} onClick={() => gradeSpeak(sentence, alts)}>
-        <Text className='tool__t'>{listening ? '✅ 读完了' : '⭐ 打分'}</Text>
+      </View>
+      <View className='grp'>
+        <Text className='grp__lab'>🎤</Text>
+        <View
+          className={recording ? 'tool tool--rec' : 'tool'}
+          onClick={() => toggleRecord(sentence, replyAfter)}
+        >
+          <Text className='tool__t'>{recording ? '⏹ 停止' : '🎙 录我的'}</Text>
+        </View>
+        {/*
+          回放要看**存档**,不是这次会话的临时状态。
+          v47 起孩子的录音是存下来的,但界面一直只看 recPath ——
+          退出再进来按钮就没了,用户的感受就是「没有回放功能」。
+        */}
+        {recPath || getMyVoice(sentence, 'kid') ? (
+          <View
+            className={toolFx('t-replay')}
+            onClick={() => {
+              if (blocked()) return
+              fx('t-replay')
+              playFile(recPath || getMyVoice(sentence, 'kid'))
+            }}
+          >
+            <Text className='tool__t'>▶️ 回放</Text>
+          </View>
+        ) : null}
+        {recPath ? (
+          <View
+            className={toolFx('t-ab')}
+            onClick={() => {
+              fx('t-ab')
+              compareAB(sentence)
+            }}
+          >
+            <Text className='tool__t'>🆚 对比</Text>
+          </View>
+        ) : null}
+        <View
+          className={toolFx('t-grade')}
+          onClick={() => {
+            fx('t-grade')
+            gradeSpeak(sentence, alts)
+          }}
+        >
+          <Text className='tool__t'>{listening ? '✅ 读完了' : '⭐ 打分'}</Text>
+        </View>
       </View>
     </View>
   )

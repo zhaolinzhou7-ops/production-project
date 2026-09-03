@@ -861,22 +861,22 @@
   }
 }
 
-/* 选项左边的试听按钮:先听出哪个读作 goat,才点得对 */
-.opt__spk {
-  flex-shrink: 0;
-  width: 76px;
-  height: 76px;
-  line-height: 76px;
-  margin-right: 8px;
-  text-align: center;
-  border-radius: 38px;
-  background: rgba(99, 102, 241, 0.12);
-  font-size: 34px;
-}
+/*
+ * v68:试听按钮从选项条里**拿出来了**(见 app.scss 的 .spk / .optrow)。
+ *
+ * 原先它是选项条里的一小块,和「选这个」的点击区只隔 8px ——
+ * 他想听一下,手指偏一点就把答案交了。而这道题本来就是让他
+ * 逐个听过再选的,误触等于把这道题毁掉。
+ *
+ * 现在一行是「[🔊]  [B goat]」两个独立的块,中间隔 28rpx。
+ */
 
-.opt--right .opt__spk,
-.opt--wrong .opt__spk {
-  background: rgba(255, 255, 255, 0.3);
+/* 带喇叭那一行里,选项本身要占满剩下的宽度 */
+.opt--pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 /* 选项文字要占满剩余宽度 —— 它才是「选中」的点击区 */

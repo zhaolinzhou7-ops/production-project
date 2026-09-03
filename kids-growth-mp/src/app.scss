@@ -246,3 +246,144 @@ page {
     font-size: 44rpx;
   }
 }
+
+
+/* ================================================================
+ * v68:点击反馈 + 喇叭独立成键
+ *
+ * 用户报的两件事,其实是同一件:
+ * 「喇叭和选项靠太近容易点错」「点完看不到反馈」——
+ * 手指点下去之后**没有任何东西动**,他不知道自己点中了没有,
+ * 于是再点一次;而两个按钮又挨着,第二下很容易落到旁边那个上。
+ *
+ * 所以两条一起改:把喇叭拉出来单独成键、拉开距离,
+ * 并且**每一次点击都要有肉眼可见的回应**。
+ * ================================================================ */
+
+/*
+ * 为什么不靠 :active。
+ *
+ * :active 只在手指按着的那一瞬间有效,松手就没了 —— 一个 4 岁半的孩子
+ * 点得又快又轻,那一帧他根本看不到。而且小程序里 view 的 :active
+ * 在不同基础库上表现并不一致。
+ * 所以这里用**状态驱动的动画**:点了之后加一个类,动画放完再由定时器摘掉。
+ * 松手之后动画还在继续,他才看得见。
+ */
+@keyframes tap-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  70% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+@keyframes tap-ring {
+  0% { transform: scale(0.7); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+@keyframes tap-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10rpx); }
+  75% { transform: translateX(10rpx); }
+}
+
+/*
+ * **独立的喇叭键。**
+ *
+ * 原先 🔊 是塞在选项条里的一小块,和「选这个」的点击区只隔 8px ——
+ * 他想听一下,手指偏一点就把答案交了。而这道题本来就是让他
+ * 逐个听过再选的,误触等于把题目毁掉。
+ *
+ * 现在拉出来单独成键,和选项之间留一整个手指的距离(见 .optrow 的 gap)。
+ * 尺寸也放大到 96rpx 以上 —— 4 岁半的指腹比成人的还软,
+ * 触点面积大、落点却更散。
+ */
+.spk {
+  position: relative;
+  flex-shrink: 0;
+  width: 104rpx;
+  height: 104rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 52rpx;
+  background: rgba(99, 102, 241, 0.14);
+  font-size: 40rpx;
+
+  /* 点下去:图标弹一下 + 荡出一圈波纹,松手之后还在动,他才看得见 */
+  &--on {
+    animation: tap-pop 0.42s ease;
+    background: rgba(99, 102, 241, 0.3);
+  }
+
+  &__ring {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 104rpx;
+    height: 104rpx;
+    border-radius: 52rpx;
+    border: 4rpx solid rgba(99, 102, 241, 0.75);
+    animation: tap-ring 0.6s ease-out;
+  }
+}
+
+/*
+ * 一行 = 喇叭 + 选项,中间隔开。
+ * gap 给到 28rpx:比手指宽度窄的间距等于没有间距。
+ */
+.optrow {
+  display: flex;
+  align-items: center;
+  gap: 28rpx;
+}
+
+/* 点中了:整块弹一下。对错颜色是随后才出来的,这一下是「我点到了」 */
+.tapped {
+  animation: tap-pop 0.34s ease;
+}
+
+/* 答错时轻轻晃一下 —— 比只变红更容易被注意到,而且不吓人 */
+.shook {
+  animation: tap-shake 0.3s ease;
+}
+
+
+/*
+ * **听的按钮和说的按钮分成两组。**
+ *
+ * 用户报「喇叭和话筒不要堆在一起」。原先它们挤在同一排里,
+ * 中间只隔 24rpx —— 他想听一遍范读,手指偏一点就开始录音了;
+ * 更糟的是录音一开,互斥闸会把声音全停掉(见 lib/audioLock),
+ * 于是表现成「点了范读没声音」,而他根本不知道自己按了录音。
+ *
+ * 分成两排之后两类按钮不再相邻,而且各带一个**图标标签** ——
+ * 他不识字,但 👂 和 🎤 他分得清,这比任何文字说明都管用。
+ */
+.grp {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24rpx;
+  margin-top: 28rpx;
+
+  &__lab {
+    flex-shrink: 0;
+    min-width: 64rpx;
+    font-size: 30rpx;
+    color: var(--ink-4);
+  }
+}
+
+/* 两组之间再拉开一点 —— 这是「误触」和「不误触」之间的全部距离 */
+.grp + .grp {
+  margin-top: 36rpx;
+  padding-top: 28rpx;
+  border-top: 2rpx solid rgba(0, 0, 0, 0.06);
+}
+
+/* 小按钮点下去也要动一下,否则他不知道点中了没有 */
+.chip--on {
+  animation: tap-pop 0.34s ease;
+  filter: brightness(0.96);
+}

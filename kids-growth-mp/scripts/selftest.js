@@ -2961,7 +2961,7 @@ function run() {
       名单只放**真正共用、且必须处处一致**的修饰符 ——
       配色类的(.btn--primary 各页颜色不同)不在此列,那是有意为之。
     */
-    const SHARED_ONLY_IN_APP = ['btn--wide', 'tool--off', 'chip--off']
+    const SHARED_ONLY_IN_APP = ['btn--wide', 'tool--off', 'chip--off', 'chip--on']
     const appText = fs.readFileSync(path.join(ROOT, 'src', 'app.scss'), 'utf8')
     /** 除 app.scss 之外的所有样式文件 */
     const allScss = []
@@ -2974,6 +2974,49 @@ function run() {
     }
     walkScss(path.join(ROOT, 'src', 'pages'))
     walkScss(path.join(ROOT, 'src', 'components'))
+
+    /*
+      ---- v68:喇叭要独立成键,点击要有反馈 ----
+
+      用户报的两件事其实是同一件:
+      「喇叭和选项靠太近容易点错」「点完看不到反馈」——
+      手指点下去屏幕上没有任何东西动,他不知道点中了没有,于是**再点一次**,
+      而两个按钮又挨着,第二下很容易落到旁边那个上。
+
+      原先 🔊 是塞在选项条里的一小块(.opt__spk),和「选这个」的点击区
+      只隔 8px。现在拉出来单独成键(.spk),中间隔一整个手指。
+    */
+    {
+      const allText = allScss.map((f) => fs.readFileSync(f, 'utf8')).join('\n')
+      ok(
+        allText.indexOf('.opt__spk') < 0,
+        '.opt__spk(塞在选项条里的小喇叭)已经废弃 —— 改用独立的 .spk,否则又会点错',
+      )
+
+      const app = fs.readFileSync(path.join(ROOT, 'src', 'app.scss'), 'utf8')
+      // 反馈动画:三个关键帧缺一个,某一类反馈就静默失效了
+      for (const kf of ['tap-pop', 'tap-ring', 'tap-shake']) {
+        ok(app.indexOf(`@keyframes ${kf}`) >= 0, `点击反馈动画 ${kf} 必须定义在 app.scss 里`)
+      }
+      for (const cls of ['.spk', '.optrow', '.grp', '.tapped', '.shook']) {
+        ok(app.indexOf(cls) >= 0, `${cls} 是共用的点击反馈样式,应该定义在 app.scss 里`)
+      }
+
+      /*
+        喇叭键要够大。
+        4 岁半的指腹比成人的还软:触点面积大、落点却更散 ——
+        小于 88rpx 的圆键他十次里有两三次会点偏。
+      */
+      const m = /\.spk \{[\s\S]*?width: (\d+)rpx/.exec(app)
+      ok(m && Number(m[1]) >= 88, `喇叭键至少 88rpx(实际 ${m ? m[1] : '没找到'})`)
+
+      // 听 / 说 两组之间要有真的间隔,不然「分组」只是换了个名字
+      ok(
+        /\.grp \+ \.grp \{[\s\S]*?margin-top/.test(app),
+        '「听」和「说」两组之间要拉开距离 —— 这是误触和不误触之间的全部距离',
+      )
+    }
+
     for (const cls of SHARED_ONLY_IN_APP) {
       const [blk, mod] = cls.split('--')
       ok(
@@ -2987,8 +3030,27 @@ function run() {
           .readFileSync(scssPath, 'utf8')
           .replace(/\/\*[\s\S]*?\*\//g, '')
           .replace(/(^|\s)\/\/[^\n]*/g, '$1')
-        // 页面里写 `.btn { &--wide {} }` 或直接写 `.btn--wide {}` 都算重复定义
-        const nested = new RegExp(`\\.${blk}\\s*\\{[\\s\\S]*?&--${mod}\\s*\\{`).test(text)
+        /*
+          页面里写 `.btn { &--wide {} }` 或直接写 `.btn--wide {}` 都算重复定义。
+
+          ⚠️ 判「嵌套」必须**真的配对花括号**,不能用 `[\s\S]*?` 一路扫过去 ——
+          那样会从上一个 `.chip {` 一直匹配到几十行之后另一个块里的 `&--on`,
+          把 `.mic { &--on }` 误判成 `.chip--on`。(第一版就是这么误报的。)
+        */
+        const blockOf = (name) => {
+          const at = text.indexOf(`.${name} {`)
+          if (at < 0) return ''
+          let depth = 0
+          for (let k = text.indexOf('{', at); k < text.length; k++) {
+            if (text[k] === '{') depth += 1
+            else if (text[k] === '}') {
+              depth -= 1
+              if (depth === 0) return text.slice(at, k + 1)
+            }
+          }
+          return text.slice(at)
+        }
+        const nested = new RegExp(`&--${mod}\\s*\\{`).test(blockOf(blk))
         const flat = text.includes(`.${cls}`) && !text.includes(`className`)
         ok(
           !nested && !flat,
