@@ -403,9 +403,20 @@ function MathRun() {
               return (
                 <View
                   key={`${c.label}-${i}`}
+                  /*
+                    ⚠️ 点中的动画不能挂在「feedback === 'none'」上。
+
+                    setChosen(n) 和 submit(n) 在同一批更新里,重渲染时
+                    feedback 已经是 'ok' / 'no' 了 —— 那个条件**永远为假**,
+                    弹一下的动画从来没播出来过。
+
+                    改成只看「点的是不是这一个」。对错两种再分开:
+                    答对弹一下、答错晃一下 —— 两个动画都在 transform 上,
+                    同时挂会互相盖掉,只能二选一。
+                  */
                   className={`${cls} ch__b--${c.kind ?? 'emoji'}${
-                    chosen === n && feedback === 'none' ? ' tapped' : ''
-                  }${show && n === chosen && n !== p.answer ? ' shook' : ''}`}
+                    chosen === n ? (show && n !== p.answer ? ' shook' : ' tapped') : ''
+                  }`}
                   onClick={() => {
                     if (feedback !== 'none') return
                     setChosen(n)

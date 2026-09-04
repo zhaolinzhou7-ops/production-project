@@ -185,6 +185,34 @@ function eq(a, b, what) {
   }
 }
 
+/*
+  ---- 选项必须去重 + 渲染期不能用后面才声明的变量(w69)----
+
+  ① 原先挑干扰项是 `pool.filter(x => x !== answer).slice(0, n)` ——
+     只排除了正确答案,干扰项彼此之间没去重。
+     常识包里已经有两道题答案都是「亚洲」、两道都是「南极洲」,
+     不去重的话选项里会并排出现两个「亚洲」:他点哪个都对,程序只认一个。
+     而且两个选项文本一样 → React 的 key 撞车 → 点这个可能高亮那个。
+
+  ② useMemo / useState(fn) 的工厂函数是**渲染时立即执行**的。
+     如果它用到写在下面的 const,就是 TDZ,真机直接白屏 ——
+     而 tsc 抓不到这一类(它没法证明那个函数什么时候跑)。
+     这条是踩过才写的:给去重加助手时顺手放在第一个用它的 useMemo 下面。
+*/
+{
+  const study = readFileSync(path.join(ROOT, 'src', 'pages', 'StudySessionPage.tsx'), 'utf8')
+  ok(study.includes('const pickDistractors'), '挑干扰项要走统一的 pickDistractors(它负责去重)')
+  const olds = study.match(/const distractors = shuffle\([^\n]*\)\.slice\(/g) || []
+  eq(olds.length, 0, '不许再用「filter 完直接 slice」挑干扰项 —— 那样干扰项之间不去重')
+
+  // 助手必须声明在第一个用到它的 useMemo 之前
+  const declAt = study.indexOf('const pickDistractors')
+  const firstUse = study.indexOf('pickDistractors(', declAt + 30)
+  ok(declAt >= 0 && (firstUse < 0 || firstUse > declAt), 'pickDistractors 必须先声明后使用')
+  const anyEarlier = study.slice(0, declAt).indexOf('pickDistractors(')
+  ok(anyEarlier < 0, 'pickDistractors 不能在声明之前被用到 —— useMemo 是渲染期立即执行的,那是 TDZ')
+}
+
 // ---------------------------------------------------------------- 难度自适应
 
 // 太难要**一组就降**:一个 4 岁半的孩子连着做错八题,下次就不肯打开了

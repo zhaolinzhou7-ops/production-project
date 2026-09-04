@@ -537,6 +537,35 @@ function Session() {
   }, [idx, cards])
 
 
+  /**
+   * 挑干扰项:**去重**,并排除正确答案。
+   *
+   * ⚠️ 原先每处都是 `pool.filter(x => x !== answer).slice(0, n)` ——
+   * 只排除了答案,干扰项**彼此之间没去重**。
+   * 内置内容包里今天恰好没有重复的词,所以一直没露馅;
+   * 但自建词本和错题本是家长手打的,重复完全可能,
+   * 而且看图题的 emoji 还有一个 '❓' 兜底 —— 只要有两张卡没配图,
+   * 选项里就会出现两个一模一样的 ❓。
+   *
+   * 后果不只是难看:两个选项文本一样 → React 的 key 撞车 →
+   * 点其中一个可能高亮另一个,而判分又是按文本算的。
+   * 那种错孩子完全看不懂,家长也复现不了。
+   */
+  const pickDistractors = (pool: string[], answer: string, n: number): string[] => {
+    // 答案本身也要按去掉首尾空格之后的样子记一遍 —— 否则内容里多一个空格,
+    // 就会出现一个「看起来和答案一模一样」的干扰项
+    const seen = new Set([answer, String(answer ?? '').trim()])
+    const out: string[] = []
+    for (const v of shuffle(pool)) {
+      const t = String(v ?? '').trim()
+      if (!t || seen.has(t)) continue
+      seen.add(t)
+      out.push(t)
+      if (out.length >= n) break
+    }
+    return out
+  }
+
   const options = useMemo(() => {
     if (!current || mode !== 'listenChoose') return []
     /*
@@ -549,7 +578,7 @@ function Session() {
     */
     const answer = isHanzi ? current.card.front : isWord ? current.card.front : current.card.back
     const src = isHanzi || isWord ? poolFront : poolBack
-    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, optCount - 1)
+    const distractors = pickDistractors(src, answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, poolBack, poolFront, isHanzi, isWord, optCount])
 
@@ -560,7 +589,11 @@ function Session() {
     const hideIdx = Math.floor(Math.random() * lines.length)
     const answer = lines[hideIdx]
     const own = new Set(lines)
-    const distractors = shuffle(linePool.filter((l) => !own.has(l) && l.length === answer.length)).slice(0, optCount - 1)
+    const distractors = pickDistractors(
+      linePool.filter((l) => !own.has(l) && l.length === answer.length),
+      answer,
+      optCount - 1,
+    )
     return { lines, hideIdx, answer, options: shuffle([answer, ...distractors]) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, mode, linePool, idx])
@@ -570,7 +603,7 @@ function Session() {
     if (!current || (mode !== 'picChoose' && mode !== 'picChooseEn')) return []
     const pick = (c: LearnCard) => (mode === 'picChooseEn' ? c.back : c.front)
     const answer = pick(current.card)
-    const distractors = shuffle(allCards.filter((c) => pick(c) !== answer).map(pick)).slice(0, optCount - 1)
+    const distractors = pickDistractors(allCards.map(pick), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards, childId])
 
@@ -579,7 +612,7 @@ function Session() {
     if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
     const emojiOf = (c: LearnCard) => (c.extra as { emoji?: string } | undefined)?.emoji ?? '❓'
     const answer = emojiOf(current.card)
-    const distractors = shuffle(allCards.filter((c) => emojiOf(c) !== answer).map(emojiOf)).slice(0, optCount - 1)
+    const distractors = pickDistractors(allCards.map(emojiOf), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards, childId])
 
@@ -587,7 +620,7 @@ function Session() {
   const pinyinOptions = useMemo(() => {
     if (!current || mode !== 'pinyin') return []
     const answer = current.card.front
-    const distractors = shuffle(allCards.filter((c) => c.front !== answer).map((c) => c.front)).slice(0, optCount - 1)
+    const distractors = pickDistractors(allCards.map((c) => c.front), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards, childId])
 
@@ -619,7 +652,12 @@ function Session() {
   const quizOptions = useMemo(() => {
     if (!current || mode !== 'quiz') return []
     const answer = current.card.back
-    const distractors = shuffle(allCards.filter((c) => c.back !== answer).map((c) => c.back)).slice(0, optCount - 1)
+    /*
+      ⚠️ 这一处是**真的会出问题**的:常识包里已经有两道题答案都是「亚洲」、
+      两道都是「南极洲」。不去重的话选项里就会并排出现两个「亚洲」——
+      他点哪个都对,可程序只认其中一个。
+    */
+    const distractors = pickDistractors(allCards.map((c) => c.back), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, allCards, childId])
 
@@ -934,8 +972,17 @@ function Session() {
    * (answer / blank.answer / redo.answer),但配色是统一算好的,
    * 从这里读最不容易漏。
    */
-  const optCls = (cls: string, opt: string): string =>
-    `${cls}${tapFx === `pick-${opt}` ? ' tapped' : ''}${cls.indexOf('--wrong') >= 0 ? ' shook' : ''}`
+  const optCls = (cls: string, opt: string): string => {
+    /*
+      ⚠️ tapped 和 shook **不能同时挂**:两个动画都作用在 transform 上,
+      同时生效时靠 CSS 的声明顺序决定谁赢 —— 那是碰巧,不是设计。
+      挪一下 app.scss 里两条规则的位置就会悄悄换个表现。
+      所以在这里显式二选一:错了只晃,其余情况才弹。
+    */
+    const wrong = cls.indexOf('--wrong') >= 0
+    if (wrong) return `${cls} shook`
+    return `${cls}${tapFx === `pick-${opt}` ? ' tapped' : ''}`
+  }
 
 
   const toggleRecord = () => {

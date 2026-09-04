@@ -2976,6 +2976,111 @@ function run() {
     walkScss(path.join(ROOT, 'src', 'components'))
 
     /*
+      ---- 选项必须去重(v68)----
+
+      原先每处挑干扰项都是 `pool.filter(x => x !== answer).slice(0, n)` ——
+      只排除了正确答案,**干扰项彼此之间没去重**。
+
+      内置内容包里今天恰好没有重复的词,所以一直没露馅;
+      但自建词本和错题本是家长手打的,重复完全可能,
+      而常识包里已经真的有两道题答案都是「亚洲」。
+
+      后果不只是难看:两个选项文本一样 → React 的 key 撞车 →
+      点其中一个可能高亮另一个,而判分又是按文本算的。
+      那种错孩子完全看不懂,家长也复现不了。
+    */
+    {
+      const sess = fs.readFileSync(
+        path.join(ROOT, 'src', 'pages', 'session', 'index.tsx'),
+        'utf8',
+      )
+      ok(
+        sess.indexOf('const pickDistractors') >= 0,
+        '挑干扰项要走统一的 pickDistractors(它负责去重)',
+      )
+      /*
+        旧写法不许回来。判据是「filter 之后直接 slice 出干扰项」——
+        那个形状只排除答案,不排除彼此。
+      */
+      const oldShape = /const distractors = shuffle\([^\n]*\)\.slice\(/g
+      const hits = sess.match(oldShape) || []
+      ok(
+        hits.length === 0,
+        `还有 ${hits.length} 处在用「filter 完直接 slice」挑干扰项 —— 那样干扰项之间不去重`,
+      )
+      // 每一处挑干扰项都必须经过它
+      const n = (sess.match(/const distractors = /g) || []).length
+      const viaHelper = (sess.match(/const distractors = pickDistractors\(/g) || []).length
+      ok(n === viaHelper, `${n} 处干扰项里只有 ${viaHelper} 处走了去重`)
+    }
+
+    /*
+      ---- 渲染期不能用到「后面才声明的」变量(v68)----
+
+      useMemo / useState(fn) / useRef 的工厂函数是**渲染时立即执行**的。
+      如果它用到一个写在下面的 `const`,那就是 TDZ ——
+      真机上直接 ReferenceError 白屏。
+
+      ⚠️ tsc 抓不到这一类:它没法证明那个函数什么时候跑。
+      而事件回调(onClick)、useEffect 的清理函数都是**之后**才执行的,
+      引用后面声明的东西完全合法 —— 所以这道关卡只看渲染期的三种。
+
+      写这条是因为刚踩过:给选项去重加了个 pickDistractors 助手,
+      顺手放在第一个用到它的 useMemo 下面,首屏直接崩。
+    */
+    {
+      const balanced = (t, from) => {
+        let d = 0
+        for (let i = from; i < t.length; i++) {
+          if (t[i] === '(') d += 1
+          else if (t[i] === ')') {
+            d -= 1
+            if (d === 0) return t.slice(from + 1, i)
+          }
+        }
+        return ''
+      }
+      const tsxFiles = []
+      const walkTsx = (dir) => {
+        for (const f of fs.readdirSync(dir)) {
+          const p2 = path.join(dir, f)
+          if (fs.statSync(p2).isDirectory()) walkTsx(p2)
+          else if (f.endsWith('.tsx')) tsxFiles.push(p2)
+        }
+      }
+      walkTsx(path.join(ROOT, 'src', 'pages'))
+      walkTsx(path.join(ROOT, 'src', 'components'))
+
+      const tdz = []
+      for (const f of tsxFiles) {
+        const t = fs.readFileSync(f, 'utf8')
+        const decls = []
+        const re = /\n  const (\w+)\s*[=:]/g
+        let m
+        while ((m = re.exec(t))) decls.push({ name: m[1], at: m.index })
+        for (const kw of ['useMemo(', 'useState(() =>', 'useRef(']) {
+          let i = -1
+          while ((i = t.indexOf(kw, i + 1)) >= 0) {
+            const open = t.indexOf('(', i + kw.length - 2)
+            const body = balanced(t, open)
+            for (const d of decls) {
+              if (d.at <= i) continue
+              if (new RegExp(`\\b${d.name}\\b`).test(body)) {
+                const line = t.slice(0, i).split('\n').length
+                const dline = t.slice(0, d.at).split('\n').length
+                tdz.push(`${path.relative(ROOT, f)}:${line} 用到了第 ${dline} 行才声明的 ${d.name}`)
+              }
+            }
+          }
+        }
+      }
+      ok(
+        tdz.length === 0,
+        `渲染期用到了后面才声明的变量,真机会直接崩:${tdz.slice(0, 3).join(' / ')}`,
+      )
+    }
+
+    /*
       ---- v68:喇叭要独立成键,点击要有反馈 ----
 
       用户报的两件事其实是同一件:

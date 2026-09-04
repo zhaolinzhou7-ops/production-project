@@ -301,14 +301,42 @@ export function StudySessionPage() {
     [itemType],
   )
 
+  /**
+   * 挑干扰项:**去重**,并排除正确答案。
+   *
+   * ⚠️ 原先每处都是 `pool.filter(x => x !== answer).slice(0, n)` ——
+   * 只排除了答案,干扰项**彼此之间没去重**。
+   * 常识包里已经有两道题答案都是「亚洲」、两道都是「南极洲」,
+   * 不去重的话选项里会并排出现两个「亚洲」:他点哪个都对,
+   * 可程序只认其中一个。自建词本和错题本是家长手打的,重复更常见。
+   *
+   * 后果不只是难看:两个选项文本一样 → React 的 key 撞车 →
+   * 点其中一个可能高亮另一个,而判分又是按文本算的。
+   *
+   * ⚠️ 声明必须在第一个用到它的 useMemo **之前** ——
+   * useMemo 的工厂函数是渲染时立即执行的,放在后面就是 TDZ,直接白屏。
+   */
+  const pickDistractors = useCallback(
+    (poolIn: Array<string | undefined>, answer: string, n: number): string[] => {
+      const seen = new Set([answer, String(answer ?? '').trim()])
+      const out: string[] = []
+      for (const v of shuffle(poolIn)) {
+        const t = String(v ?? '').trim()
+        if (!t || seen.has(t)) continue
+        seen.add(t)
+        out.push(t)
+        if (out.length >= n) break
+      }
+      return out
+    },
+    [],
+  )
+
   // 幼儿看图:3 个名字选项(picChoose) / 4 张图选项(listenPic)
   const picOptions = useMemo(() => {
     if (!current || mode !== 'picChoose') return []
     const answer = current.card.front
-    const distractors = shuffle(poolPic.map((p) => p.front).filter((f) => f !== answer)).slice(
-      0,
-      optCount - 1,
-    )
+    const distractors = pickDistractors(poolPic.map((p) => p.front), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, poolPic, optCount])
 
@@ -316,7 +344,19 @@ export function StudySessionPage() {
     if (!current || (mode !== 'listenPic' && mode !== 'listenPicEn')) return []
     const ext = current.card.extra as { emoji?: string; en?: string } | undefined
     const answer = { front: current.card.front, en: ext?.en ?? '', emoji: ext?.emoji ?? '' }
-    const distractors = shuffle(poolPic.filter((p) => p.front !== answer.front)).slice(0, optCount - 1)
+    /*
+      这一处的选项是**对象**(front / en / emoji),不能直接套 pickDistractors。
+      去重按 front 走:两张图一样、名字也一样的卡并排出现时,
+      他点哪个都对,而程序只认其中一个。
+    */
+    const seenFront = new Set([answer.front])
+    const distractors: typeof poolPic = []
+    for (const cand of shuffle(poolPic)) {
+      if (seenFront.has(cand.front)) continue
+      seenFront.add(cand.front)
+      distractors.push(cand)
+      if (distractors.length >= optCount - 1) break
+    }
     return shuffle([answer, ...distractors])
   }, [current, mode, poolPic, optCount])
 
@@ -324,10 +364,7 @@ export function StudySessionPage() {
   const picOptionsEn = useMemo(() => {
     if (!current || mode !== 'picChooseEn') return []
     const answer = (current.card.extra as { en?: string })?.en ?? current.card.back
-    const distractors = shuffle(poolPic.map((p) => p.en).filter((e) => e && e !== answer)).slice(
-      0,
-      optCount - 1,
-    )
+    const distractors = pickDistractors(poolPic.map((p) => p.en), answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, poolPic, optCount])
 
@@ -353,7 +390,7 @@ export function StudySessionPage() {
   const quizOptions = useMemo(() => {
     if (!current || mode !== 'quiz') return []
     const answer = current.card.back
-    const distractors = shuffle([...new Set(pool.filter((b) => b !== answer))]).slice(0, 3)
+    const distractors = pickDistractors(pool, answer, 3)
     return shuffle([answer, ...distractors])
   }, [current, mode, pool])
 
@@ -370,7 +407,7 @@ export function StudySessionPage() {
     */
     const answer = isHanzi || isWord ? current.card.front : current.card.back
     const src = isHanzi || isWord ? poolFront : pool
-    const distractors = shuffle(src.filter((b) => b !== answer)).slice(0, optCount - 1)
+    const distractors = pickDistractors(src, answer, optCount - 1)
     return shuffle([answer, ...distractors])
   }, [current, mode, pool, poolFront, isHanzi, isWord, optCount])
 
@@ -383,9 +420,11 @@ export function StudySessionPage() {
     const answer = lines[hideIdx]
     // 干扰句:同字数、且不属于本诗(避免用本诗其它句作干扰)
     const own = new Set(lines)
-    const distractors = shuffle(
+    const distractors = pickDistractors(
       linePool.filter((l) => !own.has(l) && l.length === answer.length),
-    ).slice(0, 3)
+      answer,
+      3,
+    )
     return { lines, hideIdx, answer, options: shuffle([answer, ...distractors]) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, mode, linePool, idx])
