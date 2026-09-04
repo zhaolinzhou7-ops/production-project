@@ -117,18 +117,43 @@ function addPoints(delta: number): PointStats {
   return award(delta, true).stats
 }
 
+/**
+ * 一个内容包里**重名**的古诗标题。
+ *
+ * 唐诗里同题不同作者的很常见:「出塞」王昌龄和王之涣各有一首,
+ * 「赤壁」「渡汉江」「凉州词」也都有两首。
+ * 卡片的 front 就是标题,于是错题本、线下抽查、薄弱卡列表里
+ * 会并排出现两个「出塞」—— **家长根本不知道该考哪一首**。
+ * (练的时候不影响,卡面下方有「朝代·作者」。)
+ *
+ * 只给重名的补作者:「静夜思」还是「静夜思」,
+ * 「出塞」变成「出塞·王昌龄」。不重名的不动,免得整页标题都拖长一截。
+ */
+function dupPoemTitles(cards: BuiltinCard[]): Set<string> {
+  const seen = new Set<string>()
+  const dup = new Set<string>()
+  for (const c of cards) {
+    const t = (c as BuiltinPoemCard).title
+    if (!t) continue
+    if (seen.has(t)) dup.add(t)
+    seen.add(t)
+  }
+  return dup
+}
+
 function builtinCardToLearnCard(
   c: BuiltinCard,
   itemType: CardItemType,
   deckId: string,
   order: number,
+  dupTitles: Set<string> = new Set(),
 ): LearnCard {
   const base = { id: newId(), deckId, order }
   if (itemType === 'poem') {
     const p = c as BuiltinPoemCard
     return {
       ...base,
-      front: p.title,
+      front: dupTitles.has(p.title) && p.author ? `${p.title}·${p.author}` : p.title,
       back: p.lines.join('\n'),
       audioText: p.lines.join('，'),
       extra: { author: p.author, dynasty: p.dynasty, lines: p.lines },
@@ -200,8 +225,9 @@ export function ensureBuiltinDeck(childId: string, builtinKey: string): string {
   const cards = readTable<LearnCard>(KEYS.cards)
   const states = readTable<StudyState>(KEYS.states)
   const init = initialSrs()
+  const dupT = pack.itemType === 'poem' ? dupPoemTitles(pack.cards) : new Set<string>()
   pack.cards.forEach((c, i) => {
-    const card = builtinCardToLearnCard(c, pack.itemType, deckId, i)
+    const card = builtinCardToLearnCard(c, pack.itemType, deckId, i, dupT)
     cards.push(card)
     states.push({ id: newId(), childId, cardId: card.id, deckId, ...init })
   })
@@ -232,8 +258,9 @@ export function syncDeckContent(childId: string, builtinKey: string): void {
   const deckId = decks[di].id
   const mine = cards.filter((c) => c.deckId === deckId).sort((a, b) => a.order - b.order)
 
+  const dupT2 = pack.itemType === 'poem' ? dupPoemTitles(pack.cards) : new Set<string>()
   pack.cards.forEach((raw, i) => {
-    const fresh = builtinCardToLearnCard(raw, pack.itemType, deckId, i)
+    const fresh = builtinCardToLearnCard(raw, pack.itemType, deckId, i, dupT2)
     const old = mine[i]
     if (old) {
       // 就地覆盖内容,保留 id → 复习进度不受影响

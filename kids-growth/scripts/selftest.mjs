@@ -213,6 +213,47 @@ function eq(a, b, what) {
   ok(anyEarlier < 0, 'pickDistractors 不能在声明之前被用到 —— useMemo 是渲染期立即执行的,那是 TDZ')
 }
 
+/*
+  ---- w69:看图选词不许在题面上泄题 + 点完要有反馈 ----
+
+  ① 题面上的「🔊 听英语」点一下就把答案念出来了 —— 那这道题就退化成
+     「听音选词」,而且是带图的听音选词,比原来还简单。
+     这一档考的是「看到这只山羊,想起 goat 这个词长什么样」。
+     想听的话每个选项都能单独点着听:他得自己听出哪一个是 goat。
+     (小程序那边 v63 就修了,网页版一直漏着。)
+
+  ② 手指点下去屏幕上没有任何东西动,他不知道点中了没有,于是再点一次,
+     而按钮又挨着,第二下很容易落到旁边那个上 ——
+     「没反馈」和「点错」是同一件事的两头。
+*/
+{
+  const study = readFileSync(path.join(ROOT, 'src', 'pages', 'StudySessionPage.tsx'), 'utf8')
+  // 锚在**渲染那一段**上 —— picChooseEn 在 useMemo 里也出现过,那里没有按钮
+  const at = study.indexOf("{mode === 'picChooseEn' && (")
+  ok(at > 0, '应该找得到看图选词的渲染段')
+  /*
+    先把注释剥掉 —— 注释里解释「这里原先有个听英语按钮」不算它还在。
+    (第一版就是这么误报的:说明文字被当成了代码。)
+  */
+  const block = study
+    .slice(at, at + 3200)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/[^\n]*/g, '$1')
+  ok(!block.includes('听英语'), '看图选词的题面不该有「听英语」按钮 —— 那等于把答案念出来')
+  ok(block.includes('aria-label={`听 ${opt}`}'), '每个选项都要能单独点着听')
+  ok(block.includes('animate-tap-pop'), '点中了要有动的反馈')
+  ok(block.includes('animate-tap-shake'), '答错要晃一下 —— 只变红对快速扫视不够')
+  // 答错要多停一会儿:正确答案念出来就要一秒,1200ms 他刚听到就翻走了
+  ok(/opt === currentEn \? 900 : 2200/.test(block), '答错要比答对多停一会儿,让他听完正确答案')
+
+  // 反馈动画必须真的定义了,否则 class 挂上去也是空的
+  const css = readFileSync(path.join(ROOT, 'src', 'index.css'), 'utf8')
+  for (const kf of ['tap-pop', 'tap-shake']) {
+    ok(css.includes(`@keyframes ${kf}`), `点击反馈动画 ${kf} 必须定义在 index.css 里`)
+    ok(css.includes(`.animate-${kf}`), `.animate-${kf} 必须定义`)
+  }
+}
+
 // ---------------------------------------------------------------- 难度自适应
 
 // 太难要**一组就降**:一个 4 岁半的孩子连着做错八题,下次就不肯打开了
@@ -677,22 +718,111 @@ eq(screenTime.screenAdvice(10, 'toddler', 0).hardAt, 25, '上限设成 0 视为�
 
 // ---------------------------------------------------------------- 数形结合
 
+/*
+  ⚠️ w69:规则和以前**反过来**了。
+
+  以前这里断言「add / sub / mulTable 要配图」。可用户明确说过
+  「口算里面很多要数数字的内容可以删掉,他现在已经能直接计算了」——
+  把图铺到所有算式题上,结果每道题都变成了数糖果:
+  他不再算 7+5,而是低头数十二颗糖。那对已经会算的孩子是**退步**。
+
+  现在:纯算式题一律不配图;图只留在**本来就是看图数数**的题型上
+  (看图合起来、看图拿走、看图多几个)。
+*/
 {
+  for (const k of ['add10', 'sub10', 'add20', 'sub20', 'chain', 'makeTen', 'compare']) {
+    ok(!mathDrill.generateProblem(k, 'toddler').visual, `${k} 是算式题,不该配图`)
+  }
+
   let checked = 0
-  for (let i = 0; i < 400; i++) {
-    for (const kind of ['add', 'sub', 'mulTable']) {
+  for (let i = 0; i < 200; i++) {
+    for (const kind of ['picAdd', 'picSub', 'picDiff']) {
       const p = mathDrill.generateProblem(kind, 'toddler')
       if (!p.visual) continue
       checked += 1
       const total = p.visual.groups.reduce((n, g) => n + g.n, 0)
       ok(total > 0 && total <= 20, '图示总数要在 20 个以内,多了孩子数不清')
       eq(p.visual.ops.length, Math.max(0, p.visual.groups.length - 1), '连接符个数比组数少一个')
-      // 图上的东西数出来就是答案 —— 数得出来才叫数形结合
-      if (kind === 'add' || kind === 'mulTable') eq(total, p.answer, `${kind}:图上的总数应等于答案`)
-      if (kind === 'sub') eq(total - (p.visual.strike || 0), p.answer, 'sub:减掉划去的应等于答案')
+      if (kind === 'picAdd') eq(total, p.answer, 'picAdd:图上的总数应等于答案')
+      if (kind === 'picSub') eq(total - (p.visual.strike || 0), p.answer, 'picSub:减掉划去的应等于答案')
     }
   }
-  ok(checked > 500, `应抽查到足够多的带图算式(实际 ${checked})`)
+  ok(checked > 300, `应抽查到足够多的看图算式(实际 ${checked})`)
+
+  /*
+    ---- 思维板块必须能「点」,不能要他打字(w69)----
+
+    这些题型早就写好了,但每一道都要求读题、然后输入一个序号:
+    「1.🍎 2.🚗 3.🚌 4.🚲 哪个不是一伙的?(答序号)」——
+    一个不识字的 4 岁半明明一眼就知道苹果不是车,却因为不会输入而做不了。
+  */
+  for (const k of ['oddOne', 'sizeCmp', 'spotDiff', 'position', 'where', 'clock', 'pattern']) {
+    const q = mathDrill.generateProblem(k, 'toddler')
+    ok(Array.isArray(q.choices) && q.choices.length >= 2, `${k} 必须给可点的选项,不能让他打字`)
+    ok(q.answer >= 1 && q.answer <= q.choices.length, `${k} 的答案必须落在选项范围里`)
+    ok(!/答序号|答 1 或 2|第几个不一样/.test(q.text), `${k} 的题面不该再要求输入序号`)
+  }
+
+  // 比长短:两条差得太少,考的就不是比较是眼力
+  for (let i = 0; i < 30; i++) {
+    const sc = mathDrill.generateProblem('sizeCmp', 'toddler')
+    const l1 = [...sc.choices[0].label].length
+    const l2 = [...sc.choices[1].label].length
+    ok(Math.abs(l1 - l2) >= 3, `比长短的两条至少差 3 格(实际 ${l1} vs ${l2})`)
+    eq(l1 > l2 ? 1 : 2, sc.answer, '更长的那一条必须等于答案')
+  }
+
+  // 方位:「在外面」和「在旁边」不能同时当选项 —— 会有两个正确答案
+  for (let i = 0; i < 30; i++) {
+    const w = mathDrill.generateProblem('where', 'toddler')
+    ok(!!w.spatial, '方位题要带图 —— emoji 拼不出「在盒子里面」')
+    const labels = w.choices.map((c) => c.label)
+    ok(
+      !(labels.includes('在外面') && labels.includes('在旁边')),
+      '「在外面」和「在旁边」不能同时当选项',
+    )
+    const map = { in: '在里面', above: '在上面', below: '在下面', beside: '在旁边' }
+    eq(labels[w.answer - 1], map[w.spatial.where], '方位题:答案必须和画出来的位置一致')
+  }
+
+  // 认时间:只出整点和半点(分钟要到小学,一上来出 3:25 他学到的只有挫败)
+  for (let i = 0; i < 40; i++) {
+    const ck = mathDrill.generateProblem('clock', 'toddler')
+    ok(!!ck.clock, '认时间要带钟面数据')
+    ok(ck.clock.minute === 0 || ck.clock.minute === 30, '只出整点和半点')
+    const want = ck.clock.minute === 30 ? `${ck.clock.hour} 点半` : `${ck.clock.hour} 点`
+    eq(ck.choices[ck.answer - 1].label, want, '认时间:答案必须和钟面一致')
+  }
+
+  // 分与合:凑十是回报最高的一档,应该占多数
+  {
+    let ten = 0
+    for (let i = 0; i < 300; i++) {
+      if (/是 10\?/.test(mathDrill.generateProblem('makeSum', 'toddler').text)) ten += 1
+    }
+    ok(ten > 150, `「合起来是 10」应该占多数(实际 ${ten}/300)`)
+  }
+
+  /*
+    题型登记的四处一致性:类型、MATH_KINDS 表、难度档名单、生成器 switch。
+    漏了 MATH_KINDS 的话题型能生成、自测也过,但**界面上一个都看不到** ——
+    v66 就是这么漏的,只有打开 app 才发现。
+  */
+  {
+    const listed = new Set(mathDrill.MATH_KINDS.map((k) => k.kind))
+    const inTiers = new Set()
+    for (const t of ['toddler', 'school', 'olympic', 'advanced']) {
+      for (const k of mathDrill.mathKindsForTier(t)) inTiers.add(k.kind)
+    }
+    for (const k of listed) {
+      ok(inTiers.has(k), `${k} 在题型表里,却不属于任何难度档 —— 界面上永远看不到`)
+      const q = mathDrill.generateProblem(k, 'primary')
+      ok(!!q && !!q.text, `${k} 要能生成题目`)
+    }
+    const labels = mathDrill.MATH_KINDS.map((k) => k.label)
+    const dup = labels.filter((l, i) => labels.indexOf(l) !== i)
+    eq(dup.length, 0, `题型名字不能重复(${[...new Set(dup)].join('、')})`)
+  }
 }
 
 // ---------------------------------------------------------------- 阶段测验
@@ -895,36 +1025,28 @@ eq(screenTime.screenAdvice(10, 'toddler', 0).hardAt, 25, '上限设成 0 视为�
   )
   const byEn = new Map(pack.cards.map((c) => [c.en, c]))
   /*
-    1–10 用「同一样东西重复 N 个」表示 —— 图上有几个就是几。
-    原先 one 用的是一个太阳 🌞,读不出「一个东西」,和 2–10 也不成序列。
+    ---- w69:数字卡一律用**数字本身** ----
+
+    原来每个数字配一样实物(1=🍎、2=👟👟、3=🍓🍓🍓……),
+    而英语练法里孩子只看得到 emoji。🍎 在食物包里是 apple、
+    👟 在衣物包里是 shoes —— 同一张图两个答案;而且每个数字换一种东西,
+    「数量」这个共同点被淹没了。序数 🥇 更是「第一」的象征物,不是「第一」本身。
   */
-  const WORDS = ['one','two','three','four','five','six','seven','eight','nine','ten']
-  WORDS.forEach((w, i) => {
+  const DIGITS = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+  const NUMWORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten']
+  NUMWORDS.forEach((w, i) => {
     const card = byEn.get(w)
     ok(card, `数字包应有 ${w}`)
-    const chars = [...card.emoji]
-    eq(chars.length, i + 1, `${w} 的图应该正好是 ${i + 1} 个`)
-    eq(new Set(chars).size, 1, `${w} 的图应该是同一样东西重复`)
+    eq(card.front, String(i), `${w} 的卡面应该是数字 ${i}`)
+    eq(card.emoji, DIGITS[i], `${w} 的图应该是数字 ${DIGITS[i]}`)
   })
-  /*
-    零。
-
-    整组卡的规矩是「front 是数字、emoji 是数量」。零画不出个数 ——
-    1–10 靠「重复几个同样的东西」看得出来,零没有东西可重复。
-    空罐子 🫙 会被认成「罐子」;0️⃣ 更糟,它让图也变成了数字,
-    把「图=数量」这条规矩一并破了。
-    现在:卡面照旧是数字 0,图给一个他见过的「一个也没有」的场面(空盘子),
-    读出来的话里点明「一个也没有」。
-  */
-  const zero = byEn.get('zero')
-  eq(zero.front, '0', '零的卡面要和 1–10 一样是数字本身')
-  ok([...zero.emoji].length <= 2, '零的图不该是一串东西 —— 那读出来就成了「几个」')
-  ok(!zero.emoji.includes('0'), '零的图不能又是一个数字 0,否则这张卡只剩符号')
-  ok(
-    (zero.say || '').includes('没有'),
-    '零读出来要点明「一个也没有」—— 光念一个「零」他对不上任何东西',
-  )
-  ok(byEn.get('first').front.includes('名'), '序数的卡面要写「第一名」,才对得上那块金牌')
+  for (const c of pack.cards) {
+    ok(DIGITS.includes(c.emoji), `数字包里的「${c.front}」用了实物图 ${c.emoji} —— 会和别的内容包撞车`)
+  }
+  for (const bad of ['first', 'second', 'third', 'a pair']) {
+    ok(!byEn.get(bad), `「${bad}」不该在看图数字包里 —— 一张静态图教不了它`)
+  }
+  ok((byEn.get('zero').say || '').includes('没有'), '零读出来要点明「一个也没有」')
 }
 
 rmSync(OUT, { recursive: true, force: true })

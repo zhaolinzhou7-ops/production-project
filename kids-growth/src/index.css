@@ -88,6 +88,36 @@ body {
   animation: combo-pulse 0.35s ease-out;
 }
 
+/*
+ * ---- 点击反馈(w69)----
+ *
+ * 「喇叭和选项靠太近容易点错」和「点完看不到反馈」是同一件事的两头:
+ * 手指点下去屏幕上没有任何东西动,他不知道点中了没有,于是再点一次,
+ * 而按钮又挨着,第二下很容易落到旁边那个上。
+ *
+ * 不靠 :active —— 那个只在按着的一瞬间有效,一个 4 岁半的孩子点得又快又轻,
+ * 那一帧他根本看不到。改成点完之后**继续动一会儿**。
+ */
+@keyframes tap-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  70% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.animate-tap-pop {
+  animation: tap-pop 0.34s ease;
+}
+
+/* 答错时轻轻晃一下 —— 只变红对快速扫视不够,晃动余光也能捕捉到,而且不吓人 */
+@keyframes tap-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+.animate-tap-shake {
+  animation: tap-shake 0.3s ease;
+}
+
 /* ---- 动画短片:每句台词一种入场动效,让画面"动起来" ---- */
 @keyframes scene-pop {
   0% { opacity: 0; transform: scale(0.4); }
@@ -217,6 +247,8 @@ body {
   .animate-shake,
   .animate-sticker-pop,
   .animate-combo-pulse,
+  .animate-tap-pop,
+  .animate-tap-shake,
   .anim-pop,
   .anim-bounce,
   .anim-slide,

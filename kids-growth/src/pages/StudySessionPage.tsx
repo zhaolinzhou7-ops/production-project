@@ -111,6 +111,29 @@ export function StudySessionPage() {
   const [startedAt] = useState(Date.now())
   const [spellInput, setSpellInput] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
+  /*
+    ---- 点击反馈(w69)----
+
+    「喇叭和选项靠太近容易点错」和「点完看不到反馈」是同一件事的两头:
+    手指点下去屏幕上没有任何东西动,他不知道点中了没有,于是再点一次,
+    而按钮又挨着,第二下很容易落到旁边那个上。
+
+    不靠 :active —— 那个只在按着的一瞬间有效,他点得又快又轻,那一帧看不到。
+    改成状态驱动:点了加一个动画类,700ms 后由定时器摘掉,松手之后还在动。
+  */
+  const [tapFx, setTapFxRaw] = useState('')
+  const fxTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const setTapFx = useCallback((key: string) => {
+    if (fxTimer.current) clearTimeout(fxTimer.current)
+    setTapFxRaw(key)
+    fxTimer.current = setTimeout(() => {
+      fxTimer.current = null
+      setTapFxRaw('')
+    }, 700)
+  }, [])
+  useEffect(() => () => {
+    if (fxTimer.current) clearTimeout(fxTimer.current)
+  }, [])
   const [speakMsg, setSpeakMsg] = useState('')
   const [summary, setSummary] = useState<{ correct: number; total: number; points: number; capped: boolean } | null>(null)
   const [levelUp, setLevelUp] = useState<LevelStep | null>(null)
@@ -976,7 +999,7 @@ export function StudySessionPage() {
                     show && isCorrect
                       ? 'bg-mint-500 text-white'
                       : show && opt === picked
-                        ? 'bg-red-400 text-white'
+                        ? 'animate-tap-shake bg-red-400 text-white'
                         : 'bg-white/80 text-gray-700'
                   }`}
                 >
@@ -1116,14 +1139,31 @@ export function StudySessionPage() {
           {current.card.phonetic && <div className="text-sm text-gray-400 mb-1">/{current.card.phonetic}/</div>}
           <div className="text-brand-600 mb-4">{current.card.back}</div>
 
-          {/* 范读 / 录我读的 / 回放 */}
+          {/*
+            **听的按钮和说的按钮分成两排(w69)。**
+
+            原先挤在同一排里,他想听一遍范读、手指偏一点就开始录音了;
+            而录音一开互斥闸会把声音全停掉(见 lib/audioLock),
+            表现成「点了范读没声音」—— 他根本不知道自己按了录音。
+
+            两排各带一个图标标签:他不识字,但 👂 和 🎤 分得清。
+          */}
           <div className="flex items-center gap-2">
+            <span className="text-base">👂</span>
             <button
-              onClick={() => playAudio(current.card.audioText ?? current.card.front)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
+              onClick={() => {
+                setTapFx('sp-play')
+                playAudio(current.card.audioText ?? current.card.front)
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-brand-600 transition ${
+                tapFx === 'sp-play' ? 'animate-tap-pop bg-brand-200' : 'bg-brand-100'
+              }`}
             >
               <Volume2 size={15} /> 范读
             </button>
+          </div>
+          <div className="mt-3 flex items-center gap-2 border-t border-black/5 pt-3">
+            <span className="text-base">🎤</span>
             {isRecordingSupported() && (
               <button
                 onClick={() => void toggleRecord()}
@@ -1137,8 +1177,13 @@ export function StudySessionPage() {
             )}
             {recBlob && (
               <button
-                onClick={() => playRecording(recBlob)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-mint-400/25 px-4 py-2 text-sm font-medium text-mint-600 active:scale-95"
+                onClick={() => {
+                  setTapFx('sp-replay')
+                  playRecording(recBlob)
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-mint-600 transition ${
+                  tapFx === 'sp-replay' ? 'animate-tap-pop bg-mint-400/40' : 'bg-mint-400/25'
+                }`}
               >
                 <Play size={15} /> 回放
               </button>
@@ -1260,7 +1305,7 @@ export function StudySessionPage() {
                     show && isCorrect
                       ? 'bg-mint-500 text-white'
                       : show && opt === picked
-                        ? 'bg-red-400 text-white'
+                        ? 'animate-tap-shake bg-red-400 text-white'
                         : 'bg-white/80 text-gray-700'
                   }`}
                 >
@@ -1340,7 +1385,7 @@ export function StudySessionPage() {
                 ? opt === redo.answer
                   ? 'bg-mint-500 text-white'
                   : opt === picked
-                    ? 'bg-red-400 text-white'
+                    ? 'animate-tap-shake bg-red-400 text-white'
                     : 'bg-white/70 text-gray-700'
                 : 'bg-white/70 text-gray-700'
               return (
@@ -1548,7 +1593,7 @@ export function StudySessionPage() {
                     show && isRight
                       ? 'bg-mint-500 text-white'
                       : show && opt === picked
-                        ? 'bg-red-400 text-white'
+                        ? 'animate-tap-shake bg-red-400 text-white'
                         : 'bg-white/80 text-gray-700'
                   }`}
                 >
@@ -1592,7 +1637,7 @@ export function StudySessionPage() {
                     show && isRight
                       ? 'bg-mint-500 text-white'
                       : show && opt === picked
-                        ? 'bg-red-400 text-white'
+                        ? 'animate-tap-shake bg-red-400 text-white'
                         : 'bg-white/80 text-gray-700'
                   }`}
                 >
@@ -1667,36 +1712,67 @@ export function StudySessionPage() {
               {(current.card.extra as { emoji?: string })?.emoji}
             </span>
           </div>
-          <button
-            onClick={() => void playWordAudio(currentEn)}
-            className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-2 text-sm font-medium text-brand-600 active:scale-95"
-          >
-            <Volume2 size={15} /> 听英语
-          </button>
-          <p className="text-sm text-gray-400 mb-3">What is it? 点一点</p>
+          {/*
+            ⚠️ 题面上**故意不给朗读按钮**(w69 去掉的)。
+
+            原先这里有一个「🔊 听英语」—— 点一下就把答案念出来了,
+            那这道题就退化成「听音选词」,而且是带图的听音选词,比原来还简单。
+            这一档考的就是「看到这只山羊,想起 goat 这个词长什么样」。
+            想听的话下面每个选项都能单独点着听:他得自己听出哪一个是 goat。
+          */}
+          <p className="text-sm text-gray-400 mb-3">这是什么?挨个听听下面的词,选出对的那个</p>
           <div className="w-full max-w-sm space-y-3">
             {picOptionsEn.map((opt) => {
               const show = picked !== null
               const isRight = opt === currentEn
               return (
-                <button
-                  key={opt}
-                  disabled={picked !== null}
-                  onClick={() => {
-                    setPicked(opt)
-                    void playWordAudio(currentEn)
-                    setTimeout(() => void advance(opt === currentEn), 1200)
-                  }}
-                  className={`w-full rounded-2xl px-4 py-4 text-center text-2xl font-bold transition ${
-                    show && isRight
-                      ? 'bg-mint-500 text-white'
-                      : show && opt === picked
-                        ? 'bg-red-400 text-white'
-                        : 'bg-white/80 text-gray-700'
-                  }`}
-                >
-                  {opt}
-                </button>
+                /*
+                  **喇叭单独成键,和选项隔开一整个手指的距离。**
+
+                  塞在选项条里的话,他想听一下、手指偏一点就把答案交了 ——
+                  而这道题本来就是让他逐个听过再选的,误触等于把题目毁掉。
+                */
+                <div key={opt} className="flex items-center gap-3">
+                  <button
+                    disabled={picked !== null}
+                    onClick={() => {
+                      setTapFx(`spk-${opt}`)
+                      void playWordAudio(opt)
+                    }}
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-brand-600 transition ${
+                      tapFx === `spk-${opt}` ? 'animate-tap-pop bg-brand-200' : 'bg-brand-100'
+                    }`}
+                    aria-label={`听 ${opt}`}
+                  >
+                    <Volume2 size={20} />
+                  </button>
+                  <button
+                    disabled={picked !== null}
+                    onClick={() => {
+                      setTapFx(`pick-${opt}`)
+                      setPicked(opt)
+                      void playWordAudio(currentEn)
+                      /*
+                        **答错要多停一会儿。**
+                        原先答错也是 1200ms,而正确答案念出来就要一秒 ——
+                        他刚听到「goat」页面就翻走了。可答错那一下恰恰是
+                        最该慢下来的时刻:他正带着「我以为是那个」的疑问。
+                      */
+                      setTimeout(() => void advance(opt === currentEn), opt === currentEn ? 900 : 2200)
+                    }}
+                    className={`flex-1 rounded-2xl px-4 py-4 text-center text-2xl font-bold transition ${
+                      show && isRight
+                        ? 'bg-mint-500 text-white'
+                        : show && opt === picked
+                          ? 'animate-tap-shake bg-red-400 text-white'
+                          : tapFx === `pick-${opt}`
+                            ? 'animate-tap-pop bg-white'
+                            : 'bg-white/80 text-gray-700'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                </div>
               )
             })}
           </div>

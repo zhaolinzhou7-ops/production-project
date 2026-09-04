@@ -3442,6 +3442,43 @@ function run() {
     }
   }
 
+  /*
+    ---- 同题不同作者的诗,标题上要分得开(v69)----
+
+    唐诗里同题很常见:「出塞」王昌龄和王之涣各有一首,
+    「赤壁」「渡汉江」「凉州词」也都有两首。而卡片的 front 就是标题,
+    错题本、线下抽查、薄弱卡列表里会并排出现两个「出塞」——
+    家长根本不知道该考哪一首。
+    只给重名的补作者:不重名的标题一个字都不动。
+  */
+  {
+    reset()
+    const cidP = study.getCurrentChildId()
+    const deckP = study.ensureBuiltinDeck(cidP, 'poems-primary')
+    const fronts = db
+      .readTable('cards')
+      .filter((c) => c.deckId === deckP)
+      .map((c) => c.front)
+
+    const dup = fronts.filter((f, i) => fronts.indexOf(f) !== i)
+    ok(dup.length === 0, `古诗卡面不该有重名(还剩:${[...new Set(dup)].slice(0, 4).join('、')})`)
+
+    // 重名的那几首要带上作者
+    ok(
+      fronts.some((f) => f.indexOf('出塞·') === 0),
+      '同题的「出塞」要写成「出塞·王昌龄」这样',
+    )
+    // 不重名的不许被改动 —— 整页标题都拖长一截是另一种毛病
+    const raw = content.BUILTIN_PACKS.find((p) => p.key === 'poems-primary').load()
+    const titles = raw.cards.map((c) => c.title)
+    const dupTitles = new Set(titles.filter((t, i) => titles.indexOf(t) !== i))
+    for (const t of titles) {
+      if (dupTitles.has(t)) continue
+      ok(fronts.indexOf(t) >= 0, `不重名的「${t}」不该被改动`)
+    }
+    ok(dupTitles.size > 0, '这一包里本来就有重名的诗,这条测试才有意义')
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')

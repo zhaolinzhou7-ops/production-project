@@ -4,93 +4,73 @@
   "subject": "启蒙",
   "itemType": "pic",
   "source": "常识性看图词汇(动物/食物/颜色/数字),配 emoji 大图 | 数字用「同一样东西重复 N 个」表示,零用数字 0️⃣,序数配名次",
-  "count": 15,
+  "count": 11,
   "cards": [
+    {
+      "front": "0",
+      "en": "zero",
+      "emoji": "0️⃣",
+      "say": "零,一个也没有"
+    },
     {
       "front": "1",
       "en": "one",
-      "emoji": "🍎",
+      "emoji": "1️⃣",
       "say": "一"
     },
     {
       "front": "2",
       "en": "two",
-      "emoji": "👟👟",
+      "emoji": "2️⃣",
       "say": "二"
     },
     {
       "front": "3",
       "en": "three",
-      "emoji": "🍓🍓🍓",
+      "emoji": "3️⃣",
       "say": "三"
     },
     {
       "front": "4",
       "en": "four",
-      "emoji": "🍊🍊🍊🍊",
+      "emoji": "4️⃣",
       "say": "四"
     },
     {
       "front": "5",
       "en": "five",
-      "emoji": "⭐⭐⭐⭐⭐",
+      "emoji": "5️⃣",
       "say": "五"
     },
     {
       "front": "6",
       "en": "six",
-      "emoji": "🐤🐤🐤🐤🐤🐤",
+      "emoji": "6️⃣",
       "say": "六"
     },
     {
       "front": "7",
       "en": "seven",
-      "emoji": "🎈🎈🎈🎈🎈🎈🎈",
+      "emoji": "7️⃣",
       "say": "七"
     },
     {
       "front": "8",
       "en": "eight",
-      "emoji": "🍎🍎🍎🍎🍎🍎🍎🍎",
+      "emoji": "8️⃣",
       "say": "八"
     },
     {
       "front": "9",
       "en": "nine",
-      "emoji": "🌸🌸🌸🌸🌸🌸🌸🌸🌸",
+      "emoji": "9️⃣",
       "say": "九"
     },
     {
       "front": "10",
       "en": "ten",
-      "emoji": "🐟🐟🐟🐟🐟🐟🐟🐟🐟🐟",
+      "emoji": "🔟",
       "say": "十"
-    },
-    {
-      "front": "0",
-      "en": "zero",
-      "emoji": "🍽️",
-      "say": "零,一个也没有"
-    },
-    {
-      "front": "第一名",
-      "en": "first",
-      "emoji": "🥇"
-    },
-    {
-      "front": "第二名",
-      "en": "second",
-      "emoji": "🥈"
-    },
-    {
-      "front": "第三名",
-      "en": "third",
-      "emoji": "🥉"
-    },
-    {
-      "front": "一双",
-      "en": "a pair",
-      "emoji": "🧦🧦"
     }
   ]
 }
