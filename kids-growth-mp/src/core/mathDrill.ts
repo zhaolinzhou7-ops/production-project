@@ -32,6 +32,16 @@ export type MathKind =
   | 'split'
   | 'makeSum'
   | 'clock'
+  /*
+    v72 新增:**纯推理**,一次计算都不需要。
+
+    口算越往后越廉价 —— 真正稀缺的是「把已知条件摆出来、往下推」。
+    这三种是低龄段推理的三块基石:传递、排除、双条件筛选。
+    都做成看图点选,不识字也能做;题目用语音念出来。
+  */
+  | 'reason3'
+  | 'whichBox'
+  | 'twoClue'
   // 小学及以上
   | 'add'
   | 'sub'
@@ -97,6 +107,18 @@ export interface MathProblem {
    * 有 choices 时 answer 是「第几个选项」(从 1 开始)。
    */
   choices?: MathChoice[]
+  /**
+   * **念出来的话。**
+   *
+   * 题面里有 emoji 时,朗读不能照着题面念 —— 合成音碰到 🟥 要么跳过、
+   * 要么念成「红色方块表情」,听着像乱码。
+   * 所以推理题分两套:**屏幕上给图,耳朵里给词**
+   * (屏幕:「🟥 比 🟦 重」;耳朵:「红的比蓝的重」)。
+   *
+   * 有 say 的题目一进来就会自动念一遍,并留一个按钮可以重听 ——
+   * 他不识字,题目不出声等于这道题不存在。
+   */
+  say?: string
   /** 钟面(认识时间专用)—— emoji 画不出钟,只能让页面自己画 */
   clock?: { hour: number; minute: number }
   /**
@@ -171,7 +193,15 @@ export interface MathKindDef {
  * 分成五块之后,每块 3–5 个,而且每块可以**整组随机**:
  * 家长点「加法·随便来」就行,不必逐个题型去想今天练哪个。
  */
-export type MathGroup = 'count' | 'plus' | 'minus' | 'mixed' | 'think' | 'times' | 'olympic' | 'english'
+export type MathGroup =
+  | 'count'
+  | 'plus'
+  | 'minus'
+  | 'think'
+  | 'reason'
+  | 'times'
+  | 'olympic'
+  | 'english'
 
 export interface MathGroupDef {
   group: MathGroup
@@ -181,12 +211,29 @@ export interface MathGroupDef {
 }
 
 export const MATH_GROUPS: MathGroupDef[] = [
-  { group: 'count', label: '数与比较', icon: '🔢', desc: '数得清、排第几、谁多谁少' },
+  { group: 'count', label: '数与量', icon: '🔢', desc: '比大小、排第几、怎么拆怎么合' },
   { group: 'plus', label: '加法', icon: '➕', desc: '10/20 以内加法、凑十、看图合起来' },
   { group: 'minus', label: '减法', icon: '➖', desc: '10/20 以内减法、看图拿走' },
-  { group: 'mixed', label: '连算与分配', icon: '➰', desc: '连加连减、平均分' },
+  /*
+    ⚠️ v72 去掉了「连算与分配」这一组 —— 它只装着两个题型,
+    而多一块分组就多一次「今天点哪个」的犹豫。
+    连加连减归到加法(它就是多步的加减),平均分归到数与量
+    (和分一分、合起来是同一件事:数怎么拆、怎么合)。
+
+    分组本身也该说明白这套东西的取向:**算是手段,想是目的**。
+    所以推理单独一块,而计算类的收得越紧越好。
+  */
   { group: 'times', label: '乘除', icon: '✖️', desc: '乘法口诀、乘法、除法、四则混合' },
-  { group: 'think', label: '找规律·动脑', icon: '🧩', desc: '规律、方位、分类、推理、专注' },
+  { group: 'think', label: '找规律·动脑', icon: '🧩', desc: '规律、方位、分类、看钟表' },
+  /*
+    **推理**单独成一组,不和「找规律」混在一起。
+
+    分开是有意的:找规律、认方位这些仍然要「看出来」,
+    而推理组里的题**一个数都不用算、也没有图案可认** ——
+    只能靠「已知 A,已知 B,所以 C」。这是两种不同的脑力活,
+    摆在一起家长会当成一回事随便点一个。
+  */
+  { group: 'reason', label: '推理', icon: '🕵️', desc: '一个数都不用算,全靠想' },
   { group: 'olympic', label: '奥数专题', icon: '🏅', desc: '和差、年龄、植树、鸡兔同笼…' },
   /*
     英语口算。
@@ -197,7 +244,7 @@ export const MATH_GROUPS: MathGroupDef[] = [
     都更接近真实使用。数字是他已经会的部分,所以英语那一半的负担很小,
     这正是「在会的东西上挂新东西」——语言习得里效率最高的一种。
   */
-  { group: 'english', label: '英语口算', icon: '🔤', desc: '用英语数数、做加减(听英文、答数字)' },
+  { group: 'english', label: '英语口算', icon: '🔤', desc: '用英语做加减(听英文、答数字)' },
 ]
 
 export function getMathGroupDef(group: MathGroup): MathGroupDef | undefined {
@@ -219,13 +266,13 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'compare', label: '比大小', icon: '⚖️', desc: '哪个多、哪个少' , group: 'count' },
   { kind: 'add20', label: '20 以内进位加', icon: '🧮', desc: '9+5 这类,幼小衔接重点' , group: 'plus' },
   { kind: 'sub20', label: '20 以内退位减', icon: '🔻', desc: '13-5 这类,和进位加配套' , group: 'minus' },
-  { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' , group: 'mixed' },
+  { kind: 'chain', label: '连加连减', icon: '➰', desc: '3+4-2 这类,一步一步算' , group: 'plus' },
   /*
     ⚠️ ordinal(排第几)v66 从题型表里去掉了 —— 它被 position 完全覆盖,
     而且是更差的那一个:题面用中文说「小鸡排第几个」(他得先认字)、
     只能从左数、还要打字。生成函数留着不删,免得有人的旧设置里存着它。
   */
-  { kind: 'half', label: '平均分', icon: '🍕', desc: '几个人分,每人分到几个' , group: 'mixed' },
+  { kind: 'half', label: '平均分', icon: '🍕', desc: '几个人分,每人分到几个' , group: 'count' },
   { kind: 'pattern', label: '找规律', icon: '🔍', desc: '接着往下填什么' , group: 'think' },
   { kind: 'countShape', label: '数图形', icon: '🔺', desc: '数一数有几个' , group: 'count' },
   { kind: 'picAdd', label: '看图·合起来', icon: '🧺', desc: '两堆合在一起有几个' , group: 'plus' },
@@ -258,6 +305,13 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'split', label: '分一分', icon: '🍰', desc: '5 可以分成 2 和几' , group: 'count' },
   { kind: 'makeSum', label: '合起来', icon: '🤝', desc: '几和几合起来是 10' , group: 'count' },
   { kind: 'clock', label: '看钟表', icon: '🕒', desc: '现在是几点(整点和半点)' , group: 'think' },
+  /*
+    ---- v72:纯推理三件套 ----
+    一次计算都不需要 —— 练的全是「已知 → 往下推」。
+  */
+  { kind: 'reason3', label: '谁最重', icon: '🏋️', desc: '甲比乙重、乙比丙重,谁最重' , group: 'reason' },
+  { kind: 'whichBox', label: '在哪个盒子', icon: '🎁', desc: '不在这个、不在那个,那在哪' , group: 'reason' },
+  { kind: 'twoClue', label: '猜猜是哪个', icon: '🔎', desc: '不是红的、不是圆的,是哪个' , group: 'reason' },
   { kind: 'add', label: '加法', icon: '🧾', desc: '两数相加' , group: 'plus' },
   { kind: 'sub', label: '减法', icon: '📄', desc: '两数相减(不为负)' , group: 'minus' },
   { kind: 'mulTable', label: '乘法口诀', icon: '✖️', desc: '九九乘法表' , group: 'times' },
@@ -330,6 +384,8 @@ const TODDLER_KINDS: MathKind[] = [
   'position', 'oddOne',
   // v66:空间方位、数的分与合、认识时间
   'where', 'split', 'makeSum', 'clock',
+  // v72:纯推理 —— 口算是手段,这一组才是目的
+  'reason3', 'whichBox', 'twoClue',
 ]
 
 /**
@@ -441,6 +497,18 @@ export function tierOfKind(kind: MathKind): MathTier {
  */
 export function mathKindsFor(stage: AgeStage): MathKindDef[] {
   return mathKindsForTier(defaultTierFor(stage))
+}
+
+/** 打乱一个数组(不改原数组)—— 推理题要靠它把选项和答案位置打散 */
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = a[i]
+    a[i] = a[j]
+    a[j] = t
+  }
+  return a
 }
 
 function randInt(min: number, max: number): number {
@@ -1146,6 +1214,123 @@ function genClock(): MathProblem {
   }
 }
 
+
+// ---------------- v72:纯推理 ----------------
+
+/*
+  这三种题**一个数都不用算**。
+
+  口算越往后越廉价:再快的心算也比不过一台计算器。真正稀缺的是
+  「把已知条件摆出来,一步一步往下推」——而这套系统里原先一道都没有。
+
+  三种覆盖了低龄段推理的三块基石:
+  · **传递**:A 比 B 重,B 比 C 重 → A 比 C 重
+  · **排除**:不在这个、不在那个 → 那就在剩下那个
+  · **双条件筛选**:不是红的、不是圆的 → 同时满足两条的只剩一个
+
+  ⚠️ 共同的一条设计规矩:**不能让他靠常识猜出来**。
+  用「大象比小狗大、小狗比老鼠大」的话,他根本不用推理 —— 他本来就知道
+  大象最大。所以一律用**颜色块**:红的和蓝的谁重,现实里没有答案,
+  只能从给的两句话里推。这是这三道题成立的前提。
+*/
+
+/** 颜色块:名字用来念,图形用来看 —— 两者必须对得上 */
+const COLOR_BLOCKS: Array<{ emoji: string; name: string }> = [
+  { emoji: '🟥', name: '红色' },
+  { emoji: '🟦', name: '蓝色' },
+  { emoji: '🟩', name: '绿色' },
+  { emoji: '🟨', name: '黄色' },
+  { emoji: '🟪', name: '紫色' },
+]
+
+/**
+ * 传递关系:A 比 B 重,B 比 C 重,谁最重?
+ *
+ * 传递推理在 4–5 岁刚好开始成型,而且**必须有具体支撑**(图 + 语音)才做得了。
+ * 只给两句话、三个东西 —— 这是传递推理最简单的形状,再多一句就超出
+ * 这个年纪的工作记忆了。
+ */
+function genReason3(): MathProblem {
+  const [a, b, c] = shuffleArr(COLOR_BLOCKS).slice(0, 3)
+  const [adj, most, least] = pick([
+    ['重', '最重', '最轻'],
+    ['高', '最高', '最矮'],
+    ['快', '最快', '最慢'],
+  ])
+  // a > b > c
+  const askTop = randInt(1, 2) === 1
+  const want = askTop ? a : c
+  const opts = shuffleArr([a, b, c])
+  return {
+    text: `${a.emoji} 比 ${b.emoji} ${adj}\n${b.emoji} 比 ${c.emoji} ${adj}\n谁${askTop ? most : least}?`,
+    say: `${a.name}比${b.name}${adj},${b.name}比${c.name}${adj}。谁${askTop ? most : least}?`,
+    answer: opts.indexOf(want) + 1,
+    choices: opts.map((x) => ({ label: x.emoji, kind: 'emoji' as const })),
+  }
+}
+
+/**
+ * 排除法:不在这个盒子,也不在那个盒子,那在哪?
+ *
+ * 三个盒子、两条否定 —— 答案被**逼**出来,没有猜的余地。
+ * 这是「排除」这件事最干净的形状,也是他以后做所有选择题的底层动作。
+ */
+function genWhichBox(): MathProblem {
+  const boxes = shuffleArr(COLOR_BLOCKS).slice(0, 3)
+  const thing = pick(['🎁', '🧸', '🍬', '⚽'])
+  const thingName = { '🎁': '礼物', '🧸': '小熊', '🍬': '糖', '⚽': '球' }[thing] ?? '东西'
+  const at = randInt(0, 2)
+  const others = boxes.filter((_, i) => i !== at)
+  return {
+    /*
+      否定要**看得见**。
+
+      他不识字,「不在」两个字对他是空白 —— 而这道题的全部信息就在那两个字上。
+      所以把排除掉的盒子后面画一个 ❌:
+      一眼就知道「这两个不是」,剩下那个自然浮出来。
+      文字留着给家长看,声音留给他听。
+    */
+    text: `${thing} 在哪个盒子里?\n${others[0].emoji} ❌\u3000${others[1].emoji} ❌`,
+    say: `${thingName}不在${others[0].name}盒子里,也不在${others[1].name}盒子里。${thingName}在哪个盒子里?`,
+    answer: boxes.indexOf(boxes[at]) + 1,
+    choices: boxes.map((x) => ({ label: x.emoji, kind: 'emoji' as const })),
+  }
+}
+
+/**
+ * 双条件筛选:不是红的,也不是圆的,是哪一个?
+ *
+ * 这是幼儿数学教材里的「属性积木」题,而且是这三种里最接近
+ * **真正的逻辑**的一种:两个条件要**同时**满足,少看一个就会选错。
+ *
+ * 四个选项刚好是「红圆 / 蓝圆 / 红方 / 蓝方」两两组合 ——
+ * 任意两条否定都正好剩一个,答案唯一,没有争议。
+ */
+function genTwoClue(): MathProblem {
+  const [c1, c2] = shuffleArr([
+    { round: '🔴', square: '🟥', name: '红色' },
+    { round: '🔵', square: '🟦', name: '蓝色' },
+    { round: '🟢', square: '🟩', name: '绿色' },
+    { round: '🟡', square: '🟨', name: '黄色' },
+  ]).slice(0, 2)
+
+  // 排除掉一种颜色和一种形状,剩下的那一个就是答案
+  const noColor = randInt(1, 2) === 1 ? c1 : c2
+  const keepColor = noColor === c1 ? c2 : c1
+  const noRound = randInt(1, 2) === 1
+  const want = noRound ? keepColor.square : keepColor.round
+
+  const all = [c1.round, c1.square, c2.round, c2.square]
+  const opts = shuffleArr(all)
+  return {
+    // 同上:两条否定各画一个 ❌,他一眼看出「这个颜色不要、这个形状不要」
+    text: `是哪一个?\n❌ ${noColor.square}\u3000❌ ${noRound ? '⭕' : '🔲'}`,
+    say: `它不是${noColor.name}的,也不是${noRound ? '圆' : '方'}的。是哪一个?`,
+    answer: opts.indexOf(want) + 1,
+    choices: opts.map((x) => ({ label: x, kind: 'emoji' as const })),
+  }
+}
+
 // ---------------- 思维档:枚举与巧算 ----------------
 
 /** 简单枚举:2 件上衣配 3 条裤子有几种穿法 —— 乘法原理的启蒙 */
@@ -1341,6 +1526,12 @@ export function generateProblem(kind: MathKind, stage: AgeStage): MathProblem {
       return genOddOne()
     case 'sizeCmp':
       return genSizeCmp()
+    case 'reason3':
+      return genReason3()
+    case 'whichBox':
+      return genWhichBox()
+    case 'twoClue':
+      return genTwoClue()
     case 'where':
       return genWhere()
     case 'split':

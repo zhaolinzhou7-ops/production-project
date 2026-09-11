@@ -3530,6 +3530,115 @@ function run() {
     }
   }
 
+  /*
+    ---- v72:纯推理三件套 ----
+
+    口算越往后越廉价 —— 再快的心算也比不过一台计算器。
+    真正稀缺的是「把已知条件摆出来、一步一步往下推」,
+    而这套系统里原先一道都没有。
+
+    这三种共同的一条设计规矩:**不能让他靠常识猜出来**。
+    用「大象比小狗大、小狗比老鼠大」的话他根本不用推理 —— 他本来就知道
+    大象最大。所以一律用颜色块:红的和蓝的谁重,现实里没有答案。
+    这是这三道题成立的前提,下面第一条就钉它。
+  */
+  {
+    const md5 = L('core/mathDrill.js')
+
+    // ① 每一种都要能点、能念,而且答案唯一
+    for (const k of ['reason3', 'whichBox', 'twoClue']) {
+      for (let i = 0; i < 40; i++) {
+        const q = md5.generateProblem(k, 'toddler')
+        ok(Array.isArray(q.choices) && q.choices.length >= 3, `${k} 要给至少三个可点的选项`)
+        ok(q.answer >= 1 && q.answer <= q.choices.length, `${k} 的答案要落在选项范围里`)
+        ok(new Set(q.choices.map((c) => c.label)).size === q.choices.length, `${k} 的选项不能重复`)
+        /*
+          **必须能念出来。**
+          这一类题的全部信息都在文字里,而他一个字都不认识 ——
+          题目不出声,这道题对他就是一张花花绿绿的空白。
+        */
+        ok(!!q.say, `${k} 必须有 say(念出来的话)—— 他不识字`)
+        // 念的那句里不能有 emoji:合成音碰到 🟥 要么跳过、要么念成「红色方块表情」
+        ok(
+          !/\p{Extended_Pictographic}/u.test(q.say),
+          `${k} 念出来的话里不该有 emoji(${q.say})`,
+        )
+        ok(q.say.length >= 8, `${k} 念出来的话太短,说不清条件(${q.say})`)
+      }
+    }
+
+    // ② 传递:两句话推出一个结论,而且不能靠常识
+    for (let i = 0; i < 60; i++) {
+      const q = md5.generateProblem('reason3', 'toddler')
+      const m = /^(.+?)比(.+?)([重高快]),(.+?)比(.+?)\3。谁最([重高快轻矮慢])\?$/.exec(q.say)
+      ok(!!m, `传递题的话应是「A比B重,B比C重。谁最重?」(实际 ${q.say})`)
+      if (m) {
+        const [, a, b, , b2, c, ask] = m
+        ok(b === b2, `中间那个必须是同一个,否则推不出来(${q.say})`)
+        ok(a !== b && b !== c && a !== c, `三个不能有重复(${q.say})`)
+        const want = ['重', '高', '快'].indexOf(ask) >= 0 ? a : c
+        const got = q.choices[q.answer - 1].label
+        // 颜色名和色块要对得上
+        const map = { 红色: '🟥', 蓝色: '🟦', 绿色: '🟩', 黄色: '🟨', 紫色: '🟪' }
+        ok(map[want] === got, `问「最${ask}」时答案应该是 ${want}(${q.say} → ${got})`)
+      }
+      /*
+        **不能靠常识猜。**
+        题面里只能出现颜色块 —— 一旦出现大象、老鼠这类东西,
+        他不用推理也知道谁大,这道题就白出了。
+      */
+      for (const c of q.choices) {
+        ok(
+          ['🟥', '🟦', '🟩', '🟨', '🟪'].indexOf(c.label) >= 0,
+          `传递题只能用颜色块,不能用现实里有大小的东西(${c.label})`,
+        )
+      }
+    }
+
+    // ③ 排除:两条否定 + 三个盒子 → 答案被逼出来,没有猜的余地
+    for (let i = 0; i < 60; i++) {
+      const q = md5.generateProblem('whichBox', 'toddler')
+      ok(q.choices.length === 3, '排除题正好三个盒子:两条否定才能逼出唯一答案')
+      // 被排除的两个必须画上 ❌ —— 他不识字,「不在」两个字对他是空白
+      const marks = (q.text.match(/❌/g) || []).length
+      ok(marks === 2, `排除掉的盒子要各画一个 ❌(实际 ${marks} 个)`)
+      const ruled = q.choices.filter((c) => q.text.indexOf(`${c.label} ❌`) >= 0)
+      ok(ruled.length === 2, '正好两个盒子被划掉')
+      ok(
+        ruled.every((c) => q.choices.indexOf(c) + 1 !== q.answer),
+        '答案不能是被划掉的那个',
+      )
+    }
+
+    // ④ 双条件筛选:两条否定同时满足的只剩一个
+    for (let i = 0; i < 60; i++) {
+      const q = md5.generateProblem('twoClue', 'toddler')
+      ok(q.choices.length === 4, '双条件题四个选项:红圆/蓝圆/红方/蓝方两两组合')
+      const marks = (q.text.match(/❌/g) || []).length
+      ok(marks === 2, `两条否定各画一个 ❌(实际 ${marks} 个)`)
+      const ROUND = ['🔴', '🔵', '🟢', '🟡']
+      const SQUARE = ['🟥', '🟦', '🟩', '🟨']
+      const labels = q.choices.map((c) => c.label)
+      ok(labels.filter((x) => ROUND.indexOf(x) >= 0).length === 2, '两个圆、两个方')
+      ok(labels.filter((x) => SQUARE.indexOf(x) >= 0).length === 2, '两个圆、两个方')
+      // 答案必须同时满足两条否定
+      const noShapeRound = q.text.indexOf('❌ ⭕') >= 0
+      const ans = labels[q.answer - 1]
+      ok(
+        noShapeRound ? SQUARE.indexOf(ans) >= 0 : ROUND.indexOf(ans) >= 0,
+        `排除了${noShapeRound ? '圆' : '方'},答案不该是${noShapeRound ? '圆' : '方'}的(${ans})`,
+      )
+    }
+
+    // ⑤ 推理要单独成一组 —— 和「找规律」不是一回事
+    const rg = md5.mathGroupsForTier('toddler').find((g) => g.def.group === 'reason')
+    ok(rg && rg.kinds.length === 3, '推理应该单独成一组,里面三种')
+    ok(
+      rg && rg.def.desc.indexOf('不用算') >= 0,
+      '推理这一组的说明要点明「一个数都不用算」—— 那是它和别的组最大的区别',
+    )
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')

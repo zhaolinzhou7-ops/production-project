@@ -15,7 +15,7 @@ import {
 } from '../../../store/study'
 import { awardSticker, feedPet, bumpChallenge } from '../../../store/fun'
 import CorrectBurst from '../../../components/CorrectBurst'
-import { playWordAudio } from '../../../lib/audio'
+import { playWordAudio, playText } from '../../../lib/audio'
 import type { StickerDef } from '../../../core/stickers'
 import { withGuard } from '../../../components/Guard'
 import { flushNow } from '../../../store/db'
@@ -77,13 +77,27 @@ function MathRun() {
 
   // 英语题进来自动读一遍:他不认英文字,不出声这道题就是空白
   useEffect(() => {
-    if (!isEnglish) return
+    /*
+      **推理题必须念出来。**
+
+      这一类题的全部信息都在文字里(「红的比蓝的重,蓝的比紫的重」)——
+      而他一个字都不认识。题目不出声,这道题对他就是一张花花绿绿的空白。
+
+      屏幕上给图、耳朵里给词:题面里是 🟥,念出来是「红色」——
+      合成音碰到 emoji 要么跳过、要么念成「红色方块表情」,听着像乱码,
+      所以朗读走 say 字段,不照着题面念(见 core/mathDrill 的 MathProblem.say)。
+    */
     const cur = problems[idx]
     if (!cur || feedback !== 'none') return
+    if (cur.say) {
+      const t = setTimeout(() => void playText(cur.say as string, 'zh_CN'), 350)
+      return () => clearTimeout(t)
+    }
+    if (!isEnglish) return
     const t = setTimeout(() => void playWordAudio(cur.text), 350)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, isEnglish, feedback])
+  }, [idx, isEnglish, feedback, problems])
 
   const tapCount = (key: string, struck: boolean) => {
     // 划掉的不参与数数 —— 它们已经被拿走了
@@ -325,6 +339,17 @@ function MathRun() {
           他还不认字,更不认英文字 —— 题目摆在那儿不出声,这道题对他就是空白。
           所以英语题一进来自动读一遍,并留一个按钮可以再听。
         */}
+        {/*
+          **再听一遍。**
+          推理题一进来自动念一次,但他常常第一遍没听全 ——
+          三句话对 4 岁半的工作记忆本来就是满载的。留一个按钮随时重听,
+          比让他记住重要得多:记不住不是这道题要考的东西。
+        */}
+        {p?.say ? (
+          <View className='audio audio--big' onClick={() => void playText(p.say as string, 'zh_CN')}>
+            <Text className='audio__t'>🔊</Text>
+          </View>
+        ) : null}
         {isEnglish ? (
           <View className='audio audio--big' onClick={() => void playWordAudio(p.text)}>
             <Text className='audio__t'>🔊</Text>
