@@ -11,7 +11,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    font-size: 48px;
+    font-size: min(48px, 29PX);
     line-height: 1;
     opacity: 0;
     animation: petal-fly 900ms ease-out forwards;
@@ -23,7 +23,7 @@
     top: 0;
     transform: translate(-50%, -50%);
     white-space: nowrap;
-    font-size: 46px;
+    font-size: min(46px, 28PX);
     font-weight: bold;
     color: #fff;
     background: #34d399;
@@ -33,7 +33,7 @@
     animation: stamp-pop 900ms ease-out forwards;
 
     &--grand {
-      font-size: 56px;
+      font-size: min(56px, 34PX);
       background: linear-gradient(135deg, #fbbf24, #f9497a);
       padding: 20px 52px;
     }

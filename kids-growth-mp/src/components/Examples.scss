@@ -14,7 +14,7 @@
   &__emoji {
     display: block;
     text-align: center;
-    font-size: 72px;
+    font-size: min(72px, 43PX);
     line-height: 1.1;
     margin-bottom: 8px;
   }

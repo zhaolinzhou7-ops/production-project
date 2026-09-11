@@ -12,11 +12,11 @@
   }
 
   &__emoji {
-    font-size: 96px;
+    font-size: min(96px, 58PX);
   }
 
   &__big {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     font-weight: bold;
     color: #374151;
     margin-top: 16px;
@@ -67,12 +67,12 @@
   padding-top: 60px;
 
   &__front {
-    font-size: 64px;
+    font-size: min(64px, 38PX);
     font-weight: bold;
     color: #374151;
 
     &--hz {
-      font-size: 130px;
+      font-size: min(130px, 78PX);
     }
   }
 
@@ -95,7 +95,7 @@
     font-weight: 500;
 
     &--hz {
-      font-size: 44px;
+      font-size: min(44px, 26PX);
       font-weight: bold;
     }
   }
@@ -132,7 +132,7 @@
   }
 
   &__t {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
   }
 }
 
@@ -220,7 +220,7 @@
   }
 
   &__num {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
     font-weight: bold;
     color: #374151;
 
@@ -251,7 +251,7 @@
   border-radius: 24px;
   padding: 24px;
   text-align: center;
-  font-size: 40px;
+  font-size: min(40px, 24PX);
   margin-bottom: 28px;
 }
 
@@ -289,7 +289,7 @@
 }
 
 .stars {
-  font-size: 48px;
+  font-size: min(48px, 29PX);
   margin-top: 8px;
 }
 
@@ -310,13 +310,13 @@
   width: 45%;
   text-align: center;
   .opt__t {
-    font-size: 52px;
+    font-size: min(52px, 31PX);
   }
 }
 
 .poem {
   &__title {
-    font-size: 38px;
+    font-size: min(38px, 23PX);
     font-weight: bold;
     color: #374151;
     margin-top: 20px;
@@ -333,7 +333,7 @@
     margin-bottom: 24px;
   }
   &__line {
-    font-size: 36px;
+    font-size: min(36px, 22PX);
     color: #374151;
     line-height: 1.8;
     &--blank {
@@ -391,7 +391,7 @@
 .pic__emoji {
   display: block;
   text-align: center;
-  font-size: 160px;
+  font-size: min(160px, 96PX);
   line-height: 1.2;
   margin: 20px 0 8px;
 }
@@ -413,7 +413,7 @@
   justify-content: center;
 
   &__e {
-    font-size: 92px;
+    font-size: min(92px, 55PX);
     line-height: 1.1;
   }
 
@@ -437,7 +437,7 @@
   margin: 20px 0;
 
   &__e {
-    font-size: 90px;
+    font-size: min(90px, 54PX);
     line-height: 1.1;
   }
 
@@ -473,7 +473,7 @@
   border-radius: 22px;
   padding: 16px 22px;
 
-  &__e { font-size: 56px; }
+  &__e { font-size: min(56px, 34PX); }
   &__n { font-size: 22px; color: #6d28d9; font-weight: bold; margin-top: 4px; }
 }
 
@@ -490,7 +490,7 @@
   height: 76px;
   line-height: 76px;
   text-align: center;
-  font-size: 42px;
+  font-size: min(42px, 25PX);
   color: #374151;
   background: #f8f8fa;
   border-radius: 16px;
@@ -506,7 +506,7 @@
 
 /* ---- 看拼音选字 ---- */
 .card__front--py {
-  font-size: 64px;
+  font-size: min(64px, 38PX);
   color: #3b82f6;
   letter-spacing: 4px;
 }
@@ -515,7 +515,7 @@
 .ear__en {
   display: block;
   text-align: center;
-  font-size: 40px;
+  font-size: min(40px, 24PX);
   color: #374151;
   font-weight: bold;
 }
@@ -570,7 +570,7 @@
   }
 
   &__word {
-    font-size: 52px;
+    font-size: min(52px, 31PX);
     font-weight: bold;
     color: #f9497a;
     letter-spacing: 6px;
@@ -604,7 +604,7 @@
   }
 
   &__kt {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
     font-weight: bold;
     color: #374151;
   }
@@ -628,7 +628,7 @@
   }
 
   &__e {
-    font-size: 76px;
+    font-size: min(76px, 46PX);
     margin-right: 20px;
     transition: transform 0.4s ease;
 
@@ -717,8 +717,8 @@
 /* 说给我听:图要大,判定按钮要明确分开(误点代价高) */
 .card--say { align-items: center; }
 .say {
-  &__e { font-size: 180px; line-height: 1.1; }
-  &__w { font-size: 110px; font-weight: bold; color: #374151; }
+  &__e { font-size: min(180px, 108PX); line-height: 1.1; }
+  &__w { font-size: min(110px, 66PX); font-weight: bold; color: #374151; }
   &__ask { display: block; margin-top: 18px; font-size: 30px; color: #6b7280; }
   &__ans {
     margin-top: 20px;
@@ -727,7 +727,7 @@
     border-radius: 20px;
     text-align: center;
   }
-  &__a { display: block; font-size: 40px; font-weight: bold; color: #059669; }
+  &__a { display: block; font-size: min(40px, 24PX); font-weight: bold; color: #059669; }
   &__b { display: block; margin-top: 6px; font-size: 28px; color: #6b7280; }
   &__hint {
     display: block;
@@ -739,7 +739,7 @@
 }
 
 /* 英语·跟我读:英文要大,中文小一号做提示 */
-.say__en { display: block; font-size: 76px; font-weight: bold; color: #374151; margin-top: 10px; }
+.say__en { display: block; font-size: min(76px, 46PX); font-weight: bold; color: #374151; margin-top: 10px; }
 .say__zh { display: block; font-size: 30px; color: #9ca3af; margin-top: 8px; }
 .chip--rec { background: #f43f5e; }
 .chip--rec .chip__t { color: #fff; }
@@ -777,7 +777,7 @@
   height: 96px;
   line-height: 96px;
   text-align: center;
-  font-size: 48px;
+  font-size: min(48px, 29PX);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.9);
   border: 4px solid #e5e7eb;
@@ -816,7 +816,7 @@
 }
 
 .vis__op {
-  font-size: 40px;
+  font-size: min(40px, 24PX);
   color: #9ca3af;
   margin-right: 12px;
 }
@@ -829,7 +829,7 @@
 }
 
 .vis__i {
-  font-size: 46px;
+  font-size: min(46px, 28PX);
   line-height: 1.2;
   margin: 2px;
 }
@@ -848,7 +848,7 @@
 
   &__w {
     display: block;
-    font-size: 48px;
+    font-size: min(48px, 29PX);
     font-weight: 700;
     color: #4f46e5;
   }

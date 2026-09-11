@@ -42,7 +42,7 @@
   &__pic {
     display: block;
     text-align: center;
-    font-size: 140px;
+    font-size: min(140px, 84PX);
     line-height: 1.1;
   }
 
@@ -55,13 +55,13 @@
   }
 
   &__emoji {
-    font-size: 96px;
+    font-size: min(96px, 58PX);
   }
 
   &__stars {
     display: block;
     margin-top: 12px;
-    font-size: 40px;
+    font-size: min(40px, 24PX);
 
     &--off {
       opacity: 0.25;
@@ -69,7 +69,7 @@
   }
 
   &__big {
-    font-size: 42px;
+    font-size: min(42px, 25PX);
     font-weight: bold;
     color: var(--ink);
     margin: 14px 0 6px;
@@ -151,7 +151,7 @@
   }
 
   &__e {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
     margin-right: 12px;
   }
 
@@ -196,7 +196,7 @@
   display: block;
   margin: 20px auto 8px;
   text-align: center;
-  font-size: 130px;
+  font-size: min(130px, 78PX);
   line-height: 1.15;
   color: var(--ink);
 }
@@ -280,5 +280,5 @@
   text-align: center;
   border-radius: 66px;
   background: rgba(99, 102, 241, 0.12);
-  font-size: 56px;
+  font-size: min(56px, 34PX);
 }

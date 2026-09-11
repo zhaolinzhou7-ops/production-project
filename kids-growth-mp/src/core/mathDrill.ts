@@ -233,9 +233,16 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'picDiff', label: '看图·多几个', icon: '⚖️', desc: '哪边多,多几个' , group: 'minus' },
   { kind: 'position', label: '排第几', icon: '📍', desc: '从左数、从右数,排第几' , group: 'count' },
   { kind: 'oddOne', label: '找不同类', icon: '🧩', desc: '哪个不是一伙的' , group: 'think' },
-  { kind: 'sizeCmp', label: '比长短', icon: '📏', desc: '哪个长、哪个高' , group: 'count' },
+  /*
+    ⚠️ v71 从题型表里去掉了 —— 点长的那一条 —— 一眼的事,做多少道都长不了东西。
+    生成函数留着不删,免得有人的旧设置里存着它。
+  */
   { kind: 'logic3', label: '想一想', icon: '💭', desc: '谁最高、谁最快' , group: 'think' },
-  { kind: 'spotDiff', label: '找不同', icon: '👀', desc: '两排里哪个不一样' , group: 'think' },
+  /*
+    ⚠️ v71 从题型表里去掉了 —— 两排里找不一样 —— 练的是**专注力**不是数学,而且很简单。
+    放在口算模块里名不副实。
+    生成函数留着不删,免得有人的旧设置里存着它。
+  */
   /*
     ---- v66 新增 ----
     方位、分与合、认识时间。三个都是幼小衔接里绕不过去、
@@ -269,7 +276,11 @@ export const MATH_KINDS: MathKindDef[] = [
   { kind: 'chicken', label: '鸡兔同笼', icon: '🐔', desc: '数头又数脚' , group: 'olympic' },
   { kind: 'profitLoss', label: '盈亏问题', icon: '🍬', desc: '多了几个、少了几个' , group: 'olympic' },
   { kind: 'average', label: '平均数', icon: '📊', desc: '匀一匀,每份是多少' , group: 'olympic' },
-  { kind: 'enCount', label: 'How many?', icon: '🍎', desc: '听英文,数一数有几个' , group: 'english' },
+  /*
+    ⚠️ v71 从题型表里去掉了 —— 纯数数 —— 他已经会直接算了,再让他一个个数 5 个苹果是倒退。
+    英语数学留 Plus / Minus 就够,那两个是算式不是数数。
+    生成函数留着不删,免得有人的旧设置里存着它。
+  */
   { kind: 'enAdd', label: 'Plus', icon: '➕', desc: 'Two plus three = ?' , group: 'english' },
   { kind: 'enSub', label: 'Minus', icon: '➖', desc: 'Five minus two = ?' , group: 'english' },
 ]
@@ -295,7 +306,7 @@ export function getMathKindDef(kind: MathKind): MathKindDef | undefined {
 const TODDLER_KINDS: MathKind[] = [
   'add10', 'sub10', 'makeTen', 'compare',
   // 英语口算:数字是他已经会的部分,所以英语那一半的负担很小
-  'enCount', 'enAdd', 'enSub',
+  'enAdd', 'enSub',
   /*
     ⚠️ ordinal(排第几)v66 从幼儿档拿掉了 —— 它和 position 是**同一道题**,
     而且是更差的那一个:
@@ -316,7 +327,7 @@ const TODDLER_KINDS: MathKind[] = [
     三个名字加两组比较关系,超出这个年纪的工作记忆。
     它是一道好题,但是给六七岁的。摆在这里只会让他每次都点错然后放弃。
   */
-  'position', 'oddOne', 'sizeCmp', 'spotDiff',
+  'position', 'oddOne',
   // v66:空间方位、数的分与合、认识时间
   'where', 'split', 'makeSum', 'clock',
 ]
@@ -499,11 +510,54 @@ function genMakeTen(): MathProblem {
 }
 
 /** 比大小:答大的那个数 —— 题干里写清楚怎么答 */
+/**
+ * 比大小。
+ *
+ * ⚠️ v71 升级过:原先是「4 和 17,哪个大?」——
+ * 对一个已经会算 6+9 的孩子,这是一眼的事,做十道也长不了什么。
+ *
+ * 现在**至少有一边是算式**:「8+5 和 12,哪个大?」
+ * 他得先把 8+5 算出来才比得了 —— 这一下就把计算从「目的」变回了「手段」:
+ * 算,是为了**判断**。这正是口算该待的位置。
+ *
+ * 三成的题两边都是算式,那时候他要算两次再比,更接近真实的用法。
+ */
 function genCompare(): MathProblem {
-  let a = randInt(1, 20)
-  let b = randInt(1, 20)
-  if (a === b) b = a + 1
-  return { text: `${a} 和 ${b}\n哪个大?大的那个是几?`, answer: Math.max(a, b) }
+  const side = (): { text: string; val: number } => {
+    const kind = randInt(1, 3)
+    if (kind === 1) {
+      const n = randInt(3, 20)
+      return { text: String(n), val: n }
+    }
+    if (kind === 2) {
+      const x = randInt(2, 9)
+      const y = randInt(2, 9)
+      return { text: `${x}+${y}`, val: x + y }
+    }
+    const x = randInt(6, 18)
+    const y = randInt(1, x - 1)
+    return { text: `${x}-${y}`, val: x - y }
+  }
+  let a = side()
+  let b = side()
+  // 两边一样大就没有答案;差 1 也太考验细心而不是理解,拉开一点
+  let guard = 0
+  while (Math.abs(a.val - b.val) < 2 && guard < 30) {
+    b = side()
+    guard += 1
+  }
+  if (a.val === b.val) b = { text: String(a.val + 3), val: a.val + 3 }
+  // 至少有一边得是算式,否则又退回「4 和 17」那种一眼题
+  if (a.text.length <= 2 && b.text.length <= 2) {
+    const x = randInt(2, 9)
+    const y = randInt(2, 9)
+    a = { text: `${x}+${y}`, val: x + y }
+    while (Math.abs(a.val - b.val) < 2) b = side()
+  }
+  return {
+    text: `${a.text} 和 ${b.text}\n哪个大?大的那个是几?`,
+    answer: Math.max(a.val, b.val),
+  }
 }
 
 /** 20 以内进位加:幼小衔接的重点题型 */

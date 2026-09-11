@@ -234,7 +234,7 @@ function MathRun() {
           两边一致,不会让人愣一下。
         */}
         <View className='btn btn--primary btn--wide' onClick={() => Taro.navigateBack()}>
-          <Text className='btn__t'>← 回到口算,再来一组</Text>
+          <Text className='btn__t'>← 再来一组</Text>
         </View>
       </View>
     )

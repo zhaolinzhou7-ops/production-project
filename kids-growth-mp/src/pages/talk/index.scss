@@ -19,7 +19,7 @@
   flex-direction: column;
   align-items: center;
 
-  &__i { font-size: 36px; }
+  &__i { font-size: min(36px, 22PX); }
   &__t { font-size: 21px; color: #6b7280; margin-top: 4px; }
   &--on {
     background: #f9497a;
@@ -42,7 +42,7 @@
   padding: 22px;
   margin-bottom: 14px;
 
-  &__e { font-size: 46px; margin-right: 20px; }
+  &__e { font-size: min(46px, 28PX); margin-right: 20px; }
   &__meta { flex: 1; }
   &__t { display: block; font-size: 30px; color: #374151; font-weight: bold; }
   &__sub { display: block; font-size: 22px; color: #9ca3af; }
@@ -87,7 +87,7 @@
   &--bot { background: rgba(255, 255, 255, 0.9); }
   &--me { background: rgba(52, 211, 153, 0.16); }
 
-  &__e { font-size: 52px; margin-right: 18px; }
+  &__e { font-size: min(52px, 31PX); margin-right: 18px; }
   &__body { flex: 1; }
   &__lab { display: block; font-size: 21px; color: #059669; margin-bottom: 6px; }
   &__en { display: block; font-size: 32px; color: #374151; font-weight: bold; line-height: 1.4; }
@@ -142,7 +142,7 @@
   justify-content: center;
   margin: 22px 0;
 
-  &__t { font-size: 64px; }
+  &__t { font-size: min(64px, 38PX); }
 }
 
 /* ---- 动画舞台 ---- */
@@ -156,7 +156,7 @@
   margin-bottom: 20px;
   overflow: hidden;
 
-  &__e { font-size: 170px; line-height: 1.1; }
+  &__e { font-size: min(170px, 102PX); line-height: 1.1; }
   &__en {
     display: block;
     text-align: center;
@@ -240,7 +240,7 @@
   &--rec { background: rgba(239, 68, 68, 0.16); }
 }
 
-.stars { display: block; text-align: center; font-size: 40px; margin: 8px 0; }
+.stars { display: block; text-align: center; font-size: min(40px, 24PX); margin: 8px 0; }
 .msg { display: block; text-align: center; font-size: 24px; color: #6b7280; line-height: 1.5; }
 
 .next {
@@ -390,7 +390,7 @@
   flex-direction: column;
   align-items: center;
 
-  &__e { font-size: 96px; }
+  &__e { font-size: min(96px, 58PX); }
   &__t {
     font-size: 34px;
     font-weight: bold;

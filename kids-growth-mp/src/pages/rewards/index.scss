@@ -13,7 +13,7 @@
     align-items: center;
   }
 
-  &__n { font-size: 76px; color: #fff; font-weight: bold; line-height: 1.1; }
+  &__n { font-size: min(76px, 46PX); color: #fff; font-weight: bold; line-height: 1.1; }
   &__l { font-size: 26px; color: rgba(255, 255, 255, 0.95); margin-top: 6px; }
   &__h { font-size: 21px; color: rgba(255, 255, 255, 0.85); margin-top: 12px; }
 
@@ -37,7 +37,7 @@
 
   &--on { background: rgba(255, 255, 255, 0.95); opacity: 1; }
 
-  &__e { font-size: 48px; margin-right: 20px; }
+  &__e { font-size: min(48px, 29PX); margin-right: 20px; }
   &__meta { flex: 1; }
   &__t { display: block; font-size: 29px; color: #374151; font-weight: bold; }
   &__gap { font-size: 21px; color: #9ca3af; }
@@ -61,7 +61,7 @@
 
   &__t { display: block; font-size: 27px; color: #374151; font-weight: bold; margin-bottom: 12px; }
   &__row { display: flex; align-items: center; padding: 12px 0; }
-  &__e { font-size: 36px; margin-right: 16px; }
+  &__e { font-size: min(36px, 22PX); margin-right: 16px; }
   &__n { flex: 1; font-size: 26px; color: #374151; }
   &__s {
     font-size: 21px;

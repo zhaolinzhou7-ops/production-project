@@ -83,7 +83,7 @@
   text-align: center;
   padding: 80px 24px;
   &__e {
-    font-size: 80px;
+    font-size: min(80px, 48PX);
   }
   &__t {
     display: block;

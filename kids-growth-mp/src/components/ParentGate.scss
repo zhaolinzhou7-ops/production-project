@@ -42,7 +42,7 @@
   &__q {
     display: block;
     text-align: center;
-    font-size: 46px;
+    font-size: min(46px, 28PX);
     font-weight: bold;
     color: #f9497a;
   }
@@ -58,7 +58,7 @@
   }
 
   &__val {
-    font-size: 48px;
+    font-size: min(48px, 29PX);
     font-weight: bold;
     color: #374151;
     letter-spacing: 4px;
@@ -94,7 +94,7 @@
   }
 
   &__kt {
-    font-size: 36px;
+    font-size: min(36px, 22PX);
     color: #374151;
     font-weight: 500;
   }

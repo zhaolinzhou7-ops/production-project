@@ -16,7 +16,7 @@
   }
 
   &__title {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     color: #fff;
     font-weight: bold;
     text-align: center;

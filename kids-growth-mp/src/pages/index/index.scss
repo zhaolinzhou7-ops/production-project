@@ -11,7 +11,7 @@
   }
 
   &__title {
-    font-size: 46px;
+    font-size: min(46px, 28PX);
     font-weight: bold;
     color: var(--ink);
     letter-spacing: 1px;
@@ -48,7 +48,7 @@
   }
 
   &__icon {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
     margin-right: 20px;
   }
 
@@ -261,7 +261,7 @@
 
   &__t {
     display: block;
-    font-size: 36px;
+    font-size: min(36px, 22PX);
     font-weight: bold;
     color: #374151;
   }
@@ -292,7 +292,7 @@
   }
 
   &__e {
-    font-size: 44px;
+    font-size: min(44px, 26PX);
   }
 
   &__l {
@@ -312,7 +312,7 @@
   padding: 24px 26px;
   margin-bottom: 20px;
 
-  &__e { font-size: 44px; }
+  &__e { font-size: min(44px, 26PX); }
   &__t {
     flex: 1;
     font-size: 26px;
@@ -341,11 +341,11 @@
     box-shadow: none;
   }
 
-  &__e { font-size: 62px; }
+  &__e { font-size: min(62px, 37PX); }
   &__meta { flex: 1; }
   &__t {
     display: block;
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     font-weight: bold;
     color: #fff;
   }
@@ -423,7 +423,7 @@
     line-height: 1.3;
 
     &--n {
-      font-size: 40px;
+      font-size: min(40px, 24PX);
       font-weight: bold;
       color: var(--ink);
     }
@@ -485,7 +485,7 @@
 
   &__i {
     display: block;
-    font-size: 46px;
+    font-size: min(46px, 28PX);
     line-height: 1.1;
   }
 
@@ -574,7 +574,7 @@
   box-shadow: var(--sh-2);
 
   &__e {
-    font-size: 52px;
+    font-size: min(52px, 31PX);
   }
 
   &__meta {
@@ -597,7 +597,7 @@
   }
 
   &__go {
-    font-size: 38px;
+    font-size: min(38px, 23PX);
     color: rgba(255, 255, 255, 0.7);
   }
 }
@@ -613,7 +613,7 @@
   background: linear-gradient(135deg, #22d3ee, #0891b2);
   box-shadow: var(--sh-2);
 
-  &__e { font-size: 52px; }
+  &__e { font-size: min(52px, 31PX); }
   &__meta { flex: 1; min-width: 0; }
   &__t {
     display: block;
@@ -627,7 +627,7 @@
     font-size: 22px;
     color: rgba(255, 255, 255, 0.88);
   }
-  &__go { font-size: 38px; color: rgba(255, 255, 255, 0.7); }
+  &__go { font-size: min(38px, 23PX); color: rgba(255, 255, 255, 0.7); }
 }
 
 /* 家长中心:整行一块,和上面孩子那些小方块区分开 */

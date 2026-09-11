@@ -3479,6 +3479,57 @@ function run() {
     ok(dupTitles.size > 0, '这一包里本来就有重名的诗,这条测试才有意义')
   }
 
+  /*
+    ---- v71:比大小要「先算再比」----
+
+    原先是「4 和 17,哪个大?」—— 对一个已经会算 6+9 的孩子这是一眼的事,
+    做十道也长不了什么。用户的原话是「有些题目太低级了」。
+
+    现在至少有一边是算式:「8+5 和 12,哪个大?」——
+    他得先把 8+5 算出来才比得了。这一下就把计算从「目的」变回了**手段**:
+    算,是为了判断。这正是口算该待的位置。
+  */
+  {
+    const md4 = L('core/mathDrill.js')
+    let withExpr = 0
+    for (let i = 0; i < 200; i++) {
+      const p = md4.generateProblem('compare', 'toddler')
+      const line = p.text.split('\n')[0]
+      const [l, r] = line.split(' 和 ')
+      ok(!!l && !!r, `比大小的题面应是「A 和 B」(实际 ${line})`)
+      const val = (t) => {
+        if (t.indexOf('+') > 0) {
+          const [x, y] = t.split('+')
+          return Number(x) + Number(y)
+        }
+        if (t.indexOf('-') > 0) {
+          const [x, y] = t.split('-')
+          return Number(x) - Number(y)
+        }
+        return Number(t)
+      }
+      const a = val(l)
+      const b = val(r)
+      ok(Number.isFinite(a) && Number.isFinite(b), `两边都要算得出来(${line})`)
+      ok(Math.max(a, b) === p.answer, `大的那个必须等于答案(${line} → ${p.answer})`)
+      // 差 1 太考验细心而不是理解
+      ok(Math.abs(a - b) >= 2, `两边至少差 2(${line})`)
+      ok(a !== b, `不能一样大,那样没有答案(${line})`)
+      if (l.length > 2 || r.length > 2) withExpr += 1
+    }
+    ok(withExpr === 200, `每一道都该至少有一边是算式(实际 ${withExpr}/200)`)
+
+    // 删掉的三个不该再出现在任何难度档里
+    for (const gone of ['enCount', 'sizeCmp', 'spotDiff']) {
+      for (const t of ['toddler', 'school', 'olympic', 'advanced']) {
+        ok(
+          md4.mathKindsForTier(t).every((k) => k.kind !== gone),
+          `${gone} 已经从题型表里去掉了,不该出现在「${t}」档`,
+        )
+      }
+    }
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')
@@ -3961,7 +4012,17 @@ function run() {
     const toddlerKinds = md3.mathKindsForTier('toddler').map((k) => k.kind)
     ok(toddlerKinds.indexOf('enAdd') >= 0, '幼儿档应该有英语口算')
     const enGroup = md3.mathGroupsForTier('toddler').find((g) => g.def.group === 'english')
-    ok(enGroup && enGroup.kinds.length === 3, '英语口算应单独成一组')
+    /*
+      ⚠️ v71 起是 2 个(Plus / Minus),不是 3 个。
+      原来还有一个 How many? —— 纯数数。对一个已经会算 6+9 的孩子,
+      再让他一个个数 5 个苹果是**倒退**;英语那一半的价值在
+      「听懂 two apples plus three apples」,不在数数。
+    */
+    ok(enGroup && enGroup.kinds.length === 2, '英语口算应单独成一组(Plus / Minus)')
+    ok(
+      enGroup && enGroup.kinds.every((k) => k.kind !== 'enCount'),
+      'How many? 不该再出现在幼儿档 —— 纯数数对会算的孩子是倒退',
+    )
   }
 
   // ---- 做题页必须是独立一页 ----

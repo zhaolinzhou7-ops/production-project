@@ -50,11 +50,11 @@
   }
 
   &__emoji {
-    font-size: 96px;
+    font-size: min(96px, 58PX);
   }
 
   &__big {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     font-weight: bold;
     color: #374151;
     margin: 12px 0;
@@ -172,7 +172,7 @@
   margin: 120px 0 40px;
 
   &__t {
-    font-size: 72px;
+    font-size: min(72px, 43PX);
     font-weight: bold;
     color: #374151;
   }
@@ -182,7 +182,7 @@
     border-radius: 24px;
     padding: 16px;
     text-align: center;
-    font-size: 60px;
+    font-size: min(60px, 36PX);
     &--ok {
       border-color: #34d399;
       color: #34d399;
@@ -214,7 +214,7 @@
     align-items: center;
   }
   &__n {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     font-weight: bold;
     color: #374151;
     &--sun {
@@ -283,7 +283,7 @@
   margin: 20px 0;
 
   &__e {
-    font-size: 90px;
+    font-size: min(90px, 54PX);
     line-height: 1.1;
   }
 
@@ -495,9 +495,9 @@
   }
 
   &__t {
-    &--emoji { font-size: 76px; line-height: 1.1; }
-    &--text { font-size: 38px; font-weight: 700; color: var(--ink); }
-    &--row { font-size: 40px; line-height: 1.2; word-break: break-all; }
+    &--emoji { font-size: min(76px, 46PX); line-height: 1.1; }
+    &--text { font-size: min(38px, 23PX); font-weight: 700; color: var(--ink); }
+    &--row { font-size: min(40px, 24PX); line-height: 1.2; word-break: break-all; }
   }
 }
 
@@ -600,7 +600,7 @@
   }
 
   &__thing {
-    font-size: 68px;
+    font-size: min(68px, 41PX);
     line-height: 1.2;
     margin: 8px;
   }

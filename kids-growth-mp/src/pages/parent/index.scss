@@ -11,14 +11,14 @@
     padding-top: 160px;
   }
 
-  &__lockE { font-size: 110px; }
-  &__lockT { font-size: 40px; font-weight: bold; color: #374151; margin-top: 16px; }
+  &__lockE { font-size: min(110px, 66PX); }
+  &__lockT { font-size: min(40px, 24PX); font-weight: bold; color: #374151; margin-top: 16px; }
   &__lockH { font-size: 24px; color: #9ca3af; margin-top: 10px; }
 
   &__pin {
     width: 300px;
     text-align: center;
-    font-size: 48px;
+    font-size: min(48px, 29PX);
     letter-spacing: 18px;
     background: #fff;
     border-radius: 22px;
@@ -43,7 +43,7 @@
   padding: 26px;
   margin-bottom: 22px;
 
-  &__e { font-size: 76px; margin-right: 22px; }
+  &__e { font-size: min(76px, 46PX); margin-right: 22px; }
   &__meta { flex: 1; }
   &__n { display: block; font-size: 32px; color: #fff; font-weight: bold; }
   &__track {
@@ -64,7 +64,7 @@
   background: rgba(255, 255, 255, 0.85);
   border-radius: 24px;
   padding: 24px;
-  &__n { display: block; font-size: 44px; font-weight: bold; color: #f9497a; }
+  &__n { display: block; font-size: min(44px, 26PX); font-weight: bold; color: #f9497a; }
   &__l { font-size: 22px; color: #9ca3af; }
 }
 
@@ -115,7 +115,7 @@
   padding: 14px 0;
   opacity: 0.5;
   &--on { opacity: 1; }
-  &__e { font-size: 46px; margin-right: 18px; }
+  &__e { font-size: min(46px, 28PX); margin-right: 18px; }
   &__meta { flex: 1; }
   &__n { display: block; font-size: 28px; color: #374151; font-weight: bold; }
   &__h { font-size: 22px; color: #9ca3af; }
@@ -393,7 +393,7 @@
 
   &__i {
     display: block;
-    font-size: 46px;
+    font-size: min(46px, 28PX);
     line-height: 1.1;
   }
 

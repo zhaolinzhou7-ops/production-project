@@ -71,7 +71,7 @@
   &__ask {
     display: block;
     margin: 18px 0;
-    font-size: 52px;
+    font-size: min(52px, 31PX);
     font-weight: bold;
     color: var(--ink);
     line-height: 1.4;
@@ -80,7 +80,7 @@
   }
 
   &__ask--long {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
   }
 
   &__q {
@@ -100,17 +100,17 @@
   &__ans {
     display: block;
     margin-top: 26px;
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     font-weight: 700;
     color: #4f46e5;
   }
 
   &__emoji {
-    font-size: 96px;
+    font-size: min(96px, 58PX);
   }
 
   &__big {
-    font-size: 42px;
+    font-size: min(42px, 25PX);
     font-weight: bold;
     color: var(--ink);
     margin: 14px 0 6px;

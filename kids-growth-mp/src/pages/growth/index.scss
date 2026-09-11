@@ -14,7 +14,7 @@
 
   &__title {
     display: block;
-    font-size: 38px;
+    font-size: min(38px, 23PX);
     color: #fff;
     font-weight: bold;
   }
@@ -39,7 +39,7 @@
   align-items: center;
 
   &__n {
-    font-size: 62px;
+    font-size: min(62px, 37PX);
     font-weight: bold;
     color: #10b981;
     line-height: 1.1;

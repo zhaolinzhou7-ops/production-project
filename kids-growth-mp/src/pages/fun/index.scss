@@ -85,7 +85,7 @@
   align-items: center;
 
   &__e {
-    font-size: 140px;
+    font-size: min(140px, 84PX);
     line-height: 1.2;
   }
 
@@ -148,7 +148,7 @@
   align-items: center;
 
   &__e {
-    font-size: 56px;
+    font-size: min(56px, 34PX);
   }
 
   &__n {
@@ -187,7 +187,7 @@
   }
 
   &__e {
-    font-size: 48px;
+    font-size: min(48px, 29PX);
   }
 
   &__n {
@@ -228,7 +228,7 @@
   }
 
   &__e {
-    font-size: 40px;
+    font-size: min(40px, 24PX);
     margin-right: 12px;
   }
 

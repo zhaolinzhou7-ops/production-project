@@ -9,10 +9,10 @@
     justify-content: center;
     margin-top: 20px;
   }
-  &__n { font-size: 120px; font-weight: bold; color: #f9497a; line-height: 1; }
+  &__n { font-size: min(120px, 72PX); font-weight: bold; color: #f9497a; line-height: 1; }
   &__u { font-size: 32px; color: #9ca3af; margin-left: 10px; }
 
-  &__stars { display: block; text-align: center; font-size: 40px; margin-top: 18px; letter-spacing: 4px; }
+  &__stars { display: block; text-align: center; font-size: min(40px, 24PX); margin-top: 18px; letter-spacing: 4px; }
   &__cheer { display: block; text-align: center; font-size: 32px; color: #374151; font-weight: bold; margin-top: 14px; }
   &__up { display: block; text-align: center; font-size: 24px; color: #059669; margin-top: 10px; }
   &__flat { display: block; text-align: center; font-size: 23px; color: #9ca3af; margin-top: 10px; }

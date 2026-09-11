@@ -16,7 +16,7 @@
   }
 
   &__y {
-    font-size: 84px;
+    font-size: min(84px, 50PX);
     color: #fff;
     font-weight: bold;
     line-height: 1;
