@@ -695,6 +695,21 @@ function Index() {
         但可以摆得紧凑一点。)
       */}
       <View className='tiles'>
+        {/*
+          **解题四步排在口算前面。**
+
+          口算越往后越廉价 —— 再快的心算也比不过一台计算器。
+          真正稀缺的是「把已知条件摆出来、一步一步往下推」,
+          而口算只是这件事里最后那一小步。
+
+          摆放顺序就是态度:主菜在前,基本功在后。
+          原先首页上「数学」只有一个口算入口,那等于告诉家长
+          「数学 = 算得快」—— 这是这套系统之前最大的一处误导。
+        */}
+        <View className='tile tile--solve' onClick={() => openPage('/pages/solve/index')}>
+          <Text className='tile__i'>📝</Text>
+          <Text className='tile__t'>解题四步</Text>
+        </View>
         <View className='tile tile--math' onClick={() => openPage('/pages/math/index')}>
           <Text className='tile__i'>🧮</Text>
           <Text className='tile__t'>口算</Text>

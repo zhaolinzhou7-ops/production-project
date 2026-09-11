@@ -25,6 +25,7 @@ export default defineAppConfig({
     'pages/math/index',
     // 做题单独一页:顶部的系统返回箭头拦不住,拆开之后返回天然回到选题页
     'pages/math/run/index',
+    'pages/solve/index',
     'pages/errorbook/index',
     'pages/talk/index',
     'pages/packs/index',

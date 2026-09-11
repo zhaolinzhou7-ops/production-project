@@ -514,6 +514,8 @@
     font-weight: 700;
   }
 
+  /* 解题四步:主菜,给它一个和口算区分得开的颜色 */
+  &--solve { background: linear-gradient(135deg, #818cf8, #4f46e5); }
   &--math { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
   &--eb { background: linear-gradient(135deg, #fb7185, #e11d48); }
   &--talk { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }

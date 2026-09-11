@@ -1331,6 +1331,193 @@ function genTwoClue(): MathProblem {
   }
 }
 
+
+// ---------------- v73:解题四步(把已知条件摆到纸面上)----------------
+
+/*
+  **这不是一种新题型,是一种新的做题方式。**
+
+  你说的那句「应该把已有的条件列出来,在纸面上去写」——
+  手机上他没法写字(4 岁半更不会),但**纸面草稿的本质是把工作记忆外化**,
+  这件事可以数字化。
+
+  一道应用题拆成四步,每一步都点出来,而且**答过的那一步留在屏幕上**:
+
+      已知:  5 个    3 个
+      要求:  一共几个
+      算式:  5 + 3 = 8
+
+  这就是草稿纸,只不过是一格一格点出来的。
+
+  关键在于**「算」被挤到了最后一步**,前三步全是理解和表征。
+  而且他答错时你能看出是**哪一步**错的 ——
+  是没数清条件、没听懂问的是什么、还是选错了运算、还是算错了。
+  这四种错的补救办法完全不同,而现在的系统一律只告诉你「错了」。
+*/
+
+export interface SolveStep {
+  /** 这一步问什么(念出来的话,他不识字) */
+  ask: string
+  /** 答过之后留在草稿上的样子,比如「5 个」「一共几个」 */
+  note: string
+  /**
+   * 这一步答完之后写到草稿的**第几行**(0 已知 / 1 要求 / 2 算式)。
+   *
+   * 写在数据里而不是页面里按序号猜 —— 以后加一种故事(比如三个数相加)
+   * 步数就变了,页面里写死的映射会悄悄错位。
+   */
+  row: 0 | 1 | 2
+  choices: MathChoice[]
+  /** 第几个选项是对的(从 1 开始) */
+  answer: number
+}
+
+export interface SolveProblem {
+  /** 题目本身(念出来) */
+  story: string
+  /** 图:两堆东西 */
+  visual?: MathVisual
+  steps: SolveStep[]
+  /** 草稿三行的标题 */
+  labels: [string, string, string]
+}
+
+/**
+ * 把几句话做成可点的选项,并算出**打乱之后**正确答案落在第几个。
+ *
+ * ⚠️ 不能先打乱再写死一个位置 —— 那是第一版的写法,答案永远指着第一个,
+ * 而选项已经被打乱了。这种错自测不看内容的话根本抓不到。
+ */
+function textChoices(right: string, others: string[]): { choices: MathChoice[]; answer: number } {
+  const opts = shuffleArr([right, ...others])
+  return {
+    choices: opts.map((t) => ({ label: t, kind: 'text' as const })),
+    answer: opts.indexOf(right) + 1,
+  }
+}
+
+/** 把一串数字做成可点的选项,正确答案混在里面 */
+function numChoices(right: number, spread = 3): { choices: MathChoice[]; answer: number } {
+  const seen = new Set([right])
+  const out = [right]
+  let guard = 0
+  while (out.length < 4 && guard < 50) {
+    guard += 1
+    const v = right + randInt(-spread, spread)
+    if (v < 0 || seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+  }
+  const opts = shuffleArr(out)
+  return {
+    choices: opts.map((n) => ({ label: String(n), kind: 'text' as const })),
+    answer: opts.indexOf(right) + 1,
+  }
+}
+
+/**
+ * 出一道「解题四步」。
+ *
+ * 三种故事:合起来 / 拿走了 / 谁多几个 —— 正好对应加、减、比较,
+ * 也正好是一年级应用题的全部起点。
+ */
+export function generateSolve(): SolveProblem {
+  const kind = pick(['add', 'sub', 'diff'] as const)
+  const emoji = pick(COUNTABLES)
+  const emoji2 = pick(COUNTABLES.filter((e) => e !== emoji))
+
+  if (kind === 'add') {
+    const a = randInt(2, 7)
+    const b = randInt(2, 7)
+    return {
+      story: `这边有 ${a} 个,那边有 ${b} 个。一共有几个?`,
+      visual: visualOf([{ emoji, n: a }, { emoji, n: b }], ['+']),
+      labels: ['已知', '要求', '算式'],
+      steps: [
+        { ask: '先看已知。这边有几个?', note: `这边 ${a} 个`, row: 0, ...numChoices(a) },
+        { ask: '那边有几个?', note: `那边 ${b} 个`, row: 0, ...numChoices(b) },
+        {
+          ask: '再看问的是什么?',
+          note: '一共有几个',
+          row: 1 as const,
+          ...textChoices('一共有几个', ['还剩几个', '多几个']),
+        },
+        {
+          ask: '该用加还是用减?',
+          note: `${a} ＋ ${b}`,
+          row: 2 as const,
+          choices: [
+            { label: '＋', kind: 'text' },
+            { label: '－', kind: 'text' },
+          ],
+          answer: 1,
+        },
+        { ask: `${a} 加 ${b} 等于几?`, note: `= ${a + b}`, row: 2, ...numChoices(a + b) },
+      ],
+    }
+  }
+
+  if (kind === 'sub') {
+    const total = randInt(5, 12)
+    const gone = randInt(1, total - 1)
+    return {
+      story: `本来有 ${total} 个,走掉了 ${gone} 个。还剩几个?`,
+      visual: visualOf([{ emoji, n: total }], [], gone),
+      labels: ['已知', '要求', '算式'],
+      steps: [
+        { ask: '先看已知。本来有几个?', note: `本来 ${total} 个`, row: 0, ...numChoices(total) },
+        { ask: '走掉了几个?', note: `走掉 ${gone} 个`, row: 0, ...numChoices(gone) },
+        {
+          ask: '再看问的是什么?',
+          note: '还剩几个',
+          row: 1 as const,
+          ...textChoices('还剩几个', ['一共有几个', '多几个']),
+        },
+        {
+          ask: '该用加还是用减?',
+          note: `${total} － ${gone}`,
+          row: 2 as const,
+          choices: [
+            { label: '＋', kind: 'text' },
+            { label: '－', kind: 'text' },
+          ],
+          answer: 2,
+        },
+        { ask: `${total} 减 ${gone} 等于几?`, note: `= ${total - gone}`, row: 2, ...numChoices(total - gone) },
+      ],
+    }
+  }
+
+  const more = randInt(4, 10)
+  const less = randInt(1, more - 1)
+  return {
+    story: `上面有 ${more} 个,下面有 ${less} 个。上面比下面多几个?`,
+    visual: visualOf([{ emoji, n: more }, { emoji: emoji2, n: less }], ['']),
+    labels: ['已知', '要求', '算式'],
+    steps: [
+      { ask: '先看已知。上面有几个?', note: `上面 ${more} 个`, row: 0, ...numChoices(more) },
+      { ask: '下面有几个?', note: `下面 ${less} 个`, row: 0, ...numChoices(less) },
+      {
+        ask: '再看问的是什么?',
+        note: '多几个',
+        row: 1 as const,
+          ...textChoices('多几个', ['一共有几个', '还剩几个']),
+      },
+      {
+        ask: '比多少要用加还是用减?',
+        note: `${more} － ${less}`,
+        row: 2 as const,
+        choices: [
+          { label: '＋', kind: 'text' },
+          { label: '－', kind: 'text' },
+        ],
+        answer: 2,
+      },
+      { ask: `${more} 减 ${less} 等于几?`, note: `= ${more - less}`, row: 2, ...numChoices(more - less) },
+    ],
+  }
+}
+
 // ---------------- 思维档:枚举与巧算 ----------------
 
 /** 简单枚举:2 件上衣配 3 条裤子有几种穿法 —— 乘法原理的启蒙 */

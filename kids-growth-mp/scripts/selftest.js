@@ -3639,6 +3639,112 @@ function run() {
     )
   }
 
+  /*
+    ---- v73:解题四步 ----
+
+    用户的原话:「应该把已有的条件列出来,在纸面上去写。口算越往后会越来越
+    廉价,在脑子里去计算并不是核心,人脑应该把更多的精力用来推理。」
+
+    手机上他没法写字,但**纸面草稿的本质是把工作记忆外化** ——
+    一道应用题拆成五步,每步点出来,答过的留在屏幕上长成一张草稿:
+        已知: 这边 5 个  那边 3 个
+        要求: 一共有几个
+        算式: 5 ＋ 3   = 8
+    关键是**「算」被挤到了最后一步**,前面全是理解和表征。
+  */
+  {
+    const md6 = L('core/mathDrill.js')
+    for (let i = 0; i < 200; i++) {
+      const q = md6.generateSolve()
+      ok(!!q.story && q.story.length >= 10, `题目要说清楚(${q.story})`)
+      ok(Array.isArray(q.labels) && q.labels.length === 3, '草稿三行:已知 / 要求 / 算式')
+      ok(q.steps.length >= 4, `至少四步(实际 ${q.steps.length})`)
+
+      for (const st of q.steps) {
+        ok(!!st.ask, '每一步都要有问话 —— 他不识字,这句是要念出来的')
+        ok(!!st.note, '每一步答完都要往草稿上写一条,否则这一步等于没发生')
+        ok(st.row >= 0 && st.row <= 2, `写到第几行要在 0–2(实际 ${st.row})`)
+        ok(st.choices.length >= 2, '每一步都要有可点的选项')
+        /*
+          **答案的位置必须跟着打乱走。**
+          第一版是先 shuffle 再把 answer 写死成第一个 —— 选项打乱了,
+          答案却永远指着头一个。这种错不看内容根本抓不到。
+        */
+        ok(
+          st.answer >= 1 && st.answer <= st.choices.length,
+          `答案要落在选项范围里(${st.ask}:answer=${st.answer},共 ${st.choices.length} 个)`,
+        )
+        ok(
+          new Set(st.choices.map((c) => c.label)).size === st.choices.length,
+          `选项不能重复(${st.ask})`,
+        )
+        /*
+          **草稿上写的,必须就是正确选项那个。**
+
+          这一条是补出来的:上面那条「答案要落在范围里」抓不到
+          「先打乱、再把 answer 写死成第一个」那种写法 ——
+          1 永远在范围里,可它指的已经不是正确答案了。
+          而草稿会照着 note 写,于是屏幕上出现「已知 5 个」、
+          正确选项却是 3 —— 他点 5 反而被判错。
+
+          note 里必须含着正确选项的字样,这条才真的把两者锁在一起。
+        */
+        const right = st.choices[st.answer - 1].label
+        ok(
+          String(st.note).indexOf(right) >= 0,
+          `草稿写的「${st.note}」里应该含着正确选项「${right}」(${st.ask})`,
+        )
+        // 念出来的话里不该有 emoji:合成音碰到它要么跳过要么念成表情名
+        ok(!/\p{Extended_Pictographic}/u.test(st.ask), `问话里不该有 emoji(${st.ask})`)
+      }
+
+      // 前面全是理解,只有最后一步才是算
+      const last = q.steps[q.steps.length - 1]
+      ok(/等于几/.test(last.ask), `最后一步才是算(实际最后一步问的是「${last.ask}」)`)
+      ok(
+        q.steps.slice(0, -1).every((st) => !/等于几/.test(st.ask)),
+        '前面几步不该出现「等于几」—— 算被挤到最后是这套流程的全部意义',
+      )
+
+      // 三行都要被填到:少一行说明有一步没写进草稿
+      const rows = new Set(q.steps.map((st) => st.row))
+      ok(rows.size === 3, `草稿三行都要有内容(实际只填了 ${rows.size} 行)`)
+
+      /*
+        **选运算那一步不能选错边。**
+        「一共」配加、「还剩」「多几个」配减 —— 这是这道题真正要教的东西,
+        写反了就是在教错。
+      */
+      const opStep = q.steps.find((st) => st.choices.some((c) => c.label === '＋'))
+      ok(!!opStep, '要有「该用加还是用减」这一步')
+      if (opStep) {
+        const want = opStep.choices[opStep.answer - 1].label
+        const askWhat = q.steps.find((st) => st.row === 1)
+        ok(!!askWhat, '要有「问的是什么」这一步')
+        const target = askWhat.note
+        if (target === '一共有几个') ok(want === '＋', `问「一共」该用加(实际 ${want})`)
+        else ok(want === '－', `问「${target}」该用减(实际 ${want})`)
+      }
+
+      // 算式那一行写出来要和答案对得上
+      const calc = q.steps[q.steps.length - 1]
+      const n = Number(String(calc.note).replace('= ', ''))
+      ok(Number.isFinite(n), `算式行要写出得数(${calc.note})`)
+      ok(
+        Number(calc.choices[calc.answer - 1].label) === n,
+        `草稿上写的得数要和正确选项一致(${calc.note} vs ${calc.choices[calc.answer - 1].label})`,
+      )
+    }
+
+    // 三种故事都要出得到:只出一种的话做五道就是同一道题
+    const kinds = new Set()
+    for (let i = 0; i < 300; i++) {
+      const q = md6.generateSolve()
+      kinds.add(q.steps.find((st) => st.row === 1).note)
+    }
+    ok(kinds.size === 3, `三种问法都该出得到(实际 ${[...kinds].join('、')})`)
+  }
+
   // ---- 阶段测验:撤掉脚手架之后他到底会多少 ----
   {
     const ex2 = L('core/exam.js')
