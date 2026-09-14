@@ -1420,6 +1420,15 @@ function numChoices(right: number, spread = 3): { choices: MathChoice[]; answer:
  *
  * 三种故事:合起来 / 拿走了 / 谁多几个 —— 正好对应加、减、比较,
  * 也正好是一年级应用题的全部起点。
+ *
+ * ⚠️ v74 改掉了一处要命的:**题目里不能把数字说出来**。
+ *
+ * 原来的题面是「这边有 2 个,那边有 2 个。一共有几个?」——
+ * 而第一步问的正是「这边有几个?」。他刚听完那句话,复读一遍就答对了,
+ * **第一步完全没意义**。而「把已知条件列出来」恰恰是这整件事的核心:
+ * 条件得由他自己从画面里数出来,不是被告知。
+ *
+ * 现在题面只说清**是什么情况**,数量全部交给图。
  */
 export function generateSolve(): SolveProblem {
   const kind = pick(['add', 'sub', 'diff'] as const)
@@ -1430,7 +1439,8 @@ export function generateSolve(): SolveProblem {
     const a = randInt(2, 7)
     const b = randInt(2, 7)
     return {
-      story: `这边有 ${a} 个,那边有 ${b} 个。一共有几个?`,
+      // 只说情况,不说数量 —— 数量在图里,得他自己数
+      story: '这边放了一些,那边也放了一些。一共有几个?',
       visual: visualOf([{ emoji, n: a }, { emoji, n: b }], ['+']),
       labels: ['已知', '要求', '算式'],
       steps: [
@@ -1461,7 +1471,7 @@ export function generateSolve(): SolveProblem {
     const total = randInt(5, 12)
     const gone = randInt(1, total - 1)
     return {
-      story: `本来有 ${total} 个,走掉了 ${gone} 个。还剩几个?`,
+      story: '本来有这么多,划掉的那些走掉了。还剩几个?',
       visual: visualOf([{ emoji, n: total }], [], gone),
       labels: ['已知', '要求', '算式'],
       steps: [
@@ -1491,7 +1501,7 @@ export function generateSolve(): SolveProblem {
   const more = randInt(4, 10)
   const less = randInt(1, more - 1)
   return {
-    story: `上面有 ${more} 个,下面有 ${less} 个。上面比下面多几个?`,
+    story: '上面一排,下面一排。上面比下面多几个?',
     visual: visualOf([{ emoji, n: more }, { emoji: emoji2, n: less }], ['']),
     labels: ['已知', '要求', '算式'],
     steps: [

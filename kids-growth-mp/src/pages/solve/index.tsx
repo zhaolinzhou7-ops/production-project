@@ -287,7 +287,18 @@ function Solve() {
         <Text className='askrow__spk'>🔊</Text>
       </View>
 
-      <View className='sch'>
+      {/*
+        **选项排法跟着内容走。**
+
+        原先一律 `flex: 1 1 40%`,三个词条(一共有几个 / 还剩几个 / 多几个)
+        加起来 120%,于是排成「上面两个小的、下面一个拉满整行的」——
+        一眼看过去是歪的,而且第三个明显比前两个大,像是被特别标出来了。
+
+        现在按内容分两种:
+        · 词条(字多)→ **一行一个**,整行铺开,好读也好点;
+        · 数字和 ＋ － (字少)→ 一行两个,紧凑。
+      */}
+      <View className={step.choices.some((c) => c.label.length > 2) ? 'sch sch--stack' : 'sch'}>
         {step.choices.map((c, i) => {
           const n = i + 1
           const isWrong = wrong.indexOf(n) >= 0
